@@ -116,9 +116,28 @@ fn answer(
     served: &AtomicU64,
     ranges: &Mutex<Vec<Option<u64>>>,
 ) {
-    let mut buffer = [0u8; 8192];
-    let read = stream.read(&mut buffer).unwrap_or(0);
-    let request = String::from_utf8_lossy(&buffer[..read]).to_string();
+    // TCP is a byte stream: one read is not guaranteed to contain all request
+    // headers. Read until the header terminator so platform-specific packet
+    // segmentation cannot hide a later header such as Range.
+    let mut request = Vec::with_capacity(1024);
+    let mut buffer = [0u8; 1024];
+
+    while request.len() < 8192 {
+        let available = (8192 - request.len()).min(buffer.len());
+        match stream.read(&mut buffer[..available]) {
+            Ok(0) => break,
+            Ok(read) => {
+                request.extend_from_slice(&buffer[..read]);
+                if request.windows(4).any(|window| window == b"\\r\\n\\r\\n") {
+                    break;
+                }
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
+            Err(_) => return,
+        }
+    }
+
+    let request = String::from_utf8_lossy(&request).to_string();
 
     let requested = range_start(&request);
     ranges
