@@ -1,4 +1,6 @@
-'use strict';\n\nconst { contextBridge, ipcRenderer } = require('electron');
+'use strict';
+
+const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('aether', {
 	window: (action) => ipcRenderer.invoke('window:action', action),
