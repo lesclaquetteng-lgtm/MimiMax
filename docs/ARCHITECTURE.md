@@ -56,8 +56,9 @@ Key properties:
 
 | File | Responsibility |
 | --- | --- |
-| `main.js` | Electron main process: creates window, resolves/spawns Rust binary, handles IPC, streams core events to renderer. |
-| `preload.js` | Secure bridge exposing a limited `window.aether` API (invoke + event subscriptions). |
+| `main.cjs` | Active CommonJS Electron entry point (declared in `package.json`): creates the window, resolves/spawns the Rust binary, validates top-level IPC senders, restricts navigation and streams core events. |
+| `preload.js` | CommonJS preload bridge exposing the limited `window.aether` API with context isolation and renderer sandboxing enabled. |
+| `security.cjs` | Pure security helpers and operation gate, covered by Node's built-in test runner. |
 | `ui/*` | Renderer UI (layout, styling, interaction logic). |
 
 The GUI invokes core commands (`info`, `settings`, `accounts`, `install`, `launch`, etc.) and renders
