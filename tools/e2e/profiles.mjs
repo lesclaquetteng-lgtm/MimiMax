@@ -130,6 +130,33 @@ await send('Runtime.enable');
 await waitFor(`document.querySelector('#paths-output').textContent.trim().length > 0`, 'the initial state');
 await sleep(500);
 
+// --- create an offline account through the real UI --------------------------------------------
+let accountStore = await evaluate('window.aether.accounts.get()');
+record('the account store is reachable through Electron IPC', accountStore?.ok === true, accountStore?.error || '');
+
+if (accountStore?.ok && accountStore.accounts.length === 0) {
+	await click('.nav-item[data-page="accounts"]');
+	await waitFor(`document.querySelector('.page.is-active')?.dataset.page === 'accounts'`, 'the accounts page');
+	await click('#btn-add-offline');
+	await waitFor(`document.querySelector('#modal').hidden === false`, 'the offline account dialog');
+	await type('#offline-name', 'Notch');
+	await click('#modal-confirm');
+	await waitFor(
+		`window.aether.accounts.get().then((store) => store.ok && store.accounts.length === 1 && Boolean(store.selected))`,
+		'the offline account to be saved and selected'
+	);
+	accountStore = await evaluate('window.aether.accounts.get()');
+}
+
+record('an offline account can be created and selected from the interface',
+	accountStore?.ok === true && accountStore.accounts.length === 1
+		&& accountStore.accounts[0].username === 'Notch'
+		&& accountStore.selected === accountStore.accounts[0].id,
+	JSON.stringify({ accounts: accountStore?.accounts?.map((account) => account.username), selected: accountStore?.selected }));
+
+await click('.nav-item[data-page="play"]');
+await waitFor(`document.querySelector('.page.is-active')?.dataset.page === 'play'`, 'the play page');
+
 // --- the catalog ------------------------------------------------------------------------------
 const catalog = await evaluate('window.aether.profiles.list()');
 record('the core lists the profiles of the player',

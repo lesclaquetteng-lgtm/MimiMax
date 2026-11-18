@@ -80,6 +80,22 @@ gradle build
 
 ## 4. Interface (Electron)
 
+### 4.0 Electron boundary and concurrency checks
+
+Run these dependency-free checks from `launcher/`:
+
+```powershell
+node --check gui/src/main.cjs
+node --check gui/src/preload.js
+npm run test:security
+```
+
+They verify that external navigation is limited to HTTPS without embedded credentials, the renderer
+cannot invoke IPC from a child frame or another window, and repeated install/game operations cannot
+race over shared state. The renderer is sandboxed and stays on its local application document.
+
+### 4.1 Layout and visual probe
+
 The check drives the real application through CDP, on an isolated `AETHER_HOME`:
 
 ```powershell
@@ -111,11 +127,18 @@ Screenshots: [`images/launcher-servers.png`](images/launcher-servers.png),
 [`images/launcher-play.png`](images/launcher-play.png), and the narrow variants
 (`*-narrow.png`).
 
-### 4.1 End-to-end checks (`tools/e2e/`)
+### 4.2 End-to-end checks (`tools/e2e/`)
 
 The behavioural checks live in `tools/e2e/`, **not** in `target/`: `cargo clean` must not be able
 to delete them. They drive the real application over CDP; the launcher is started with a fake core
 so the failures are reproducible without touching the network:
+
+The GitHub Actions job **Electron account and profile flows (Windows)** runs
+`profiles.mjs` against the real Electron window and the real Rust core on an isolated data home.
+It creates an offline account through the Accounts dialog, then exercises profile selection,
+editing, creation and deletion through the Play page. This is the regression test for the complete
+renderer → preload → IPC → core path, not only for the helper functions.
+
 
 ```powershell
 # Build the fake cores once (they only use the standard library).

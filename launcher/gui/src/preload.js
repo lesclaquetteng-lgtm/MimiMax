@@ -1,4 +1,6 @@
-import { contextBridge, ipcRenderer } from 'electron';
+'use strict';
+
+const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('aether', {
 	window: (action) => ipcRenderer.invoke('window:action', action),

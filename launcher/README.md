@@ -103,8 +103,9 @@ launcher/
 ├── src/                  Rust core (CLI, install, launch, metadata, accounts, settings)
 ├── gui/
 │   └── src/
-│       ├── main.js       Electron main process (spawns core, IPC handlers)
-│       ├── preload.js    Renderer bridge (window.aether API)
+│       ├── main.cjs      Active CommonJS Electron main process
+│       ├── preload.js    Sandboxed renderer bridge (window.aether API)
+│       ├── security.cjs  URL, IPC and operation guards
 │       └── ui/           Renderer UI (HTML/CSS/JS)
 ├── tests/                Rust integration/unit tests
 ├── Cargo.toml
@@ -115,6 +116,9 @@ launcher/
 
 ```powershell
 cargo test
+node --check gui/src/main.cjs
+node --check gui/src/preload.js
+npm run test:security
 # optional
 cargo clippy --all-targets
 ```
