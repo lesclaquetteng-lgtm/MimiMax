@@ -128,7 +128,7 @@ fn answer(
             Ok(0) => break,
             Ok(read) => {
                 request.extend_from_slice(&buffer[..read]);
-                if request.windows(4).any(|window| window == b"\\r\\n\\r\\n") {
+                if request.windows(4).any(|window| window == b"\r\n\r\n") {
                     break;
                 }
             }
