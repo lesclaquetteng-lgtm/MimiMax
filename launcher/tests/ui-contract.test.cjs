@@ -8,6 +8,7 @@ const path = require('node:path');
 const root = path.resolve(__dirname, '..');
 const html = fs.readFileSync(path.join(root, 'gui/src/ui/index.html'), 'utf8');
 const app = fs.readFileSync(path.join(root, 'gui/src/ui/app.js'), 'utf8');
+const styles = fs.readFileSync(path.join(root, 'gui/src/ui/styles.css'), 'utf8');
 
 test('every navigation entry points to an existing page', () => {
 	const navigation = [...html.matchAll(/class="[^"]*\bnav-item\b[^"]*"[^>]*data-page="([^"]+)"/g)]
@@ -53,7 +54,8 @@ test('the command palette and keyboard shortcuts are wired', () => {
 test('appearance is persisted through the Rust settings API', () => {
 	assert.match(app, /api\.settings\.update\(\{ theme: normalized \}\)/);
 	assert.match(html, /id="select-theme"/);
-	assert.match(html, /data-theme/);
+	assert.match(app, /document\.documentElement\.dataset\.theme/);
+	assert.match(styles, /html\[data-theme="light"\]/);
 });
 
 test('performance overview does not publish simulated FPS telemetry', () => {
