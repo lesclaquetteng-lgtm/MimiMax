@@ -10,7 +10,7 @@ const state = {
 	profiles: { profiles: [], activeFor: null },
 	servers: { servers: [], pings: {} },
 	hosts: [],
-	performance: { mods: [], state: {}, installing: false },
+	performance: { mods: [], state: {}, installing: false, checked: false },
 	sessionLines: 0,
 	installing: false,
 	launching: false
@@ -42,6 +42,238 @@ function setStatus(text, kind = '') {
 	const pill = $('#status-pill');
 	pill.className = `status-pill${kind ? ` is-${kind}` : ''}`;
 	$('#status-text').textContent = text;
+	const dashboardStatus = $('#dashboard-status');
+	if (dashboardStatus) dashboardStatus.textContent = text;
+}
+
+/* ------------------------------------------------------- workspace UX */
+
+function applyTheme(theme, persist = true) {
+	const normalized = theme === 'light' ? 'light' : 'dark';
+	document.documentElement.dataset.theme = normalized;
+	const select = $('#select-theme');
+	if (select) select.value = normalized;
+	const button = $('#theme-toggle');
+	if (button) {
+		button.setAttribute('aria-label', normalized === 'dark' ? 'Switch to light theme' : 'Switch to dark theme');
+		button.title = normalized === 'dark' ? 'Switch to light theme' : 'Switch to dark theme';
+	}
+	if (state.settings) state.settings.theme = normalized;
+	if (persist && api?.settings?.update) {
+		api.settings.update({ theme: normalized }).then((result) => {
+			if (!result?.ok) toast(result?.error || 'The theme could not be saved.', 'error');
+		}).catch((error) => toast(error.message || 'The theme could not be saved.', 'error'));
+	}
+}
+
+function renderDashboard() {
+	const account = state.accounts.accounts.find((entry) => entry.id === state.accounts.selected);
+	const profile = currentProfile();
+	const javaPath = state.settings.javaPath || '';
+	const requiredJava = Number(state.settings.requiredJavaVersion) || 21;
+	const status = state.installing ? 'Installing…' : state.launching ? 'Starting Minecraft…' : 'Ready';
+	$('#dashboard-account').textContent = account?.username || 'No account selected';
+	$('#dashboard-account-meta').textContent = account
+		? (account.type === 'offline' ? 'Offline account · Local profile' : 'Microsoft account')
+		: 'Add an account to get started';
+	$('#dashboard-profile').textContent = profile?.name || 'Default';
+	$('#dashboard-profile-meta').textContent = profile
+		? 'Minecraft ' + (profile.gameVersion || '—') + ' · ' + (Math.round(profile.maxMemory / 1024 * 10) / 10) + ' GB RAM'
+		: 'Choose a profile';
+	$('#dashboard-java').textContent = javaPath ? 'Custom runtime' : 'Auto-detected';
+	$('#dashboard-java-meta').textContent = 'Java ' + requiredJava + ' required';
+	$('#dashboard-status').textContent = status;
+}
+
+function renderSetupChecklist() {
+	const card = $('#setup-card');
+	if (!card) return;
+	const accountsReady = state.accounts.accounts.length > 0 && Boolean(state.accounts.selected);
+	const profileReady = accountsReady && Boolean(state.profiles.activeFor);
+	const mods = state.performance.mods || [];
+	const installed = mods.filter((mod) => mod.installed).length;
+	const performanceReady = state.performance.checked && mods.length > 0 && installed === mods.length;
+	const current = currentProfile();
+	const steps = [
+		{ id: '#setup-account', state: '#setup-account-state', complete: accountsReady,
+			done: 'Account selected and ready', pending: 'Create an offline or Microsoft account' },
+		{ id: '#setup-profile', state: '#setup-profile-state', complete: profileReady,
+			done: (current.name || 'Default') + ' · Minecraft ' + (current.gameVersion || '—'), pending: 'Set your Minecraft version and memory' },
+		{ id: '#setup-performance', state: '#setup-performance-state', complete: performanceReady,
+			done: 'Optimization pack ready · ' + installed + '/' + mods.length,
+			pending: state.performance.checked ? installed + '/' + mods.length + ' optimization mods installed' : 'Review or install the optimization pack' }
+	];
+	for (const step of steps) {
+		const button = $(step.id);
+		const label = $(step.state);
+		button?.classList.toggle('is-complete', step.complete);
+		if (label) label.textContent = step.complete ? step.done : step.pending;
+	}
+}
+
+function commandItems() {
+	return [
+		{ id: 'play', label: 'Play', detail: 'Open your game dashboard', icon: '▶', type: 'page' },
+		{ id: 'accounts', label: 'Accounts', detail: 'Add or switch accounts', icon: '◎', type: 'page' },
+		{ id: 'versions', label: 'Versions', detail: 'Browse Minecraft releases', icon: '▱', type: 'page' },
+		{ id: 'mods', label: 'Mods', detail: 'Manage installed mods', icon: '⌘', type: 'page' },
+		{ id: 'servers', label: 'Servers', detail: 'Check or host a server', icon: '⌁', type: 'page' },
+		{ id: 'performance', label: 'Performance', detail: 'Optimization pack and JVM presets', icon: '↗', type: 'page' },
+		{ id: 'logs', label: 'Logs', detail: 'Inspect game and install output', icon: '≡', type: 'page' },
+		{ id: 'settings', label: 'Settings', detail: 'Runtime, memory and appearance', icon: '⚙', type: 'page' },
+		{ id: 'launch', label: 'Launch Minecraft', detail: 'Start the selected profile', icon: '▶', type: 'action' },
+		{ id: 'install', label: 'Install / repair game', detail: 'Install missing files for this profile', icon: '↓', type: 'action' },
+		{ id: 'add-account', label: 'Add offline account', detail: 'Create a local player account', icon: '+', type: 'action' },
+		{ id: 'theme', label: 'Toggle appearance', detail: 'Switch between dark and light mode', icon: '◐', type: 'action' }
+	];
+}
+
+let commandSelection = 0;
+let filteredCommands = [];
+
+function renderCommandResults() {
+	const query = ($('#command-search').value || '').trim().toLocaleLowerCase();
+	filteredCommands = commandItems().filter((item) =>
+		(item.label + ' ' + item.detail + ' ' + item.id).toLocaleLowerCase().includes(query)
+	);
+	commandSelection = Math.min(commandSelection, Math.max(0, filteredCommands.length - 1));
+	const results = $('#command-results');
+	results.replaceChildren();
+	if (!filteredCommands.length) {
+		const empty = document.createElement('div');
+		empty.className = 'command-empty';
+		empty.textContent = 'No matching pages or actions.';
+		results.appendChild(empty);
+		return;
+	}
+	filteredCommands.forEach((item, index) => {
+		const button = document.createElement('button');
+		button.type = 'button';
+		button.className = 'command-result' + (index === commandSelection ? ' is-selected' : '');
+		button.setAttribute('role', 'option');
+		button.setAttribute('aria-selected', String(index === commandSelection));
+		const icon = document.createElement('span');
+		icon.className = 'command-result-icon';
+		icon.textContent = item.icon;
+		const copy = document.createElement('span');
+		copy.className = 'command-result-copy';
+		const title = document.createElement('strong');
+		title.textContent = item.label;
+		const detail = document.createElement('small');
+		detail.textContent = item.detail;
+		copy.append(title, detail);
+		button.append(icon, copy);
+		button.addEventListener('mouseenter', () => {
+			commandSelection = index;
+			updateCommandSelection();
+		});
+		button.addEventListener('click', () => runCommand(item));
+		results.appendChild(button);
+	});
+}
+
+function updateCommandSelection() {
+	$$('.command-result').forEach((button, index) => {
+		const selected = index === commandSelection;
+		button.classList.toggle('is-selected', selected);
+		button.setAttribute('aria-selected', String(selected));
+		if (selected) button.scrollIntoView({ block: 'nearest' });
+	});
+}
+
+function openCommandPalette() {
+	const palette = $('#command-palette');
+	if (!palette || !palette.hidden) return;
+	palette.hidden = false;
+	$('#command-search').value = '';
+	commandSelection = 0;
+	renderCommandResults();
+	requestAnimationFrame(() => $('#command-search').focus());
+}
+
+function closeCommandPalette() {
+	const palette = $('#command-palette');
+	if (!palette || palette.hidden) return;
+	palette.hidden = true;
+	$('#command-open').focus();
+}
+
+function runCommand(item) {
+	closeCommandPalette();
+	if (item.type === 'page') showPage(item.id);
+	else if (item.id === 'launch') launch();
+	else if (item.id === 'install') install();
+	else if (item.id === 'add-account') {
+		showPage('accounts');
+		offlineAccountModal();
+	} else if (item.id === 'theme') {
+		applyTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
+	}
+}
+
+function initWorkspaceControls() {
+	try {
+		document.body.classList.toggle('sidebar-collapsed', localStorage.getItem('aether.sidebar.collapsed') === '1');
+	} catch { /* local storage can be disabled by the host */ }
+	$$('.nav-item').forEach((button) => { button.dataset.tooltip = button.textContent.trim(); });
+	$('#sidebar-toggle')?.addEventListener('click', () => {
+		const collapsed = document.body.classList.toggle('sidebar-collapsed');
+		$('#sidebar-toggle').setAttribute('aria-pressed', String(collapsed));
+		try { localStorage.setItem('aether.sidebar.collapsed', collapsed ? '1' : '0'); } catch { /* optional preference */ }
+	});
+	$('#theme-toggle')?.addEventListener('click', () => {
+		applyTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
+	});
+	$('#select-theme')?.addEventListener('change', (event) => applyTheme(event.target.value));
+	$('#command-open')?.addEventListener('click', openCommandPalette);
+	$('#command-search')?.addEventListener('input', () => {
+		commandSelection = 0;
+		renderCommandResults();
+	});
+	$('#command-palette')?.addEventListener('click', (event) => {
+		if (event.target === $('#command-palette')) closeCommandPalette();
+	});
+	$('#setup-dismiss')?.addEventListener('click', () => {
+		$('#setup-card').hidden = true;
+		try { localStorage.setItem('aether.setup.dismissed', '1'); } catch { /* optional preference */ }
+	});
+	$('#setup-account')?.addEventListener('click', () => showPage('accounts'));
+	$('#setup-profile')?.addEventListener('click', () => showPage('play'));
+	$('#setup-performance')?.addEventListener('click', () => showPage('performance'));
+	try {
+		if (localStorage.getItem('aether.setup.dismissed') === '1') $('#setup-card').hidden = true;
+	} catch { /* optional preference */ }
+
+	document.addEventListener('keydown', (event) => {
+		if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+			event.preventDefault();
+			openCommandPalette();
+			return;
+		}
+		if (!$('#command-palette').hidden) {
+			if (event.key === 'Escape') {
+				event.preventDefault();
+				closeCommandPalette();
+			} else if (event.key === 'ArrowDown' && filteredCommands.length) {
+				event.preventDefault();
+				commandSelection = (commandSelection + 1) % filteredCommands.length;
+				updateCommandSelection();
+			} else if (event.key === 'ArrowUp' && filteredCommands.length) {
+				event.preventDefault();
+				commandSelection = (commandSelection - 1 + filteredCommands.length) % filteredCommands.length;
+				updateCommandSelection();
+			} else if (event.key === 'Enter' && filteredCommands[commandSelection]) {
+				event.preventDefault();
+				runCommand(filteredCommands[commandSelection]);
+			}
+			return;
+		}
+		if ((event.ctrlKey || event.metaKey) && /^[1-8]$/.test(event.key)) {
+			const pages = ['play', 'accounts', 'versions', 'mods', 'servers', 'performance', 'logs', 'settings'];
+			event.preventDefault();
+			showPage(pages[Number(event.key) - 1]);
+		}
+	});
 }
 
 /** Parses Minecraft MOTD formatting codes (§0-f, §l,m,n,o,r) into styled sanitized HTML spans. */
@@ -227,130 +459,6 @@ function init3DSkinViewer() {
 
 	if (skinCanvasAnimId) cancelAnimationFrame(skinCanvasAnimId);
 	skinCanvasAnimId = requestAnimationFrame(renderFrame);
-}
-
-/* ------------------------------------------------ Catmull-Rom Live FPS Spline */
-
-let fpsCanvasAnimId = null;
-const fpsHistory = [680, 710, 740, 725, 780, 830, 810, 860, 890, 875, 910, 940, 920, 895, 930];
-
-function initFpsSplineGraph() {
-	const canvas = $('#fps-spline-canvas');
-	if (!canvas) return;
-	const ctx = canvas.getContext('2d');
-	if (!ctx) return;
-
-	function catmullRom(p0, p1, p2, p3, t) {
-		const t2 = t * t;
-		const t3 = t2 * t;
-		return 0.5 * (
-			(2 * p1) +
-			(-p0 + p2) * t +
-			(2 * p0 - 5 * p1 + 4 * p2 - p3) * t2 +
-			(-p0 + 3 * p1 - 3 * p2 + p3) * t3
-		);
-	}
-
-	let tickCounter = 0;
-	function renderGraph() {
-		tickCounter++;
-		if (tickCounter % 30 === 0) {
-			const jitter = Math.floor((Math.random() - 0.45) * 40);
-			const last = fpsHistory[fpsHistory.length - 1];
-			const next = Math.max(550, Math.min(1050, last + jitter));
-			fpsHistory.push(next);
-			if (fpsHistory.length > 24) fpsHistory.shift();
-
-			const badge = $('#fps-spline-status');
-			if (badge) badge.textContent = `⚡ ${next} FPS (Real-time)`;
-		}
-
-		ctx.clearRect(0, 0, canvas.width, canvas.height);
-		const w = canvas.width;
-		const h = canvas.height;
-
-		// Background grid lines
-		ctx.strokeStyle = 'rgba(255, 255, 255, 0.04)';
-		ctx.lineWidth = 1;
-		for (let y = 20; y < h; y += 25) {
-			ctx.beginPath();
-			ctx.moveTo(0, y);
-			ctx.lineTo(w, y);
-			ctx.stroke();
-		}
-
-		// Calculate point coordinates
-		const minVal = 500;
-		const maxVal = 1100;
-		const step = w / (fpsHistory.length - 1);
-		const points = fpsHistory.map((val, i) => ({
-			x: i * step,
-			y: h - ((val - minVal) / (maxVal - minVal)) * (h - 24) - 12
-		}));
-
-		if (points.length < 2) return;
-
-		// Gradient Fill under spline
-		const grad = ctx.createLinearGradient(0, 0, 0, h);
-		grad.addColorStop(0, 'rgba(124, 92, 252, 0.35)');
-		grad.addColorStop(0.5, 'rgba(56, 189, 248, 0.15)');
-		grad.addColorStop(1, 'rgba(12, 16, 23, 0)');
-
-		ctx.beginPath();
-		ctx.moveTo(points[0].x, points[0].y);
-
-		for (let i = 0; i < points.length - 1; i++) {
-			const p0 = points[Math.max(0, i - 1)];
-			const p1 = points[i];
-			const p2 = points[i + 1];
-			const p3 = points[Math.min(points.length - 1, i + 2)];
-
-			for (let t = 0; t < 1; t += 0.1) {
-				const x = catmullRom(p0.x, p1.x, p2.x, p3.x, t);
-				const y = catmullRom(p0.y, p1.y, p2.y, p3.y, t);
-				ctx.lineTo(x, y);
-			}
-		}
-
-		const lastPoint = points[points.length - 1];
-		ctx.lineTo(lastPoint.x, lastPoint.y);
-
-		// Fill area
-		ctx.save();
-		ctx.lineTo(w, h);
-		ctx.lineTo(0, h);
-		ctx.closePath();
-		ctx.fillStyle = grad;
-		ctx.fill();
-		ctx.restore();
-
-		// Spline stroke line
-		ctx.beginPath();
-		ctx.moveTo(points[0].x, points[0].y);
-		for (let i = 0; i < points.length - 1; i++) {
-			const p0 = points[Math.max(0, i - 1)];
-			const p1 = points[i];
-			const p2 = points[i + 1];
-			const p3 = points[Math.min(points.length - 1, i + 2)];
-
-			for (let t = 0; t <= 1; t += 0.1) {
-				const x = catmullRom(p0.x, p1.x, p2.x, p3.x, t);
-				const y = catmullRom(p0.y, p1.y, p2.y, p3.y, t);
-				ctx.lineTo(x, y);
-			}
-		}
-		ctx.strokeStyle = '#38BDF8';
-		ctx.lineWidth = 2.5;
-		ctx.shadowColor = 'rgba(56, 189, 248, 0.6)';
-		ctx.shadowBlur = 8;
-		ctx.stroke();
-		ctx.shadowBlur = 0;
-
-		fpsCanvasAnimId = requestAnimationFrame(renderGraph);
-	}
-
-	if (fpsCanvasAnimId) cancelAnimationFrame(fpsCanvasAnimId);
-	fpsCanvasAnimId = requestAnimationFrame(renderGraph);
 }
 
 /**
@@ -1149,6 +1257,14 @@ function renderPerformance() {
 	const installed = mods.filter((mod) => mod.installed).length;
 	$('#perf-count').textContent = `${installed}/${mods.length}`;
 	$('#perf-path').textContent = state.performance.state?.modsFolder || '';
+	const healthPercent = mods.length ? Math.round((installed / mods.length) * 100) : 0;
+	$('#perf-health-count').textContent = mods.length ? installed + '/' + mods.length + ' installed' : 'No data';
+	$('#perf-health-percent').textContent = mods.length ? healthPercent + '%' : '—';
+	$('#perf-health-progress').style.width = healthPercent + '%';
+	$('#perf-health-message').textContent = mods.length
+		? (installed === mods.length ? 'All optimization mods are ready' : (mods.length - installed) + ' mod(s) missing')
+		: (state.performance.checked ? 'No optimization pack data' : 'Waiting for local check');
+	renderSetupChecklist();
 
 	if (mods.length === 0) {
 		table.appendChild(emptyState(
@@ -1188,6 +1304,7 @@ function renderPerformanceState() {
 
 	if (settings.jvmPreset) {
 		selectOption($('#select-jvm'), settings.jvmPreset);
+		$('#perf-jvm-summary').textContent = settings.jvmPreset;
 		$('#jvm-current').textContent = `Current preset: ${settings.jvmPreset}. It applies on the next launch.`;
 
 		// Highlight active preset card
@@ -1198,12 +1315,16 @@ function renderPerformanceState() {
 
 	const preset = settings.optionsPreset;
 	if (preset && preset !== 'vanilla') {
+		$('#perf-options-summary').textContent = preset === 'max' ? 'Maximum FPS' : preset;
 		$('#options-current').textContent = preset === 'restore'
 			? 'The original options.txt is in place.'
 			: `Last applied preset: ${preset}.`;
 	} else {
+		$('#perf-options-summary').textContent = 'Default options';
 		$('#options-current').textContent = 'The original options.txt is in place.';
 	}
+	$('#perf-health-message').textContent = state.performance.checked ? 'Local install checked' : 'Not checked yet';
+	renderSetupChecklist();
 }
 
 async function loadPerformance() {
@@ -1215,6 +1336,7 @@ async function loadPerformance() {
 
 	state.performance.mods = result.mods || [];
 	state.performance.state = result.state || {};
+	state.performance.checked = true;
 	renderPerformance();
 	renderPerformanceState();
 }
@@ -1818,6 +1940,7 @@ function paintRanges() {
 }
 
 function bindSettings() {
+	$('#select-theme').addEventListener('change', (event) => applyTheme(event.target.value));
 	const maxMemory = $('#range-max-memory');
 	const minMemory = $('#range-min-memory');
 
@@ -1881,6 +2004,7 @@ function bindSettings() {
 
 function applySettings(settings) {
 	state.settings = settings;
+	applyTheme(settings.theme || 'dark', false);
 
 	$('#range-memory').value = settings.maxMemory;
 	$('#output-memory').textContent = `${settings.maxMemory} MB`;
@@ -1893,6 +2017,7 @@ function applySettings(settings) {
 	$('#range-height').value = settings.windowHeight;
 	$('#output-height').textContent = settings.windowHeight;
 	$('#input-java').value = settings.javaPath || '';
+	$('#select-theme').value = settings.theme === 'light' ? 'light' : 'dark';
 	$('#input-accent').value = settings.accentColor;
 	$('#output-accent').textContent = settings.accentColor.toUpperCase();
 	$('#input-fabric-api').value = settings.fabricApiVersion;
@@ -1900,6 +2025,8 @@ function applySettings(settings) {
 
 	document.documentElement.style.setProperty('--accent', settings.accentColor);
 	paintRanges();
+	renderDashboard();
+	renderSetupChecklist();
 }
 
 async function loadLoaders(gameVersion) {
@@ -2049,6 +2176,8 @@ async function loadProfiles() {
 	}
 
 	applyProfile(result.activeFor);
+	renderDashboard();
+	renderSetupChecklist();
 }
 
 /**
@@ -2058,6 +2187,7 @@ async function loadProfiles() {
  * files are.
  */
 function showPage(name) {
+	state.page = name;
 	let activeBtn = null;
 	$$('.nav-item').forEach((other) => {
 		const match = other.dataset.page === name;
@@ -2088,16 +2218,15 @@ function showPage(name) {
 		loadServers();
 		loadHosts();
 	}
-	if (name === 'performance') {
-		loadPerformance();
-		setTimeout(initFpsSplineGraph, 50);
-	}
+	if (name === 'performance') loadPerformance();
 	if (name === 'play') {
 		setTimeout(init3DSkinViewer, 50);
 	}
 }
 
 async function init() {
+	initWorkspaceControls();
+
 	// Window controls.
 	$$('[data-window]').forEach((button) => {
 		button.addEventListener('click', () => api.window(button.dataset.window));
@@ -2279,6 +2408,7 @@ async function init() {
 	}
 
 	applySettings(info.settings);
+	applyTheme(info.settings.theme || 'dark', false);
 	$('#paths-output').textContent = [
 		`game   ${info.paths.game}`,
 		`mods   ${info.paths.mods}`,
@@ -2289,6 +2419,8 @@ async function init() {
 	state.accounts = await api.accounts.get();
 	renderAccounts();
 	renderAccountTable();
+	renderDashboard();
+	renderSetupChecklist();
 
 	await loadVersions();
 	await loadLoaders(state.settings.gameVersion);
@@ -2298,6 +2430,8 @@ async function init() {
 	await loadServers();
 	await loadHosts();
 	await loadPerformance();
+	renderDashboard();
+	renderSetupChecklist();
 }
 
 async function loadVersions() {
