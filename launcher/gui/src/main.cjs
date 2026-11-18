@@ -145,7 +145,7 @@ function runCore(args) {
 			if (remaining > 0) output += chunk.toString().slice(0, remaining);
 			if (!outputTruncated && chunk.length > Math.max(0, remaining)) {
 				outputTruncated = true;
-				output += '\\n[launcher output truncated after 1,000,000 characters]';
+				output += '\n[launcher output truncated after 1,000,000 characters]';
 			}
 		};
 
