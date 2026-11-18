@@ -182,6 +182,56 @@ const guard = await evaluate(`(async () => {
 record('withBusy gives the controls back after a rejection', guard.reset === true && guard.result === null, JSON.stringify(guard));
 record('the rejection reaches the player', guard.message === 'boom from the bridge');
 
+// --- command palette and workspace keyboard shortcuts ----------------------------------------
+await evaluate(`document.dispatchEvent(new KeyboardEvent('keydown', {
+	key: 'k', ctrlKey: true, bubbles: true, cancelable: true
+})), true`);
+await waitFor(`document.querySelector('#command-palette').hidden === false`, 'the command palette');
+const paletteOpens = await evaluate(`({
+	open: !document.querySelector('#command-palette').hidden,
+	options: document.querySelectorAll('#command-results .command-result').length,
+	focused: document.activeElement.id
+})`);
+record('Ctrl+K opens the command palette', paletteOpens.open && paletteOpens.options >= 8 && paletteOpens.focused === 'command-search',
+	JSON.stringify(paletteOpens));
+
+await evaluate(`(() => {
+	const input = document.querySelector('#command-search');
+	input.value = 'performance';
+	input.dispatchEvent(new Event('input', { bubbles: true }));
+	return true;
+})()`);
+const filtered = await evaluate(`({
+	count: document.querySelectorAll('#command-results .command-result').length,
+	label: document.querySelector('#command-results .command-result strong')?.textContent
+})`);
+record('the command palette filters pages and actions', filtered.count === 1 && filtered.label === 'Performance',
+	JSON.stringify(filtered));
+
+await pressKey('Escape', 27);
+record('Escape closes the command palette', await evaluate(`document.querySelector('#command-palette').hidden`) === true);
+await evaluate(`document.dispatchEvent(new KeyboardEvent('keydown', {
+	key: '6', ctrlKey: true, bubbles: true, cancelable: true
+})), true`);
+await waitFor(`document.querySelector('.page.is-active')?.dataset.page === 'performance'`, 'the keyboard page shortcut');
+record('Ctrl+6 navigates to Performance', await evaluate(`document.querySelector('.page.is-active').dataset.page`) === 'performance');
+
+// Theme changes are written through the Rust settings command, not browser storage.
+const originalTheme = await evaluate(`window.aether.settings.get().then((result) => result.settings.theme)`);
+await evaluate(`document.querySelector('#theme-toggle').click(), true`);
+const switchedTheme = originalTheme === 'light' ? 'dark' : 'light';
+await waitFor(`document.documentElement.dataset.theme === ${JSON.stringify(switchedTheme)}`, 'the theme to change');
+await waitFor(
+	`window.aether.settings.get().then((result) => result.settings.theme === ${JSON.stringify(switchedTheme)})`,
+	'the theme to be saved by Rust'
+);
+record('the selected theme is persisted by the Rust settings core', true, switchedTheme);
+await evaluate(`document.querySelector('#theme-toggle').click(), true`);
+await waitFor(
+	`window.aether.settings.get().then((result) => result.settings.theme === ${JSON.stringify(originalTheme)})`,
+	'the original theme to be restored'
+);
+
 socket.close();
 await sleep(200);
 const failed = results.filter((entry) => !entry.ok).length;

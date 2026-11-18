@@ -77,8 +77,12 @@ async function waitFor(expression, description, timeout = 20000) {
 
 /** A real mouse click in the middle of an element. */
 async function click(selector) {
+	// A redesigned dashboard can put controls below the fold. Scroll the real target into
+	// the viewport before dispatching a physical mouse event, just as a user would.
 	const point = await evaluate(`(() => {
 		const element = document.querySelector(${JSON.stringify(selector)});
+		if (!element) throw new Error('missing click target: ' + ${JSON.stringify(selector)});
+		element.scrollIntoView({ block: 'center', inline: 'center', behavior: 'instant' });
 		const box = element.getBoundingClientRect();
 		return { x: box.left + box.width / 2, y: box.top + box.height / 2 };
 	})()`);
@@ -88,7 +92,7 @@ async function click(selector) {
 			type, x: point.x, y: point.y, button: 'left', clickCount: 1
 		});
 	}
-	await sleep(150);
+	await sleep(180);
 }
 
 /** Clicks a field and types into it, through the browser's own input. */
