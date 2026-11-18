@@ -136,8 +136,18 @@ function runCore(args) {
 		}
 
 		let output = '';
+		let outputTruncated = false;
 		let settled = false;
 		let timer = null;
+
+		const appendOutput = (chunk) => {
+			const remaining = 1_000_000 - output.length;
+			if (remaining > 0) output += chunk.toString().slice(0, remaining);
+			if (!outputTruncated && chunk.length > Math.max(0, remaining)) {
+				outputTruncated = true;
+				output += '\\n[launcher output truncated after 1,000,000 characters]';
+			}
+		};
 
 		const answer = (result) => {
 			if (settled) return;
@@ -287,7 +297,7 @@ function createWindow() {
 			preload: path.join(here, 'preload.js'),
 			contextIsolation: true,
 			nodeIntegration: false,
-			sandbox: false
+			sandbox: true
 		}
 	});
 
