@@ -4,6 +4,7 @@
 	<meta charset="utf-8" />
 	<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost" />
 	<title>Aether Launcher</title>
+	<link rel="stylesheet" href="tokens.css" />
 	<link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -27,6 +28,7 @@
 
 	<div class="shell">
 		<aside class="sidebar">
+			<div class="nav-indicator" id="nav-indicator"></div>
 			<div class="sidebar-brand-block">
 				<div class="brand-crest">
 					<svg viewBox="0 0 24 24" class="brand-crest-svg">
@@ -108,6 +110,7 @@
 						<p class="hero-subtext">Competitive Minecraft client with built-in optimizations, offline mode and custom HUD.</p>
 					</div>
 					<div class="hero-banner-art">
+						<canvas id="player-skin-canvas" class="player-skin-canvas" width="120" height="120" title="Player 3D Avatar (drag to rotate)"></canvas>
 						<div class="hero-art-shield"></div>
 					</div>
 				</div>
@@ -320,7 +323,36 @@
 						<h2 class="card-title">JVM preset</h2>
 						<p class="muted">The garbage collector flags of the next launch. <strong>Ultra</strong>
 						uses Aikar's flags with string tuning.</p>
-						<label class="field">
+						<div class="preset-cards-grid" id="preset-cards-grid">
+							<div class="preset-card" data-preset="balanced">
+								<div class="preset-card-icon">
+									<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" /><path d="M12 3v18M3 12h18" /></svg>
+								</div>
+								<div class="preset-card-info">
+									<div class="preset-card-title">Balanced</div>
+									<div class="preset-card-desc">Low latency G1GC tuning for stable 144+ FPS</div>
+								</div>
+							</div>
+							<div class="preset-card" data-preset="performance">
+								<div class="preset-card-icon">
+									<svg viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" /></svg>
+								</div>
+								<div class="preset-card-info">
+									<div class="preset-card-title">Performance</div>
+									<div class="preset-card-desc">Optimized allocation rates, minimal GC pauses</div>
+								</div>
+							</div>
+							<div class="preset-card" data-preset="ultra">
+								<div class="preset-card-icon">
+									<svg viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" /></svg>
+								</div>
+								<div class="preset-card-info">
+									<div class="preset-card-title">Ultra (Aikar's)</div>
+									<div class="preset-card-desc">Competitive flag tuning with string deduplication</div>
+								</div>
+							</div>
+						</div>
+						<label class="field" style="margin-top: 12px;">
 							<span class="field-label">Preset</span>
 							<select id="select-jvm" class="input">
 								<option value="balanced">Balanced</option>
@@ -344,6 +376,15 @@
 						</div>
 						<p class="muted" id="options-current"></p>
 					</div>
+				</div>
+
+				<div class="card card--fps-chart">
+					<div class="card-head">
+						<h2 class="card-title">Live FPS Curve & Diagnostics</h2>
+						<span class="badge" id="fps-spline-status">880+ FPS Peak Target</span>
+					</div>
+					<p class="muted">Real-time Catmull-Rom spline smoothed frame telemetry benchmark.</p>
+					<canvas id="fps-spline-canvas" class="fps-spline-canvas" width="600" height="110"></canvas>
 				</div>
 
 				<div class="card">

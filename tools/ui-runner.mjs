@@ -60,11 +60,18 @@ async function checkProbe(pageName) {
 	const probeResult = await evaluate(`(() => {
 		const content = document.querySelector('.content');
 		const activePage = document.querySelector('.page.is-active');
+		const clipped = activePage ? [...activePage.querySelectorAll('.card, .account-row, .version-row, .mod-row, .session-row')].filter(n => n.scrollWidth - n.clientWidth > 1) : [];
 		return {
 			page: activePage?.dataset.page,
 			docOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
 			contentOverflow: content.scrollWidth - content.clientWidth,
-			clippedCount: activePage ? [...activePage.querySelectorAll('.card, .account-row, .version-row, .mod-row, .session-row')].filter(n => n.scrollWidth - n.clientWidth > 1).length : 0
+			clippedCount: clipped.length,
+			clippedDetails: clipped.map(n => ({
+				tag: n.tagName,
+				cls: n.className,
+				diff: n.scrollWidth - n.clientWidth,
+				title: n.querySelector('h2')?.textContent || ''
+			}))
 		};
 	})()`);
 

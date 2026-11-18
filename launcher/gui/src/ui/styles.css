@@ -7,45 +7,47 @@
  */
 
 :root {
-	--bg: #0a0a0b;
-	--bg-elevated: #111113;
-	--surface: #161618;
-	--surface-hover: #1c1c1f;
-	--surface-active: #222225;
-	--border: rgba(255, 255, 255, 0.07);
-	--border-hover: rgba(255, 255, 255, 0.12);
-	--border-focus: rgba(255, 255, 255, 0.18);
-	--text: #ececef;
-	--text-secondary: #a1a1a6;
-	--text-tertiary: #6e6e73;
+	--bg: var(--color-bg, #0B0E14);
+	--bg-elevated: var(--color-bg-elevated, #0F131A);
+	--surface: var(--color-surface, #14181F);
+	--surface-hover: var(--color-surface-hover, #1C222B);
+	--surface-active: var(--color-surface-active, #242B37);
+	--border: var(--color-border, #232B38);
+	--border-hover: rgba(124, 92, 252, 0.35);
+	--border-focus: #7C5CFC;
+	--text: #F1F5F9;
+	--text-secondary: #94A3B8;
+	--text-tertiary: #64748B;
 
 	--sidebar-w: 220px;
 
-	--accent: #6c5ce7;
-	--accent-dim: color-mix(in srgb, var(--accent) 14%, transparent);
-	--accent-soft: color-mix(in srgb, var(--accent) 25%, transparent);
-	--accent-mid: color-mix(in srgb, var(--accent) 50%, transparent);
-	--accent-text: color-mix(in srgb, var(--accent) 75%, white);
-	--accent-hover: color-mix(in srgb, var(--accent) 85%, white);
+	--accent: #7C5CFC;
+	--accent-cyan: #38BDF8;
+	--accent-gradient: linear-gradient(135deg, #7C5CFC 0%, #38BDF8 100%);
+	--accent-dim: rgba(124, 92, 252, 0.14);
+	--accent-soft: rgba(124, 92, 252, 0.25);
+	--accent-mid: rgba(124, 92, 252, 0.50);
+	--accent-text: #C4B5FD;
+	--accent-hover: #9061F9;
 
-	--green: #34c759;
-	--green-dim: rgba(52, 199, 89, 0.12);
-	--red: #ff453a;
-	--red-dim: rgba(255, 69, 58, 0.12);
-	--yellow: #ffd60a;
-	--yellow-dim: rgba(255, 214, 10, 0.12);
+	--green: #10B981;
+	--green-dim: rgba(16, 185, 129, 0.15);
+	--red: #EF4444;
+	--red-dim: rgba(239, 68, 68, 0.15);
+	--yellow: #F59E0B;
+	--yellow-dim: rgba(245, 158, 11, 0.15);
 
-	--radius: 12px;
+	--radius: 14px;
 	--radius-sm: 8px;
 	--radius-xs: 6px;
 
-	--shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
-	--shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
-	--shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.6);
+	--shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.6);
+	--shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+	--shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.7);
 
-	--ring: 0 0 0 2px var(--accent-mid);
-	--ease: cubic-bezier(0.25, 0.1, 0.25, 1);
-	--ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+	--ring: 0 0 0 2px rgba(124, 92, 252, 0.5);
+	--ease: cubic-bezier(0.22, 1, 0.36, 1);
+	--ease-spring: cubic-bezier(0.22, 1, 0.36, 1);
 	--dur: 0.15s;
 }
 
@@ -1383,4 +1385,372 @@ input[type="range"]:disabled::-webkit-slider-thumb { box-shadow: none; cursor: n
 		animation-iteration-count: 1 !important;
 		transition-duration: 0.001ms !important;
 	}
+}
+
+/* ============================================================ AETHER NEO UI == */
+
+/* 1. Sliding Nav Indicator */
+.sidebar {
+	position: relative;
+}
+
+.nav-indicator {
+	position: absolute;
+	left: 8px;
+	width: 3px;
+	height: 28px;
+	border-radius: 3px;
+	background: var(--gradient-aether, linear-gradient(135deg, #7C5CFC, #38BDF8));
+	box-shadow: 0 0 10px rgba(124, 92, 252, 0.6);
+	pointer-events: none;
+	opacity: 0;
+	transform: translateY(0);
+	transition: transform 200ms cubic-bezier(0.22, 1, 0.36, 1), opacity 150ms ease;
+	z-index: 10;
+}
+
+.nav-indicator.is-visible {
+	opacity: 1;
+}
+
+/* 2. 3D Player Avatar Skin Canvas */
+.hero-banner-art {
+	position: relative;
+	width: 120px;
+	height: 120px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex: 0 0 120px;
+}
+
+.player-skin-canvas {
+	width: 110px;
+	height: 110px;
+	border-radius: var(--radius-md, 12px);
+	background: radial-gradient(circle at center, rgba(124, 92, 252, 0.18) 0%, rgba(15, 19, 26, 0.8) 75%);
+	border: 1px solid rgba(124, 92, 252, 0.3);
+	cursor: grab;
+	transition: transform 150ms ease, box-shadow 150ms ease;
+	z-index: 2;
+}
+
+.player-skin-canvas:active {
+	cursor: grabbing;
+	transform: scale(0.97);
+}
+
+.player-skin-canvas:hover {
+	border-color: rgba(56, 189, 248, 0.5);
+	box-shadow: 0 0 18px rgba(124, 92, 252, 0.35);
+}
+
+/* 3. Skeleton Loaders */
+.skeleton-row {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	padding: 12px 14px;
+	border-radius: var(--radius-sm, 8px);
+	background: var(--surface, #14181F);
+	border: 1px solid var(--border, #232B38);
+	margin-bottom: 6px;
+	position: relative;
+	overflow: hidden;
+}
+
+.skeleton-shimmer {
+	position: absolute;
+	top: 0;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.05), transparent);
+	transform: translateX(-100%);
+	animation: skeleton-wave 1.6s infinite;
+}
+
+@keyframes skeleton-wave {
+	100% {
+		transform: translateX(100%);
+	}
+}
+
+.skeleton-box {
+	background: rgba(255, 255, 255, 0.06);
+	border-radius: 4px;
+}
+
+.skeleton-icon {
+	width: 32px;
+	height: 32px;
+	border-radius: 6px;
+	flex: 0 0 32px;
+}
+
+.skeleton-title {
+	width: 140px;
+	height: 14px;
+	margin-bottom: 6px;
+}
+
+.skeleton-sub {
+	width: 220px;
+	height: 10px;
+}
+
+.skeleton-tag {
+	width: 60px;
+	height: 18px;
+	border-radius: 4px;
+	margin-left: auto;
+}
+
+/* 4. Discord-Style Server Cards & MOTD */
+.server-card-discord {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	padding: 14px 16px;
+	border-radius: var(--radius-md, 12px);
+	background: var(--surface, #14181F);
+	border: 1px solid var(--border, #232B38);
+	margin-bottom: 10px;
+	transition: border-color 150ms ease, transform 150ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 150ms ease;
+	position: relative;
+	overflow: hidden;
+}
+
+.server-card-discord:hover {
+	border-color: rgba(124, 92, 252, 0.35);
+	transform: translateY(-1px);
+	box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+.server-card-discord-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 10px;
+}
+
+.server-card-discord-title-group {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	min-width: 0;
+}
+
+.server-card-discord-name {
+	font-weight: 700;
+	font-size: 14px;
+	color: var(--text, #F1F5F9);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.server-card-discord-address {
+	font-size: 11px;
+	font-family: var(--font-mono, monospace);
+	color: var(--text-tertiary, #64748B);
+}
+
+.server-status-dot-pulse {
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	background: var(--green, #10B981);
+	box-shadow: 0 0 8px rgba(16, 185, 129, 0.7);
+	flex: 0 0 8px;
+	animation: dot-pulse 2s infinite;
+}
+
+.server-status-dot-pulse.is-offline {
+	background: #64748B;
+	box-shadow: none;
+	animation: none;
+}
+
+@keyframes dot-pulse {
+	0%, 100% {
+		opacity: 1;
+		transform: scale(1);
+	}
+	50% {
+		opacity: 0.5;
+		transform: scale(0.85);
+	}
+}
+
+.badge-lock {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 2px 7px;
+	border-radius: 4px;
+	font-size: 10px;
+	font-weight: 600;
+	letter-spacing: 0.3px;
+	background: rgba(124, 92, 252, 0.15);
+	color: #C4B5FD;
+	border: 1px solid rgba(124, 92, 252, 0.3);
+}
+
+.badge-offline-ok {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 2px 7px;
+	border-radius: 4px;
+	font-size: 10px;
+	font-weight: 600;
+	letter-spacing: 0.3px;
+	background: rgba(16, 185, 129, 0.15);
+	color: #6EE7B7;
+	border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.motd-container {
+	font-size: 12px;
+	line-height: 1.45;
+	padding: 8px 12px;
+	border-radius: 6px;
+	background: rgba(0, 0, 0, 0.3);
+	border: 1px solid rgba(255, 255, 255, 0.04);
+	word-break: break-word;
+	font-family: var(--font-ui, sans-serif);
+}
+
+/* Minecraft color formatting spans */
+.mc-0 { color: #000000; }
+.mc-1 { color: #0000AA; }
+.mc-2 { color: #00AA00; }
+.mc-3 { color: #00AAAA; }
+.mc-4 { color: #AA0000; }
+.mc-5 { color: #AA00AA; }
+.mc-6 { color: #FFAA00; }
+.mc-7 { color: #AAAAAA; }
+.mc-8 { color: #555555; }
+.mc-9 { color: #5555FF; }
+.mc-a { color: #55FF55; }
+.mc-b { color: #55FFFF; }
+.mc-c { color: #FF5555; }
+.mc-d { color: #FF55FF; }
+.mc-e { color: #FFFF55; }
+.mc-f { color: #FFFFFF; }
+.mc-bold { font-weight: 700; }
+.mc-italic { font-style: italic; }
+.mc-underlined { text-decoration: underline; }
+.mc-strikethrough { text-decoration: line-through; }
+
+/* 5. Performance Preset Cards with Glowing Animated Border */
+.preset-cards-grid {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	margin-top: 10px;
+	width: 100%;
+	box-sizing: border-box;
+}
+
+.preset-card {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 10px 12px;
+	border-radius: var(--radius-md, 12px);
+	background: var(--surface, #14181F);
+	border: 1px solid var(--border, #232B38);
+	cursor: pointer;
+	position: relative;
+	width: 100%;
+	box-sizing: border-box;
+	transition: transform 150ms cubic-bezier(0.22, 1, 0.36, 1), background 150ms ease;
+}
+
+.preset-card:hover {
+	background: var(--surface-hover, #1C222B);
+	transform: translateY(-2px);
+}
+
+.preset-card.is-active {
+	background: #171C26;
+	border-color: transparent;
+	box-shadow: 0 0 16px rgba(124, 92, 252, 0.4);
+}
+
+.preset-card.is-active::after {
+	content: "";
+	position: absolute;
+	inset: -1px;
+	border-radius: inherit;
+	padding: 1px;
+	background: linear-gradient(135deg, #7C5CFC, #38BDF8, #7C5CFC);
+	background-size: 200% 200%;
+	-webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+	-webkit-mask-composite: xor;
+	mask-composite: exclude;
+	animation: border-glow-spin 3s linear infinite;
+	pointer-events: none;
+}
+
+@keyframes border-glow-spin {
+	0% { background-position: 0% 50%; }
+	50% { background-position: 100% 50%; }
+	100% { background-position: 0% 50%; }
+}
+
+.preset-card-icon {
+	width: 32px;
+	height: 32px;
+	border-radius: 8px;
+	background: rgba(124, 92, 252, 0.15);
+	color: #C4B5FD;
+	display: grid;
+	place-items: center;
+	flex: 0 0 32px;
+}
+
+.preset-card-icon svg {
+	width: 18px;
+	height: 18px;
+	stroke: currentColor;
+	stroke-width: 2;
+	fill: none;
+}
+
+.preset-card-info {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+}
+
+.preset-card-title {
+	font-size: 13px;
+	font-weight: 700;
+	color: var(--text, #F1F5F9);
+}
+
+.preset-card-desc {
+	font-size: 11px;
+	color: var(--text-secondary, #94A3B8);
+	line-height: 1.3;
+}
+
+/* 6. Catmull-Rom Live FPS Spline Canvas */
+.card--fps-chart {
+	margin-bottom: 20px;
+}
+
+.fps-spline-canvas {
+	width: 100%;
+	max-width: 100%;
+	height: 110px;
+	border-radius: var(--radius-sm, 8px);
+	background: #0C1017;
+	border: 1px solid var(--border, #232B38);
+	margin-top: 10px;
+	display: block;
+	box-sizing: border-box;
 }

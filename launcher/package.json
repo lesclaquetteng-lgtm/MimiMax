@@ -1,9 +1,8 @@
-{
+﻿{
   "name": "aether-launcher",
   "version": "1.0.0",
   "description": "The launcher of the Aether Client, a Rust core with an Electron interface.",
-  "type": "module",
-  "main": "gui/src/main.js",
+    "main": "gui/src/main.cjs",
   "author": "Aether",
   "license": "MIT",
   "scripts": {
@@ -62,3 +61,5 @@
     }
   }
 }
+
+

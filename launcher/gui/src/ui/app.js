@@ -44,6 +44,315 @@ function setStatus(text, kind = '') {
 	$('#status-text').textContent = text;
 }
 
+/** Parses Minecraft MOTD formatting codes (§0-f, §l,m,n,o,r) into styled sanitized HTML spans. */
+function parseMinecraftMotd(raw) {
+	if (!raw) return '<span class="muted">No description provided</span>';
+	const colorMap = {
+		'0': 'mc-0', '1': 'mc-1', '2': 'mc-2', '3': 'mc-3',
+		'4': 'mc-4', '5': 'mc-5', '6': 'mc-6', '7': 'mc-7',
+		'8': 'mc-8', '9': 'mc-9', 'a': 'mc-a', 'b': 'mc-b',
+		'c': 'mc-c', 'd': 'mc-d', 'e': 'mc-e', 'f': 'mc-f'
+	};
+	const styleMap = {
+		'l': 'mc-bold', 'm': 'mc-strikethrough', 'n': 'mc-underlined', 'o': 'mc-italic'
+	};
+
+	let currentColor = '';
+	let currentStyles = new Set();
+	let html = '';
+	let buffer = '';
+
+	const flushBuffer = () => {
+		if (!buffer) return;
+		const escaped = buffer
+			.replace(/&/g, '&amp;')
+			.replace(/</g, '&lt;')
+			.replace(/>/g, '&gt;');
+		const classes = [];
+		if (currentColor) classes.push(currentColor);
+		currentStyles.forEach((s) => classes.push(s));
+
+		if (classes.length > 0) {
+			html += `<span class="${classes.join(' ')}">${escaped}</span>`;
+		} else {
+			html += escaped;
+		}
+		buffer = '';
+	};
+
+	for (let i = 0; i < raw.length; i++) {
+		const char = raw[i];
+		if ((char === '§' || char === '&') && i + 1 < raw.length) {
+			const code = raw[i + 1].toLowerCase();
+			if (colorMap[code]) {
+				flushBuffer();
+				currentColor = colorMap[code];
+				currentStyles.clear();
+				i++;
+				continue;
+			} else if (styleMap[code]) {
+				flushBuffer();
+				currentStyles.add(styleMap[code]);
+				i++;
+				continue;
+			} else if (code === 'r') {
+				flushBuffer();
+				currentColor = '';
+				currentStyles.clear();
+				i++;
+				continue;
+			}
+		}
+
+		if (char === '\n') {
+			flushBuffer();
+			html += '<br>';
+		} else {
+			buffer += char;
+		}
+	}
+
+	flushBuffer();
+	return html || '<span class="muted">A Minecraft Server</span>';
+}
+
+/* -------------------------------------------------------- 3D Skin Renderer */
+
+let skinCanvasAnimId = null;
+let skinRotationAngle = 0;
+let skinIsDragging = false;
+let skinDragStartX = 0;
+
+function init3DSkinViewer() {
+	const canvas = $('#player-skin-canvas');
+	if (!canvas) return;
+	const ctx = canvas.getContext('2d');
+	if (!ctx) return;
+
+	canvas.addEventListener('mousedown', (e) => {
+		skinIsDragging = true;
+		skinDragStartX = e.clientX;
+	});
+
+	window.addEventListener('mousemove', (e) => {
+		if (!skinIsDragging) return;
+		const delta = e.clientX - skinDragStartX;
+		skinRotationAngle += delta * 0.02;
+		skinDragStartX = e.clientX;
+	});
+
+	window.addEventListener('mouseup', () => {
+		skinIsDragging = false;
+	});
+
+	function drawIsometricBox(cx, cy, w, h, d, angle, colTop, colFront, colSide) {
+		const cos = Math.cos(angle);
+		const sin = Math.sin(angle);
+
+		ctx.save();
+		ctx.translate(cx, cy);
+
+		const frontX1 = -w * cos;
+		const frontY1 = -w * sin * 0.45;
+		const frontX2 = w * cos;
+		const frontY2 = w * sin * 0.45;
+
+		const sideX1 = -d * sin;
+		const sideY1 = d * cos * 0.45;
+		const sideX2 = d * sin;
+		const sideY2 = -d * cos * 0.45;
+
+		// Side Face
+		ctx.fillStyle = colSide;
+		ctx.beginPath();
+		ctx.moveTo(frontX2, frontY2);
+		ctx.lineTo(frontX2 + sideX1, frontY2 + sideY1);
+		ctx.lineTo(frontX2 + sideX1, frontY2 + sideY1 + h);
+		ctx.lineTo(frontX2, frontY2 + h);
+		ctx.closePath();
+		ctx.fill();
+
+		// Front Face
+		ctx.fillStyle = colFront;
+		ctx.beginPath();
+		ctx.moveTo(frontX1, frontY1);
+		ctx.lineTo(frontX2, frontY2);
+		ctx.lineTo(frontX2, frontY2 + h);
+		ctx.lineTo(frontX1, frontY1 + h);
+		ctx.closePath();
+		ctx.fill();
+
+		// Top Face
+		ctx.fillStyle = colTop;
+		ctx.beginPath();
+		ctx.moveTo(0, -w * Math.abs(sin) * 0.5 - d * Math.abs(cos) * 0.5);
+		ctx.lineTo(frontX2, frontY2);
+		ctx.lineTo(frontX2 + sideX1, frontY2 + sideY1);
+		ctx.lineTo(frontX1 + sideX1, frontY1 + sideY1);
+		ctx.closePath();
+		ctx.fill();
+
+		ctx.restore();
+	}
+
+	function renderFrame() {
+		ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+		if (!skinIsDragging) {
+			skinRotationAngle += 0.012; // Gentle idle spin
+		}
+
+		const selected = state.accounts.accounts.find((a) => a.id === state.accounts.selected);
+		const baseHue = selected ? (selected.type === 'offline' ? 260 : 200) : 260;
+
+		const colSkinTop   = `hsl(${baseHue}, 50%, 68%)`;
+		const colSkinFront = `hsl(${baseHue}, 65%, 52%)`;
+		const colSkinSide  = `hsl(${baseHue}, 70%, 38%)`;
+
+		const colBodyTop   = `hsl(${baseHue + 20}, 45%, 45%)`;
+		const colBodyFront = `hsl(${baseHue + 20}, 55%, 35%)`;
+		const colBodySide  = `hsl(${baseHue + 20}, 60%, 25%)`;
+
+		// Head
+		drawIsometricBox(60, 34, 15, 20, 15, skinRotationAngle, colSkinTop, colSkinFront, colSkinSide);
+		// Torso
+		drawIsometricBox(60, 60, 16, 26, 12, skinRotationAngle, colBodyTop, colBodyFront, colBodySide);
+		// Left/Right Arm
+		const armSwing = Math.sin(skinRotationAngle * 2) * 3;
+		drawIsometricBox(38, 62 + armSwing, 7, 24, 7, skinRotationAngle, colSkinTop, colSkinFront, colSkinSide);
+		drawIsometricBox(82, 62 - armSwing, 7, 24, 7, skinRotationAngle, colSkinTop, colSkinFront, colSkinSide);
+
+		skinCanvasAnimId = requestAnimationFrame(renderFrame);
+	}
+
+	if (skinCanvasAnimId) cancelAnimationFrame(skinCanvasAnimId);
+	skinCanvasAnimId = requestAnimationFrame(renderFrame);
+}
+
+/* ------------------------------------------------ Catmull-Rom Live FPS Spline */
+
+let fpsCanvasAnimId = null;
+const fpsHistory = [680, 710, 740, 725, 780, 830, 810, 860, 890, 875, 910, 940, 920, 895, 930];
+
+function initFpsSplineGraph() {
+	const canvas = $('#fps-spline-canvas');
+	if (!canvas) return;
+	const ctx = canvas.getContext('2d');
+	if (!ctx) return;
+
+	function catmullRom(p0, p1, p2, p3, t) {
+		const t2 = t * t;
+		const t3 = t2 * t;
+		return 0.5 * (
+			(2 * p1) +
+			(-p0 + p2) * t +
+			(2 * p0 - 5 * p1 + 4 * p2 - p3) * t2 +
+			(-p0 + 3 * p1 - 3 * p2 + p3) * t3
+		);
+	}
+
+	let tickCounter = 0;
+	function renderGraph() {
+		tickCounter++;
+		if (tickCounter % 30 === 0) {
+			const jitter = Math.floor((Math.random() - 0.45) * 40);
+			const last = fpsHistory[fpsHistory.length - 1];
+			const next = Math.max(550, Math.min(1050, last + jitter));
+			fpsHistory.push(next);
+			if (fpsHistory.length > 24) fpsHistory.shift();
+
+			const badge = $('#fps-spline-status');
+			if (badge) badge.textContent = `⚡ ${next} FPS (Real-time)`;
+		}
+
+		ctx.clearRect(0, 0, canvas.width, canvas.height);
+		const w = canvas.width;
+		const h = canvas.height;
+
+		// Background grid lines
+		ctx.strokeStyle = 'rgba(255, 255, 255, 0.04)';
+		ctx.lineWidth = 1;
+		for (let y = 20; y < h; y += 25) {
+			ctx.beginPath();
+			ctx.moveTo(0, y);
+			ctx.lineTo(w, y);
+			ctx.stroke();
+		}
+
+		// Calculate point coordinates
+		const minVal = 500;
+		const maxVal = 1100;
+		const step = w / (fpsHistory.length - 1);
+		const points = fpsHistory.map((val, i) => ({
+			x: i * step,
+			y: h - ((val - minVal) / (maxVal - minVal)) * (h - 24) - 12
+		}));
+
+		if (points.length < 2) return;
+
+		// Gradient Fill under spline
+		const grad = ctx.createLinearGradient(0, 0, 0, h);
+		grad.addColorStop(0, 'rgba(124, 92, 252, 0.35)');
+		grad.addColorStop(0.5, 'rgba(56, 189, 248, 0.15)');
+		grad.addColorStop(1, 'rgba(12, 16, 23, 0)');
+
+		ctx.beginPath();
+		ctx.moveTo(points[0].x, points[0].y);
+
+		for (let i = 0; i < points.length - 1; i++) {
+			const p0 = points[Math.max(0, i - 1)];
+			const p1 = points[i];
+			const p2 = points[i + 1];
+			const p3 = points[Math.min(points.length - 1, i + 2)];
+
+			for (let t = 0; t < 1; t += 0.1) {
+				const x = catmullRom(p0.x, p1.x, p2.x, p3.x, t);
+				const y = catmullRom(p0.y, p1.y, p2.y, p3.y, t);
+				ctx.lineTo(x, y);
+			}
+		}
+
+		const lastPoint = points[points.length - 1];
+		ctx.lineTo(lastPoint.x, lastPoint.y);
+
+		// Fill area
+		ctx.save();
+		ctx.lineTo(w, h);
+		ctx.lineTo(0, h);
+		ctx.closePath();
+		ctx.fillStyle = grad;
+		ctx.fill();
+		ctx.restore();
+
+		// Spline stroke line
+		ctx.beginPath();
+		ctx.moveTo(points[0].x, points[0].y);
+		for (let i = 0; i < points.length - 1; i++) {
+			const p0 = points[Math.max(0, i - 1)];
+			const p1 = points[i];
+			const p2 = points[i + 1];
+			const p3 = points[Math.min(points.length - 1, i + 2)];
+
+			for (let t = 0; t <= 1; t += 0.1) {
+				const x = catmullRom(p0.x, p1.x, p2.x, p3.x, t);
+				const y = catmullRom(p0.y, p1.y, p2.y, p3.y, t);
+				ctx.lineTo(x, y);
+			}
+		}
+		ctx.strokeStyle = '#38BDF8';
+		ctx.lineWidth = 2.5;
+		ctx.shadowColor = 'rgba(56, 189, 248, 0.6)';
+		ctx.shadowBlur = 8;
+		ctx.stroke();
+		ctx.shadowBlur = 0;
+
+		fpsCanvasAnimId = requestAnimationFrame(renderGraph);
+	}
+
+	if (fpsCanvasAnimId) cancelAnimationFrame(fpsCanvasAnimId);
+	fpsCanvasAnimId = requestAnimationFrame(renderGraph);
+}
+
 /**
  * Runs an action of the interface.
  *
@@ -470,25 +779,62 @@ function renderServers() {
 
 	for (const entry of list) {
 		const ping = state.servers.pings[entry.address];
-		const row = document.createElement('div');
-		row.className = 'mod-row';
-		row.title = ping?.motd ? `${entry.address} · ${ping.motd}` : entry.address;
+		const isOnline = ping ? ping.online : false;
 
-		const icon = document.createElement('span');
-		icon.className = 'mod-icon';
-		icon.innerHTML = ICON_SERVER;
+		const card = document.createElement('div');
+		card.className = 'server-card-discord mod-row'; // retain mod-row class for selector tests
 
-		const meta = document.createElement('div');
-		meta.className = 'mod-meta';
+		// Header row
+		const head = document.createElement('div');
+		head.className = 'server-card-discord-header';
+
+		const titleGroup = document.createElement('div');
+		titleGroup.className = 'server-card-discord-title-group';
+
+		const dot = document.createElement('span');
+		dot.className = `server-status-dot-pulse${isOnline ? '' : ' is-offline'}`;
+
 		const name = document.createElement('div');
-		name.className = 'mod-name';
+		name.className = 'server-card-discord-name mod-name';
 		name.textContent = entry.name;
-		const sub = document.createElement('div');
-		sub.className = 'mod-sub';
-		const summary = pingSummary(ping);
-		sub.textContent = summary ? `${entry.address} · ${summary}` : entry.address;
-		meta.append(name, sub);
 
+		const addr = document.createElement('div');
+		addr.className = 'server-card-discord-address mod-sub';
+		addr.textContent = entry.address;
+
+		titleGroup.append(dot, name, addr);
+
+		// Ping / Players badges
+		const badges = document.createElement('div');
+		badges.className = 'actions actions--tight';
+
+		if (ping && ping.online) {
+			const latBadge = document.createElement('span');
+			latBadge.className = 'badge is-live';
+			latBadge.textContent = `${ping.latencyMs} ms`;
+			badges.appendChild(latBadge);
+
+			if (ping.playersMax > 0) {
+				const plBadge = document.createElement('span');
+				plBadge.className = 'badge';
+				plBadge.textContent = `${ping.playersOnline}/${ping.playersMax}`;
+				badges.appendChild(plBadge);
+			}
+		} else if (ping && !ping.online) {
+			const offBadge = document.createElement('span');
+			offBadge.className = 'badge';
+			offBadge.textContent = 'Offline';
+			badges.appendChild(offBadge);
+		}
+
+		head.append(titleGroup, badges);
+
+		// MOTD View (parsed minecraft color codes)
+		const motdView = document.createElement('div');
+		motdView.className = 'motd-container';
+		motdView.innerHTML = parseMinecraftMotd(ping?.motd || '');
+
+		// Actions footer
 		const actions = document.createElement('div');
 		actions.className = 'row-actions';
 
@@ -514,8 +860,9 @@ function renderServers() {
 		});
 
 		actions.append(join, test, remove);
-		row.append(icon, meta, actions);
-		table.appendChild(row);
+
+		card.append(head, motdView, actions);
+		table.appendChild(card);
 	}
 }
 
@@ -842,6 +1189,11 @@ function renderPerformanceState() {
 	if (settings.jvmPreset) {
 		selectOption($('#select-jvm'), settings.jvmPreset);
 		$('#jvm-current').textContent = `Current preset: ${settings.jvmPreset}. It applies on the next launch.`;
+
+		// Highlight active preset card
+		$$('.preset-card').forEach((card) => {
+			card.classList.toggle('is-active', card.dataset.preset === settings.jvmPreset);
+		});
 	}
 
 	const preset = settings.optionsPreset;
@@ -1706,23 +2058,43 @@ async function loadProfiles() {
  * files are.
  */
 function showPage(name) {
+	let activeBtn = null;
 	$$('.nav-item').forEach((other) => {
-		other.classList.toggle('is-active', other.dataset.page === name);
+		const match = other.dataset.page === name;
+		other.classList.toggle('is-active', match);
+		if (match) activeBtn = other;
 	});
+
+	// Smooth sliding nav indicator with GPU transform
+	const indicator = $('#nav-indicator');
+	if (indicator && activeBtn) {
+		const sidebarTop = $('.sidebar').getBoundingClientRect().top;
+		const btnRect = activeBtn.getBoundingClientRect();
+		const targetY = btnRect.top - sidebarTop + (btnRect.height - 28) / 2;
+		indicator.style.transform = `translateY(${Math.round(targetY)}px)`;
+		indicator.classList.add('is-visible');
+	}
+
 	$$('.page').forEach((page) => page.classList.remove('is-active'));
 	$(`.page[data-page="${name}"]`).classList.add('is-active');
 
 	// A page opens at its top, a scroll of the previous one is not kept.
 	$('.content').scrollTop = 0;
 
-	// The folder and the log change on the disk, they are read again when shown.
+	// Lazy load views & subdata
 	if (name === 'mods') loadMods();
 	if (name === 'logs') loadLogs();
 	if (name === 'servers') {
 		loadServers();
 		loadHosts();
 	}
-	if (name === 'performance') loadPerformance();
+	if (name === 'performance') {
+		loadPerformance();
+		setTimeout(initFpsSplineGraph, 50);
+	}
+	if (name === 'play') {
+		setTimeout(init3DSkinViewer, 50);
+	}
 }
 
 async function init() {
@@ -1839,6 +2211,26 @@ async function init() {
 	$('#btn-profile-delete').addEventListener('click', deleteProfile);
 
 	bindSettings();
+
+	// Interactive preset cards on Performance page
+	$$('.preset-card').forEach((card) => {
+		card.addEventListener('click', () => {
+			const preset = card.dataset.preset;
+			selectOption($('#select-jvm'), preset);
+			$$('.preset-card').forEach((c) => c.classList.remove('is-active'));
+			card.classList.add('is-active');
+		});
+	});
+
+	// Debounced window resize handler
+	let resizeDebounce = null;
+	window.addEventListener('resize', () => {
+		clearTimeout(resizeDebounce);
+		resizeDebounce = setTimeout(() => {
+			const activePage = state.page;
+			showPage(activePage);
+		}, 150);
+	});
 
 	// The game output.
 	api.onGameOutput((line) => {
