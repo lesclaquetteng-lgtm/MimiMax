@@ -228,6 +228,18 @@ cd aether-client
 gradle build              # 25 JUnit tests, then the remapped jar
 ```
 
+### Electron security regression checks
+From `launcher/`, run the dependency-free Node.js checks before changing the main process or preload:
+
+```powershell
+node --check gui/src/main.cjs
+node --check gui/src/preload.js
+npm run test:security
+```
+
+The checks cover HTTPS-only external navigation, renderer IPC origin checks, and mutual exclusion
+for installation/game operations.
+
 ### Interface (Electron, headless check)
 ```powershell
 # Starts the launcher on a debugging port, walks every page at 1180x760 and 940x620,
