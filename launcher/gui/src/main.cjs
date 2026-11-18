@@ -11,7 +11,7 @@ let mainWindow = null;
 const operationGate = createOperationGate();
 
 function handleIpc(channel, handler) {
-	handleIpc(channel, (event, ...args) => {
+	ipcMain.handle(channel, (event, ...args) => {
 		if (!isTrustedIpcEvent(event, mainWindow)) {
 			return { ok: false, error: 'Untrusted IPC sender.' };
 		}
