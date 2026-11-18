@@ -32,15 +32,25 @@ test('navigation stays in the same local application document', () => {
 	assert.equal(isSameAppDocument('not a URL', current), false);
 });
 
-test('IPC is accepted only from the top-level frame of the main window', () => {
-	const mainFrame = {};
-	const sender = { mainFrame };
+test('IPC is accepted from the main document without relying on wrapper identity', () => {
+	const sender = { getURL: () => 'file:///C:/Program%20Files/Aether/ui/index.html' };
 	const window = { webContents: sender };
+	const frame = {
+		url: 'file:///C:/Program%20Files/Aether/ui/index.html',
+		parent: null
+	};
 
-	assert.equal(isTrustedIpcEvent({ sender, senderFrame: mainFrame }, window), true);
-	assert.equal(isTrustedIpcEvent({ sender, senderFrame: {} }, window), false);
-	assert.equal(isTrustedIpcEvent({ sender: {}, senderFrame: mainFrame }, window), false);
+	assert.equal(isTrustedIpcEvent({ sender, senderFrame: { ...frame } }, window), true);
+	assert.equal(isTrustedIpcEvent({ sender: {}, senderFrame: frame }, window), false);
 	assert.equal(isTrustedIpcEvent({ sender, senderFrame: null }, window), false);
+	assert.equal(isTrustedIpcEvent({
+		sender,
+		senderFrame: { ...frame, parent: {} }
+	}, window), false);
+	assert.equal(isTrustedIpcEvent({
+		sender,
+		senderFrame: { ...frame, url: 'https://example.com/' }
+	}, window), false);
 });
 
 test('operation gate rejects overlapping work and releases after completion', async () => {
