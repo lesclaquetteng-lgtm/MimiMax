@@ -63,7 +63,7 @@ jobs:
         working-directory: launcher
         run: |
           Remove-Item Env:ELECTRON_SKIP_BINARY_DOWNLOAD -ErrorAction SilentlyContinue
-          node .\\node_modules\\electron\\install.js
+          node .\node_modules\electron\install.js
           $electronPath = (node -p "require('electron')").Trim()
           if (-not (Test-Path $electronPath)) { throw "Electron runtime is missing at $electronPath" }
           Write-Host "Electron runtime: $electronPath"
