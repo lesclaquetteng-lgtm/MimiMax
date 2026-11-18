@@ -80,6 +80,22 @@ gradle build
 
 ## 4. Interface (Electron)
 
+### 4.0 Electron boundary and concurrency checks
+
+Run these dependency-free checks from `launcher/`:
+
+```powershell
+node --check gui/src/main.cjs
+node --check gui/src/preload.js
+npm run test:security
+```
+
+They verify that external navigation is limited to HTTPS without embedded credentials, the renderer
+cannot invoke IPC from a child frame or another window, and repeated install/game operations cannot
+race over shared state. The renderer is sandboxed and stays on its local application document.
+
+### 4.1 Layout and visual probe
+
 The check drives the real application through CDP, on an isolated `AETHER_HOME`:
 
 ```powershell
