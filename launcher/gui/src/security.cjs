@@ -43,9 +43,17 @@ function isSameAppDocument(candidate, current) {
  * Accept IPC only from the main window's top-level renderer frame.
  */
 function isTrustedIpcEvent(event, window) {
-	if (!window?.webContents || event?.sender !== window.webContents) return false;
-	return Boolean(event.senderFrame && event.sender.mainFrame &&
-		event.senderFrame === event.sender.mainFrame);
+	const contents = window?.webContents;
+	const frame = event?.senderFrame;
+
+	if (!contents || event.sender !== contents || !frame) return false;
+
+	// WebFrameMain wrappers are not a reliable identity boundary across Electron
+	// versions. Check the actual frame tree and its document instead: only the
+	// top-level frame of this app's local index.html may invoke privileged IPC.
+	if (frame.parent !== null) return false;
+
+	return isSameAppDocument(frame.url, contents.getURL());
 }
 
 /**
