@@ -84,8 +84,10 @@ function renderDashboard() {
 	$('#dashboard-profile-meta').textContent = profile
 		? 'Minecraft ' + (profile.gameVersion || '—') + ' · ' + (Math.round(profile.maxMemory / 1024 * 10) / 10) + ' GB RAM'
 		: 'Choose a profile';
-	$('#dashboard-java').textContent = javaPath ? 'Java configured' : 'Auto-detected';
-	$('#dashboard-java-meta').textContent = 'Java ' + requiredJava + ' required · ' + (javaPath ? 'Runtime path ready' : 'Automatic detection');
+	$('#dashboard-java').textContent = javaPath ? 'Path configured' : 'Not detected';
+	$('#dashboard-java-meta').textContent = javaPath
+		? 'Java ' + requiredJava + ' required · Custom runtime path'
+		: 'Install Java ' + requiredJava + ' or select java.exe in Settings';
 	$('#dashboard-status').textContent = status;
 }
 
