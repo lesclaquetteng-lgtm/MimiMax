@@ -4,40 +4,47 @@ Launcher for **Aether Client**. It installs Minecraft with the Fabric loader and
 starts the game with an **offline account** or a **Microsoft account**.
 
 The launcher is split into two parts:
+
 - **Rust core** (`src/`, `Cargo.toml`): accounts, settings, version/Fabric metadata, installation,
   classpath/argument building, game launch, and a JSON-oriented CLI.
-- **Electron GUI** (`gui/`): desktop interface that spawns the Rust binary and streams progress/output.
+- **Native shell** (`desktop/`, Tauri 2 + WebView2): the window, the single-instance lock, the
+  process runner, the packaging — and the interface it serves from `gui/src/ui/`.
+
+The interface is plain HTML/CSS/JavaScript. It was written for an Electron shell, which is gone: the
+same files are now served by the system webview, through `gui/src/ui/bridge.js`, which exposes
+`window.aether` over Tauri's IPC.
 
 ## Prerequisites
 
-- **Rust toolchain** (Cargo) to build and test the core.
-- **Node.js + npm** to run/build the Electron UI.
+- **Rust toolchain** (Cargo) to build and test the core and the shell.
+- **WebView2** (shipped with Windows 10/11; the installer embeds the bootstrapper otherwise).
 - **Java runtime** available for launching Minecraft (the launcher detects/configures the Java path).
+- **Node.js** only for the end-to-end scripts in `../tools/e2e/`.
 
 ## Build & run
 
-### 1) Build the launcher core
 ```powershell
-cargo build --release
-# or: npm run core
+cargo build --release                                # core  -> target/release/aether-launcher.exe
+cargo build --release --manifest-path desktop/Cargo.toml  # shell -> desktop/target/release/aether-desktop.exe
 ```
 
-The GUI looks for:
-- `target/release/aether-launcher(.exe)`
-- `target/debug/aether-launcher(.exe)`
-- or the binary specified by `AETHER_LAUNCHER_BIN`
+The shell **embeds** the core binary at compile time (`desktop/src/core.rs`, `include_bytes!` of
+`target/release/aether-launcher.exe`): build the core first, or the shell build fails. A portable
+build is therefore one file, and the installer carries one file.
 
-### 2) Start the GUI
 ```powershell
-npm install
-npm start
+npm run core      # cargo build --release
+npm run shell     # cargo build --release --manifest-path desktop/Cargo.toml
+npm start         # runs the shell from its build directory
+npm run test:shell
 ```
 
-> If the core binary is missing, the GUI reports that it must be built first.
+> Without a built core, the shell reports that it must be built first (`AETHER_LAUNCHER_BIN` can
+> point at any core binary).
 
 ## CLI (Rust core)
 
-The CLI prints JSON messages (useful for scripting and for the GUI bridge).
+The CLI prints JSON messages (the interface is a client of these commands).
 
 ```powershell
 cargo run --release -- help
@@ -59,7 +66,15 @@ Available commands:
 | `loaders [--version X]` | List Fabric loader versions for a game version |
 | `install [--version X] [--loader Y] [--fabric-api Z]` | Install game/libraries/assets/Fabric API/mod and emit progress events |
 | `launch [--version X] [--account ID]` | Launch Minecraft and stream game output/exit status |
+| `stop` | Stop the recorded game, even when the launcher that started it is gone |
 | `command [--version X] [--account ID]` | Print the resolved Java program, arguments and classpath |
+
+### The record of the game
+
+A launch writes the identifier of the Java process to `<home>/aether/game.pid` and removes it when
+the game exits. The shell kills the child it started when the window closes; the record covers the
+case where the shell itself was killed, or when the game was started from the command line: `stop`
+reads it and kills the tree instead of leaving an orphan that the next session cannot name.
 
 ### Notes
 - Default profile values come from settings (e.g. `gameVersion`, `loaderVersion`, `fabricApiVersion`).
@@ -74,13 +89,14 @@ Available commands:
 | `AETHER_SHARED_DIR` | Use a specific game directory (e.g. an existing `.minecraft`) |
 | `AETHER_ANCHOR` | Directory used to locate an installation sitting next to the executable (set by the shell) |
 | `AETHER_MOD_JAR` | Explicit path to `aether-client-*.jar` for installation |
-| `AETHER_LAUNCHER_BIN` | (GUI) Explicit path to the launcher core binary |
+| `AETHER_LAUNCHER_BIN` | (shell) Explicit path to the launcher core binary |
 
 Resolved paths (defaults, unless overridden):
 
 | What | Path |
 | --- | --- |
 | Launcher data (settings, accounts, logs) | `<home>/Aether/aether` |
+| Record of the running game | `<home>/Aether/aether/game.pid` |
 | Game directory (assets, libraries, versions, mods) | `<home>/Aether/.minecraft` |
 
 `<home>` is derived from the current user profile/home directory.
@@ -101,27 +117,27 @@ Implementation: `src/offline.rs`, `src/accounts.rs`, `src/game.rs`.
 ```text
 launcher/
 ├── src/                  Rust core (CLI, install, launch, metadata, accounts, settings)
-├── gui/
-│   └── src/
-│       ├── main.cjs      Active CommonJS Electron main process
-│       ├── preload.js    Sandboxed renderer bridge (window.aether API)
-│       ├── security.cjs  URL, IPC and operation guards
-│       └── ui/           Renderer UI (HTML/CSS/JS)
+├── desktop/              Native shell (Tauri 2)
+│   ├── src/main.rs       window, single-instance lock, command registration
+│   ├── src/commands.rs   one command per interface call (same names as the old IPC)
+│   ├── src/core.rs       runs the core, streams its JSON events, embeds the binary
+│   ├── src/state.rs      the processes the window can stop (install, game)
+│   └── tauri.conf.json   window, CSP, NSIS (French) packaging
+├── gui/src/ui/           the interface: HTML/CSS/JS + bridge.js (window.aether over Tauri IPC)
 ├── tests/                Rust integration/unit tests
 ├── Cargo.toml
-└── package.json          Electron scripts/build config
+└── package.json          npm shortcuts (core, shell, start, e2e)
 ```
 
 ## Tests & checks
 
 ```powershell
-cargo test
-node --check gui/src/main.cjs
-node --check gui/src/preload.js
-npm run test:security
-# optional
-cargo clippy --all-targets
+cargo test                                               # core
+cargo test --manifest-path desktop/Cargo.toml            # shell
+cargo clippy --all-targets                               # core
+cargo clippy --all-targets --manifest-path desktop/Cargo.toml
 ```
 
-GUI packaging/build scripts are defined in `package.json` (`pack`, `dist`) and require Electron Builder
-dependencies/configuration appropriate for your environment.
+The end-to-end scripts live in `../tools/e2e/` and drive the real window over the DevTools protocol
+of WebView2 (`WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS="--remote-debugging-port=9222"`); they use the
+same `window.aether` bridge as a player. See `../docs/VERIFICATION.md` §4.

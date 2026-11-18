@@ -458,17 +458,30 @@ impl Launcher {
         // interface that the next launch wipes.
         let mut session = logs::SessionLog::start(&self.paths).ok();
 
-        let mut child = game::launch(&options, |line: &str| {
-            if let Some(session) = session.as_mut() {
-                session.line(line);
-            }
-            on_output(line);
-        })
+        // The record of the process outlives this call: a shell that crashes must not leave Java
+        // running with nothing able to name it.
+        let data = self.paths.data.clone();
+
+        let mut child = game::launch(
+            &options,
+            |pid: u32| game::record_pid(&data, pid),
+            |line: &str| {
+                if let Some(session) = session.as_mut() {
+                    session.line(line);
+                }
+                on_output(line);
+            },
+        )
         .map_err(|error| format!("could not start java: {}", error))?;
 
-        let status = child
-            .wait()
-            .map_err(|error| format!("the game stopped: {}", error))?;
+        let status = match child.wait() {
+            Ok(status) => status,
+            Err(error) => {
+                game::forget_pid(&self.paths.data);
+                return Err(format!("the game stopped: {}", error));
+            }
+        };
+        game::forget_pid(&self.paths.data);
 
         let code = status.code().unwrap_or(0) as u32;
         if let Some(session) = session.as_mut() {
@@ -476,5 +489,18 @@ impl Launcher {
         }
 
         Ok((code, offline))
+    }
+
+    /// The game that is still running, including the one of a launcher that is gone.
+    pub fn running_game(&self) -> Option<u32> {
+        game::running(&self.paths.data)
+    }
+
+    /// Stops the game from its record.
+    ///
+    /// The shell closes the child it started on its own; this is the path that still works after the
+    /// shell itself was killed, or for a game started from the command line.
+    pub fn stop_game(&self) -> Result<u32, String> {
+        game::stop(&self.paths.data)
     }
 }

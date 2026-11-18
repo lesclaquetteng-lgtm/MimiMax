@@ -132,7 +132,7 @@ await sleep(500);
 
 // --- create an offline account through the real UI --------------------------------------------
 let accountStore = await evaluate('window.aether.accounts.get()');
-record('the account store is reachable through Electron IPC', accountStore?.ok === true, accountStore?.error || '');
+record('the account store is reachable through the launcher bridge', accountStore?.ok === true, accountStore?.error || '');
 
 if (accountStore?.ok && accountStore.accounts.length === 0) {
 	await click('.nav-item[data-page="accounts"]');

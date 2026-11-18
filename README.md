@@ -1,19 +1,19 @@
 # Aether Client
 
-A Minecraft client in the spirit of **Lunar Client**, **Badlion** and **Feather**, built on
-**Fabric**, with first-class **offline (cracked) mode** support.
+A Minecraft client built on **Fabric**, with first-class **offline (cracked) mode** support and a
+launcher that installs, tunes and starts the game.
 
 It consists of two parts:
 
 | Part | Path | Description |
 | --- | --- | --- |
 | **Aether Client** | `aether-client/` | Fabric mod that runs inside Minecraft: modules, HUD, Click GUI, configuration and session handling. |
-| **Aether Launcher** | `launcher/` | Rust launcher core + Electron GUI that manages accounts/settings, installs Minecraft/Fabric/mods and starts the game. |
+| **Aether Launcher** | `launcher/` | Rust launcher core + native shell (Tauri/WebView2) that manages accounts/settings, installs Minecraft/Fabric/mods and starts the game. |
 
 ```
 .
 ├── aether-client/      Fabric mod (Minecraft 1.21.11, Java 21, Mojang mappings)
-├── launcher/           Rust core + Electron interface
+├── launcher/           Rust core (src/) + native shell (desktop/) + its interface (gui/src/ui/)
 ├── docs/               Architecture, features and verification notes
 └── tools/              Local helper scripts/references used during development
 ```
@@ -25,6 +25,20 @@ It consists of two parts:
 In game, with the optimisation pack and an offline account on a hosted server:
 
 ![HUD at 889 FPS](docs/images/fps-offline-hud.png)
+
+## What this client is, and what it is not
+
+It is a client for **singleplayer, offline servers and private servers you run or are allowed to
+join**: HUD elements, interface modules, movement helpers, an offline-first launcher, a local server
+host, and a verified optimisation pack.
+
+It is **not** marketed as an anti-cheat-safe client. The Combat category really does contain
+Kill Aura, Auto Crystal and Anti Knockback (`docs/FEATURES.md`), and no module claims to be
+undetectable, to bypass a specific anti-cheat, or to be allowed on servers that forbid it. Those
+modules exist for the player's own worlds and for servers whose rules permit them.
+
+The launcher is the part with no asterisk: offline and Microsoft accounts, installation, servers,
+hosting, logs and the performance pack stay usable whatever the player does in game.
 
 ## Offline mode
 
@@ -118,9 +132,11 @@ See [`docs/FEATURES.md`](docs/FEATURES.md) for the detailed list.
 - Offline and Microsoft account support.
 - Version/Fabric loader selection and installation pipeline.
 - Downloads/verifies game client, libraries, assets, Fabric profile dependencies, Fabric API and Aether mod jar.
-- Builds and runs the Java launch command (CLI) or launches from the Electron UI.
+- Builds and runs the Java launch command (CLI) or launches from the native shell.
 - Servers page: server list, ping, offline-account probe, one-click hosting of an offline server.
 - Performance page: optimisation pack from Modrinth, options and JVM presets.
+- Records the process of the game, so a game left behind by a closed launcher can still be stopped
+  (`aether-launcher stop`, or the Stop button of the next session).
 - Stores settings/accounts/game data under an Aether-managed home (configurable).
 
 ## Prerequisites
@@ -130,9 +146,12 @@ See [`docs/FEATURES.md`](docs/FEATURES.md) for the detailed list.
 - **A JDK compatible with Gradle/Fabric Loom** to run Gradle itself (Loom 1.19 may require a newer JDK, e.g. 25, depending on your setup; `tools/setup.ps1` can help provision local tooling on Windows).
 
 ### Aether Launcher (`launcher/`)
-- **Rust toolchain** (Cargo) to build/test the launcher core.
-- **Node.js + npm** to run the Electron GUI.
+- **Rust toolchain** (Cargo) to build/test the launcher core and the shell.
+- **WebView2** to run the shell: Windows 10/11 ship it, and the NSIS installer carries the
+  bootstrapper for machines that do not.
 - A working **Java runtime** for launching Minecraft (the launcher can detect/configure it).
+- Node.js is only needed for the end-to-end scripts in `tools/e2e/` (`node --test`, CDP over
+  WebSocket); the launcher itself has no npm dependency.
 
 ## Building
 
@@ -155,18 +174,33 @@ cargo build --release
 Binary:
 - `launcher/target/release/aether-launcher` (or `.exe` on Windows)
 
-### Launcher GUI (Electron)
+### Launcher shell (Tauri)
 ```powershell
 cd launcher
-npm install
-npm start
+cargo build --release --manifest-path desktop/Cargo.toml
+# or, from the same folder: npm run shell
 ```
 
-The Electron app looks for the Rust binary (e.g. `target/release/aether-launcher` or `target/debug/aether-launcher`, or `AETHER_LAUNCHER_BIN`).
+Binary:
+- `launcher/desktop/target/release/aether-desktop.exe` (~8.5 MB, the core and the interface are embedded)
+
+The shell embeds the core binary at compile time, so the core is always built first:
+`npm run core && npm run shell`. `npm start` runs the shell from the build directory.
+
+The root `MimiMax.exe` / `Aether-Launcher.exe` (`tools/launcher-runner.rs`) only looks for the shell
+and starts it; `build.bat` compiles the core, the shell, the mod and that runner in order.
+
+### Installer
+```powershell
+cd launcher/desktop
+cargo tauri build      # NSIS (French) + portable executable
+```
+The artefacts land in `launcher/desktop/target/release/bundle/`; `dist/` keeps the two files that
+were published (`Aether-Launcher-1.0.0-portable.exe`, `Aether-Launcher-Setup-1.0.0.exe`).
 
 ## Command line (launcher core)
 
-The Rust binary exposes JSON-oriented commands used by the GUI and usable directly:
+The Rust binary exposes JSON-oriented commands used by the interface and usable directly:
 
 ```powershell
 cd launcher
@@ -185,6 +219,7 @@ cargo run --release -- install --version 1.21.11 --loader 0.20.1
 cargo run --release -- command --account <account-id>
 cargo run --release -- launch --account <account-id>
 cargo run --release -- launch --server 127.0.0.1:25565
+cargo run --release -- stop
 cargo run --release -- servers ping mc.hypixel.net
 cargo run --release -- servers probe mc.hypixel.net
 cargo run --release -- hosts create --name "Local Test" --port 25565 --players 10
@@ -198,6 +233,10 @@ cargo run --release -- performance jvm ultra
 
 (You can also run the compiled binary from `target/release/` directly.)
 
+`stop` reads the record of the game written by the last launch, so it also stops a game whose
+launcher was closed or killed; it answers `{"ok": false, "error": "no game is running"}` when there
+is nothing to close.
+
 ## Data locations
 
 By default the launcher resolves paths under the user's home directory:
@@ -205,59 +244,72 @@ By default the launcher resolves paths under the user's home directory:
 | What | Default location |
 | --- | --- |
 | Launcher data (settings/accounts/logs) | `<home>/Aether/aether` |
+| Record of the running game | `<home>/Aether/aether/game.pid` |
 | Game directory (assets/libraries/versions/mods) | `<home>/Aether/.minecraft` |
 
 Environment overrides:
 - `AETHER_HOME`: moves the launcher home/root.
 - `AETHER_SHARED_DIR`: points the game directory to an existing `.minecraft`.
 - `AETHER_MOD_JAR`: overrides the path to the Aether client mod jar used during installation.
-- `AETHER_LAUNCHER_BIN` (GUI): path to the launcher core binary.
+- `AETHER_LAUNCHER_BIN` (shell): path to the launcher core binary.
 
 ## Tests
 
 ### Launcher (Rust)
 ```powershell
 cd launcher
-cargo test --release      # 151 tests: 122 unit + 6 download + 20 integration + 3 sha1
+cargo test --release
 cargo clippy --release --all-targets
 ```
+
+### Launcher shell (Rust)
+```powershell
+cd launcher
+cargo test --release --manifest-path desktop/Cargo.toml
+```
+
+### Design tokens
+```powershell
+node tools/check-theme-tokens.mjs
+```
+
+Fails when a `var(--…)` of the interface has no definition in `launcher/gui/src/ui/tokens.css`, or
+when the same token is declared in two files. `tools/capture-window.ps1` screenshots the real window
+and `tools/theme-probe.mjs` reads the computed theme over the DevTools protocol of WebView2.
+`tools/theme-sweep.mjs` walks the eight pages, exercises the accent control by clicking it, and
+audits every page: unresolved tokens, text below the WCAG contrast floor, leftovers of the previous
+palette. Start the shell with `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS="--remote-debugging-port=9247"`,
+then `node tools/theme-sweep.mjs 9247 tools/theme-pages` (optionally a colour as a fourth argument).
 
 ### Client (Java / Gradle)
 ```powershell
 cd aether-client
-gradle build              # 25 JUnit tests, then the remapped jar
+gradle build
 ```
 
-### Electron security regression checks
-From `launcher/`, run the dependency-free Node.js checks before changing the main process or preload:
+### Interface (headless check)
+The interface is plain HTML/CSS/JS served by the shell; the checks drive it over the DevTools
+protocol of WebView2, on an isolated `AETHER_HOME`:
 
 ```powershell
-node --check gui/src/main.cjs
-node --check gui/src/preload.js
-npm run test:security
-```
-
-The checks cover HTTPS-only external navigation, renderer IPC origin checks, and mutual exclusion
-for installation/game operations.
-
-### Interface (Electron, headless check)
-```powershell
-# Starts the launcher on a debugging port, walks every page at 1180x760 and 940x620,
-# measures the overflows and writes the screenshots.
-node tools/ui-check.mjs 9231 tools/ui-shots
+$env:AETHER_HOME = "tools/ui-home"
+$env:AETHER_SHARED_DIR = "tools/aether-home/.minecraft"
+$env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = "--remote-debugging-port=9233"
+& launcher/desktop/target/release/aether-desktop.exe
+node tools/ui-check.mjs 9233 tools/ui-shots
 ```
 
 The behavioural end-to-end checks (failures, crash report, cancellation, timeouts, accessibility,
 profiles, sliders) live in `tools/e2e/` and run through `npm run e2e:*` from `launcher/` — see
-[`docs/VERIFICATION.md`](docs/VERIFICATION.md) §4.1 for the full procedure.
+[`docs/VERIFICATION.md`](docs/VERIFICATION.md) §4.2 for the full procedure.
 
 ## Documentation
 
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) – component design and key decisions
 - [`docs/FEATURES.md`](docs/FEATURES.md) – user-facing features and modules
 - [`docs/VERIFICATION.md`](docs/VERIFICATION.md) – verification checklist and measured results
-- [`RAPPORT-FINAL.md`](RAPPORT-FINAL.md) – analyse, tests, FPS, verdict on the interface and the
-  advanced improvements (in French)
+- [`ANALYSE-AMELIORATIONS.md`](ANALYSE-AMELIORATIONS.md) – the improvement log, with the evidence of
+  each change (in French)
 
 ## Licence
 

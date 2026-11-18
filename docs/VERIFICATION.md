@@ -78,21 +78,30 @@ gradle build
   configuration used to fall back to the defaults.
 - The built jar is remapped by Loom and copied to the mods folder by `aether-launcher install`.
 
-## 4. Interface (Electron)
+## 4. Interface (native shell)
 
-### 4.0 Electron boundary and concurrency checks
-
-Run these dependency-free checks from `launcher/`:
+The interface is plain HTML/CSS/JavaScript, served by the Tauri shell to WebView2. It talks to the
+core through `gui/src/ui/bridge.js`, which exposes the same `window.aether` object the Electron
+preload used to define.
 
 ```powershell
-node --check gui/src/main.cjs
-node --check gui/src/preload.js
-npm run test:security
+cargo test --release --manifest-path desktop/Cargo.toml
+cargo build --release --manifest-path desktop/Cargo.toml
 ```
 
-They verify that external navigation is limited to HTTPS without embedded credentials, the renderer
-cannot invoke IPC from a child frame or another window, and repeated install/game operations cannot
-race over shared state. The renderer is sandboxed and stays on its local application document.
+The shell tests cover the shape of the answers it builds, the JSON documents of the core and the
+timeouts of the network commands. The window itself is covered by the checks below.
+
+### 4.0 What the shell guarantees
+
+- **One instance**: a second launch focuses the window that is already open, so two windows cannot
+  write the same settings.
+- **Embedded core**: `desktop/src/core.rs` embeds `target/release/aether-launcher.exe`, writes it to
+  the application data on first start and replaces it when its bytes change.
+- **No orphan on close**: `RunEvent::ExitRequested` / `Exit` kill the installation and the game that
+  the window started (`state::kill_active`).
+- **No orphan after a crash**: the core records the game in `<home>/aether/game.pid`, so `stop` (and
+  the Stop button of the next session) still kills the tree of a launcher that was killed.
 
 ### 4.1 Layout and visual probe
 
@@ -101,7 +110,8 @@ The check drives the real application through CDP, on an isolated `AETHER_HOME`:
 ```powershell
 $env:AETHER_HOME = "tools/ui-home"
 $env:AETHER_SHARED_DIR = "tools/aether-home/.minecraft"
-electron . --remote-debugging-port=9233
+$env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = "--remote-debugging-port=9233"
+& launcher/desktop/target/release/aether-desktop.exe
 node tools/ui-check.mjs 9233 tools/ui-shots
 ```
 
@@ -133,11 +143,11 @@ The behavioural checks live in `tools/e2e/`, **not** in `target/`: `cargo clean`
 to delete them. They drive the real application over CDP; the launcher is started with a fake core
 so the failures are reproducible without touching the network:
 
-The GitHub Actions job **Electron account and profile flows (Windows)** runs
-`profiles.mjs` against the real Electron window and the real Rust core on an isolated data home.
-It creates an offline account through the Accounts dialog, then exercises profile selection,
-editing, creation and deletion through the Play page. This is the regression test for the complete
-renderer → preload → IPC → core path, not only for the helper functions.
+These scripts drive the real window and the real Rust core on an isolated data home. The
+`profiles.mjs` walk creates an offline account through the Accounts dialog, then exercises profile
+selection, editing, creation and deletion through the Play page: it covers the complete
+renderer → bridge → command → core path, not only the helper functions. They are no longer part of
+CI (the shell needs a desktop session): run them locally with the commands below.
 
 
 ```powershell
@@ -150,7 +160,8 @@ $env:AETHER_HOME = "tools/e2e/home"
 $env:AETHER_LAUNCHER_BIN = "tools/e2e/fake-core.exe"
 $env:AETHER_REAL_CORE = "launcher/target/release/aether-launcher.exe"
 $env:AETHER_FAKE_FAIL = "install,launch-exit"   # the failure mode of the run
-electron . --remote-debugging-port=9222
+$env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = "--remote-debugging-port=9222"
+& launcher/desktop/target/release/aether-desktop.exe
 
 # Then, from launcher/:
 npm run e2e:failure -- 9222 documents   # install + launch error documents, installation report

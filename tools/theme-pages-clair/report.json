@@ -1,0 +1,569 @@
+{
+  "pages": [
+    {
+      "accent": "defaut",
+      "data": {
+        "play": {
+          "unresolved": [],
+          "measured": 39,
+          "problems": [],
+          "survivors": [],
+          "consumers": {
+            "primaryButton": {
+              "color": "rgb(255, 255, 255)",
+              "background": "color(srgb 0.189725 0.418039 0.791059)",
+              "border": "rgba(0, 0, 0, 0)"
+            },
+            "rangeValue": {
+              "color": "color(srgb 0.707922 0.813726 0.986588)",
+              "background": "color(srgb 0.231373 0.509804 0.964706 / 0.14)",
+              "border": "color(srgb 0.231373 0.509804 0.964706 / 0.3)"
+            },
+            "badge": {
+              "color": "color(srgb 0.707922 0.813726 0.986588)",
+              "background": "color(srgb 0.231373 0.509804 0.964706 / 0.14)",
+              "border": "color(srgb 0.231373 0.509804 0.964706 / 0.3)"
+            }
+          },
+          "tokens": {
+            "accent": "#3B82F6",
+            "accent-dim": "color-mix(in srgb, #3B82F6 14%, transparent)",
+            "accent-soft": "color-mix(in srgb, #3B82F6 30%, transparent)",
+            "accent-mid": "color-mix(in srgb, #3B82F6 55%, transparent)",
+            "accent-text": "color-mix(in srgb, #3B82F6 38%, #ffffff)",
+            "accent-hover": "color-mix(in srgb, #3B82F6 68%, #000)",
+            "border-hover": "color-mix(in srgb, #3B82F6 45%, transparent)"
+          }
+        },
+        "accounts": {
+          "unresolved": [],
+          "measured": 24,
+          "problems": [],
+          "survivors": [],
+          "consumers": {
+            "primaryButton": {
+              "color": "rgb(255, 255, 255)",
+              "background": "color(srgb 0.189725 0.418039 0.791059)",
+              "border": "rgba(0, 0, 0, 0)"
+            },
+            "rangeValue": {
+              "color": "color(srgb 0.707922 0.813726 0.986588)",
+              "background": "color(srgb 0.231373 0.509804 0.964706 / 0.14)",
+              "border": "color(srgb 0.231373 0.509804 0.964706 / 0.3)"
+            },
+            "badge": {
+              "color": "color(srgb 0.707922 0.813726 0.986588)",
+              "background": "color(srgb 0.231373 0.509804 0.964706 / 0.14)",
+              "border": "color(srgb 0.231373 0.509804 0.964706 / 0.3)"
+            }
+          },
+          "tokens": {
+            "accent": "#3B82F6",
+            "accent-dim": "color-mix(in srgb, #3B82F6 14%, transparent)",
+            "accent-soft": "color-mix(in srgb, #3B82F6 30%, transparent)",
+            "accent-mid": "color-mix(in srgb, #3B82F6 55%, transparent)",
+            "accent-text": "color-mix(in srgb, #3B82F6 38%, #ffffff)",
+            "accent-hover": "color-mix(in srgb, #3B82F6 68%, #000)",
+            "border-hover": "color-mix(in srgb, #3B82F6 45%, transparent)"
+          }
+        },
+        "versions": {
+          "unresolved": [],
+          "measured": 140,
+          "problems": [],
+          "survivors": [],
+          "consumers": {
+            "primaryButton": {
+              "color": "rgb(255, 255, 255)",
+              "background": "color(srgb 0.189725 0.418039 0.791059)",
+              "border": "rgba(0, 0, 0, 0)"
+            },
+            "rangeValue": {
+              "color": "color(srgb 0.707922 0.813726 0.986588)",
+              "background": "color(srgb 0.231373 0.509804 0.964706 / 0.14)",
+              "border": "color(srgb 0.231373 0.509804 0.964706 / 0.3)"
+            },
+            "badge": {
+              "color": "color(srgb 0.707922 0.813726 0.986588)",
+              "background": "color(srgb 0.231373 0.509804 0.964706 / 0.14)",
+              "border": "color(srgb 0.231373 0.509804 0.964706 / 0.3)"
+            }
+          },
+          "tokens": {
+            "accent": "#3B82F6",
+            "accent-dim": "color-mix(in srgb, #3B82F6 14%, transparent)",
+            "accent-soft": "color-mix(in srgb, #3B82F6 30%, transparent)",
+            "accent-mid": "color-mix(in srgb, #3B82F6 55%, transparent)",
+            "accent-text": "color-mix(in srgb, #3B82F6 38%, #ffffff)",
+            "accent-hover": "color-mix(in srgb, #3B82F6 68%, #000)",
+            "border-hover": "color-mix(in srgb, #3B82F6 45%, transparent)"
+          }
+        },
+        "mods": {
+          "unresolved": [],
+          "measured": 27,
+          "problems": [],
+          "survivors": [],
+          "consumers": {
+            "primaryButton": {
+              "color": "rgb(255, 255, 255)",
+              "background": "color(srgb 0.189725 0.418039 0.791059)",
+              "border": "rgba(0, 0, 0, 0)"
+            },
+            "rangeValue": {
+              "color": "color(srgb 0.707922 0.813726 0.986588)",
+              "background": "color(srgb 0.231373 0.509804 0.964706 / 0.14)",
+              "border": "color(srgb 0.231373 0.509804 0.964706 / 0.3)"
+            },
+            "badge": {
+              "color": "color(srgb 0.707922 0.813726 0.986588)",
+              "background": "color(srgb 0.231373 0.509804 0.964706 / 0.14)",
+              "border": "color(srgb 0.231373 0.509804 0.964706 / 0.3)"
+            }
+          },
+          "tokens": {
+            "accent": "#3B82F6",
+            "accent-dim": "color-mix(in srgb, #3B82F6 14%, transparent)",
+            "accent-soft": "color-mix(in srgb, #3B82F6 30%, transparent)",
+            "accent-mid": "color-mix(in srgb, #3B82F6 55%, transparent)",
+            "accent-text": "color-mix(in srgb, #3B82F6 38%, #ffffff)",
+            "accent-hover": "color-mix(in srgb, #3B82F6 68%, #000)",
+            "border-hover": "color-mix(in srgb, #3B82F6 45%, transparent)"
+          }
+        },
+        "servers": {
+          "unresolved": [],
+          "measured": 41,
+          "problems": [],
+          "survivors": [],
+          "consumers": {
+            "primaryButton": {
+              "color": "rgb(255, 255, 255)",
+              "background": "color(srgb 0.189725 0.418039 0.791059)",
+              "border": "rgba(0, 0, 0, 0)"
+            },
+            "rangeValue": {
+              "color": "color(srgb 0.707922 0.813726 0.986588)",
+              "background": "color(srgb 0.231373 0.509804 0.964706 / 0.14)",
+              "border": "color(srgb 0.231373 0.509804 0.964706 / 0.3)"
+            },
+            "badge": {
+              "color": "color(srgb 0.707922 0.813726 0.986588)",
+              "background": "color(srgb 0.231373 0.509804 0.964706 / 0.14)",
+              "border": "color(srgb 0.231373 0.509804 0.964706 / 0.3)"
+            }
+          },
+          "tokens": {
+            "accent": "#3B82F6",
+            "accent-dim": "color-mix(in srgb, #3B82F6 14%, transparent)",
+            "accent-soft": "color-mix(in srgb, #3B82F6 30%, transparent)",
+            "accent-mid": "color-mix(in srgb, #3B82F6 55%, transparent)",
+            "accent-text": "color-mix(in srgb, #3B82F6 38%, #ffffff)",
+            "accent-hover": "color-mix(in srgb, #3B82F6 68%, #000)",
+            "border-hover": "color-mix(in srgb, #3B82F6 45%, transparent)"
+          }
+        },
+        "performance": {
+          "unresolved": [],
+          "measured": 79,
+          "problems": [],
+          "survivors": [],
+          "consumers": {
+            "primaryButton": {
+              "color": "rgb(255, 255, 255)",
+              "background": "color(srgb 0.189725 0.418039 0.791059)",
+              "border": "rgba(0, 0, 0, 0)"
+            },
+            "rangeValue": {
+              "color": "color(srgb 0.707922 0.813726 0.986588)",
+              "background": "color(srgb 0.231373 0.509804 0.964706 / 0.14)",
+              "border": "color(srgb 0.231373 0.509804 0.964706 / 0.3)"
+            },
+            "badge": {
+              "color": "color(srgb 0.707922 0.813726 0.986588)",
+              "background": "color(srgb 0.231373 0.509804 0.964706 / 0.14)",
+              "border": "color(srgb 0.231373 0.509804 0.964706 / 0.3)"
+            }
+          },
+          "tokens": {
+            "accent": "#3B82F6",
+            "accent-dim": "color-mix(in srgb, #3B82F6 14%, transparent)",
+            "accent-soft": "color-mix(in srgb, #3B82F6 30%, transparent)",
+            "accent-mid": "color-mix(in srgb, #3B82F6 55%, transparent)",
+            "accent-text": "color-mix(in srgb, #3B82F6 38%, #ffffff)",
+            "accent-hover": "color-mix(in srgb, #3B82F6 68%, #000)",
+            "border-hover": "color-mix(in srgb, #3B82F6 45%, transparent)"
+          }
+        },
+        "logs": {
+          "unresolved": [],
+          "measured": 30,
+          "problems": [],
+          "survivors": [],
+          "consumers": {
+            "primaryButton": {
+              "color": "rgb(255, 255, 255)",
+              "background": "color(srgb 0.189725 0.418039 0.791059)",
+              "border": "rgba(0, 0, 0, 0)"
+            },
+            "rangeValue": {
+              "color": "color(srgb 0.707922 0.813726 0.986588)",
+              "background": "color(srgb 0.231373 0.509804 0.964706 / 0.14)",
+              "border": "color(srgb 0.231373 0.509804 0.964706 / 0.3)"
+            },
+            "badge": {
+              "color": "color(srgb 0.707922 0.813726 0.986588)",
+              "background": "color(srgb 0.231373 0.509804 0.964706 / 0.14)",
+              "border": "color(srgb 0.231373 0.509804 0.964706 / 0.3)"
+            }
+          },
+          "tokens": {
+            "accent": "#3B82F6",
+            "accent-dim": "color-mix(in srgb, #3B82F6 14%, transparent)",
+            "accent-soft": "color-mix(in srgb, #3B82F6 30%, transparent)",
+            "accent-mid": "color-mix(in srgb, #3B82F6 55%, transparent)",
+            "accent-text": "color-mix(in srgb, #3B82F6 38%, #ffffff)",
+            "accent-hover": "color-mix(in srgb, #3B82F6 68%, #000)",
+            "border-hover": "color-mix(in srgb, #3B82F6 45%, transparent)"
+          }
+        },
+        "settings": {
+          "unresolved": [],
+          "measured": 31,
+          "problems": [],
+          "survivors": [],
+          "consumers": {
+            "primaryButton": {
+              "color": "rgb(255, 255, 255)",
+              "background": "color(srgb 0.189725 0.418039 0.791059)",
+              "border": "rgba(0, 0, 0, 0)"
+            },
+            "rangeValue": {
+              "color": "color(srgb 0.707922 0.813726 0.986588)",
+              "background": "color(srgb 0.231373 0.509804 0.964706 / 0.14)",
+              "border": "color(srgb 0.231373 0.509804 0.964706 / 0.3)"
+            },
+            "badge": {
+              "color": "color(srgb 0.707922 0.813726 0.986588)",
+              "background": "color(srgb 0.231373 0.509804 0.964706 / 0.14)",
+              "border": "color(srgb 0.231373 0.509804 0.964706 / 0.3)"
+            }
+          },
+          "tokens": {
+            "accent": "#3B82F6",
+            "accent-dim": "color-mix(in srgb, #3B82F6 14%, transparent)",
+            "accent-soft": "color-mix(in srgb, #3B82F6 30%, transparent)",
+            "accent-mid": "color-mix(in srgb, #3B82F6 55%, transparent)",
+            "accent-text": "color-mix(in srgb, #3B82F6 38%, #ffffff)",
+            "accent-hover": "color-mix(in srgb, #3B82F6 68%, #000)",
+            "border-hover": "color-mix(in srgb, #3B82F6 45%, transparent)"
+          }
+        }
+      }
+    },
+    {
+      "accent": "choisi",
+      "data": {
+        "play": {
+          "unresolved": [],
+          "measured": 39,
+          "problems": [],
+          "survivors": [],
+          "consumers": {
+            "primaryButton": {
+              "color": "rgb(0, 0, 0)",
+              "background": "color(srgb 0.401961 0.67851 0.810353)",
+              "border": "rgba(0, 0, 0, 0)"
+            },
+            "rangeValue": {
+              "color": "color(srgb 0.806274 0.934431 0.995529)",
+              "background": "color(srgb 0.490196 0.827451 0.988235 / 0.14)",
+              "border": "color(srgb 0.490196 0.827451 0.988235 / 0.3)"
+            },
+            "badge": {
+              "color": "color(srgb 0.806274 0.934431 0.995529)",
+              "background": "color(srgb 0.490196 0.827451 0.988235 / 0.14)",
+              "border": "color(srgb 0.490196 0.827451 0.988235 / 0.3)"
+            }
+          },
+          "tokens": {
+            "accent": "#7dd3fc",
+            "accent-dim": "color-mix(in srgb, #7dd3fc 14%, transparent)",
+            "accent-soft": "color-mix(in srgb, #7dd3fc 30%, transparent)",
+            "accent-mid": "color-mix(in srgb, #7dd3fc 55%, transparent)",
+            "accent-text": "color-mix(in srgb, #7dd3fc 38%, #ffffff)",
+            "accent-hover": "color-mix(in srgb, #7dd3fc 68%, #000)",
+            "border-hover": "color-mix(in srgb, #7dd3fc 45%, transparent)"
+          }
+        },
+        "accounts": {
+          "unresolved": [],
+          "measured": 24,
+          "problems": [],
+          "survivors": [],
+          "consumers": {
+            "primaryButton": {
+              "color": "rgb(0, 0, 0)",
+              "background": "color(srgb 0.401961 0.67851 0.810353)",
+              "border": "rgba(0, 0, 0, 0)"
+            },
+            "rangeValue": {
+              "color": "color(srgb 0.806274 0.934431 0.995529)",
+              "background": "color(srgb 0.490196 0.827451 0.988235 / 0.14)",
+              "border": "color(srgb 0.490196 0.827451 0.988235 / 0.3)"
+            },
+            "badge": {
+              "color": "color(srgb 0.806274 0.934431 0.995529)",
+              "background": "color(srgb 0.490196 0.827451 0.988235 / 0.14)",
+              "border": "color(srgb 0.490196 0.827451 0.988235 / 0.3)"
+            }
+          },
+          "tokens": {
+            "accent": "#7dd3fc",
+            "accent-dim": "color-mix(in srgb, #7dd3fc 14%, transparent)",
+            "accent-soft": "color-mix(in srgb, #7dd3fc 30%, transparent)",
+            "accent-mid": "color-mix(in srgb, #7dd3fc 55%, transparent)",
+            "accent-text": "color-mix(in srgb, #7dd3fc 38%, #ffffff)",
+            "accent-hover": "color-mix(in srgb, #7dd3fc 68%, #000)",
+            "border-hover": "color-mix(in srgb, #7dd3fc 45%, transparent)"
+          }
+        },
+        "versions": {
+          "unresolved": [],
+          "measured": 140,
+          "problems": [],
+          "survivors": [],
+          "consumers": {
+            "primaryButton": {
+              "color": "rgb(0, 0, 0)",
+              "background": "color(srgb 0.401961 0.67851 0.810353)",
+              "border": "rgba(0, 0, 0, 0)"
+            },
+            "rangeValue": {
+              "color": "color(srgb 0.806274 0.934431 0.995529)",
+              "background": "color(srgb 0.490196 0.827451 0.988235 / 0.14)",
+              "border": "color(srgb 0.490196 0.827451 0.988235 / 0.3)"
+            },
+            "badge": {
+              "color": "color(srgb 0.806274 0.934431 0.995529)",
+              "background": "color(srgb 0.490196 0.827451 0.988235 / 0.14)",
+              "border": "color(srgb 0.490196 0.827451 0.988235 / 0.3)"
+            }
+          },
+          "tokens": {
+            "accent": "#7dd3fc",
+            "accent-dim": "color-mix(in srgb, #7dd3fc 14%, transparent)",
+            "accent-soft": "color-mix(in srgb, #7dd3fc 30%, transparent)",
+            "accent-mid": "color-mix(in srgb, #7dd3fc 55%, transparent)",
+            "accent-text": "color-mix(in srgb, #7dd3fc 38%, #ffffff)",
+            "accent-hover": "color-mix(in srgb, #7dd3fc 68%, #000)",
+            "border-hover": "color-mix(in srgb, #7dd3fc 45%, transparent)"
+          }
+        },
+        "mods": {
+          "unresolved": [],
+          "measured": 27,
+          "problems": [],
+          "survivors": [],
+          "consumers": {
+            "primaryButton": {
+              "color": "rgb(0, 0, 0)",
+              "background": "color(srgb 0.401961 0.67851 0.810353)",
+              "border": "rgba(0, 0, 0, 0)"
+            },
+            "rangeValue": {
+              "color": "color(srgb 0.806274 0.934431 0.995529)",
+              "background": "color(srgb 0.490196 0.827451 0.988235 / 0.14)",
+              "border": "color(srgb 0.490196 0.827451 0.988235 / 0.3)"
+            },
+            "badge": {
+              "color": "color(srgb 0.806274 0.934431 0.995529)",
+              "background": "color(srgb 0.490196 0.827451 0.988235 / 0.14)",
+              "border": "color(srgb 0.490196 0.827451 0.988235 / 0.3)"
+            }
+          },
+          "tokens": {
+            "accent": "#7dd3fc",
+            "accent-dim": "color-mix(in srgb, #7dd3fc 14%, transparent)",
+            "accent-soft": "color-mix(in srgb, #7dd3fc 30%, transparent)",
+            "accent-mid": "color-mix(in srgb, #7dd3fc 55%, transparent)",
+            "accent-text": "color-mix(in srgb, #7dd3fc 38%, #ffffff)",
+            "accent-hover": "color-mix(in srgb, #7dd3fc 68%, #000)",
+            "border-hover": "color-mix(in srgb, #7dd3fc 45%, transparent)"
+          }
+        },
+        "servers": {
+          "unresolved": [],
+          "measured": 41,
+          "problems": [],
+          "survivors": [],
+          "consumers": {
+            "primaryButton": {
+              "color": "rgb(0, 0, 0)",
+              "background": "color(srgb 0.401961 0.67851 0.810353)",
+              "border": "rgba(0, 0, 0, 0)"
+            },
+            "rangeValue": {
+              "color": "color(srgb 0.806274 0.934431 0.995529)",
+              "background": "color(srgb 0.490196 0.827451 0.988235 / 0.14)",
+              "border": "color(srgb 0.490196 0.827451 0.988235 / 0.3)"
+            },
+            "badge": {
+              "color": "color(srgb 0.806274 0.934431 0.995529)",
+              "background": "color(srgb 0.490196 0.827451 0.988235 / 0.14)",
+              "border": "color(srgb 0.490196 0.827451 0.988235 / 0.3)"
+            }
+          },
+          "tokens": {
+            "accent": "#7dd3fc",
+            "accent-dim": "color-mix(in srgb, #7dd3fc 14%, transparent)",
+            "accent-soft": "color-mix(in srgb, #7dd3fc 30%, transparent)",
+            "accent-mid": "color-mix(in srgb, #7dd3fc 55%, transparent)",
+            "accent-text": "color-mix(in srgb, #7dd3fc 38%, #ffffff)",
+            "accent-hover": "color-mix(in srgb, #7dd3fc 68%, #000)",
+            "border-hover": "color-mix(in srgb, #7dd3fc 45%, transparent)"
+          }
+        },
+        "performance": {
+          "unresolved": [],
+          "measured": 79,
+          "problems": [],
+          "survivors": [],
+          "consumers": {
+            "primaryButton": {
+              "color": "rgb(0, 0, 0)",
+              "background": "color(srgb 0.401961 0.67851 0.810353)",
+              "border": "rgba(0, 0, 0, 0)"
+            },
+            "rangeValue": {
+              "color": "color(srgb 0.806274 0.934431 0.995529)",
+              "background": "color(srgb 0.490196 0.827451 0.988235 / 0.14)",
+              "border": "color(srgb 0.490196 0.827451 0.988235 / 0.3)"
+            },
+            "badge": {
+              "color": "color(srgb 0.806274 0.934431 0.995529)",
+              "background": "color(srgb 0.490196 0.827451 0.988235 / 0.14)",
+              "border": "color(srgb 0.490196 0.827451 0.988235 / 0.3)"
+            }
+          },
+          "tokens": {
+            "accent": "#7dd3fc",
+            "accent-dim": "color-mix(in srgb, #7dd3fc 14%, transparent)",
+            "accent-soft": "color-mix(in srgb, #7dd3fc 30%, transparent)",
+            "accent-mid": "color-mix(in srgb, #7dd3fc 55%, transparent)",
+            "accent-text": "color-mix(in srgb, #7dd3fc 38%, #ffffff)",
+            "accent-hover": "color-mix(in srgb, #7dd3fc 68%, #000)",
+            "border-hover": "color-mix(in srgb, #7dd3fc 45%, transparent)"
+          }
+        },
+        "logs": {
+          "unresolved": [],
+          "measured": 30,
+          "problems": [],
+          "survivors": [],
+          "consumers": {
+            "primaryButton": {
+              "color": "rgb(0, 0, 0)",
+              "background": "color(srgb 0.401961 0.67851 0.810353)",
+              "border": "rgba(0, 0, 0, 0)"
+            },
+            "rangeValue": {
+              "color": "color(srgb 0.806274 0.934431 0.995529)",
+              "background": "color(srgb 0.490196 0.827451 0.988235 / 0.14)",
+              "border": "color(srgb 0.490196 0.827451 0.988235 / 0.3)"
+            },
+            "badge": {
+              "color": "color(srgb 0.806274 0.934431 0.995529)",
+              "background": "color(srgb 0.490196 0.827451 0.988235 / 0.14)",
+              "border": "color(srgb 0.490196 0.827451 0.988235 / 0.3)"
+            }
+          },
+          "tokens": {
+            "accent": "#7dd3fc",
+            "accent-dim": "color-mix(in srgb, #7dd3fc 14%, transparent)",
+            "accent-soft": "color-mix(in srgb, #7dd3fc 30%, transparent)",
+            "accent-mid": "color-mix(in srgb, #7dd3fc 55%, transparent)",
+            "accent-text": "color-mix(in srgb, #7dd3fc 38%, #ffffff)",
+            "accent-hover": "color-mix(in srgb, #7dd3fc 68%, #000)",
+            "border-hover": "color-mix(in srgb, #7dd3fc 45%, transparent)"
+          }
+        },
+        "settings": {
+          "unresolved": [],
+          "measured": 31,
+          "problems": [],
+          "survivors": [],
+          "consumers": {
+            "primaryButton": {
+              "color": "rgb(0, 0, 0)",
+              "background": "color(srgb 0.401961 0.67851 0.810353)",
+              "border": "rgba(0, 0, 0, 0)"
+            },
+            "rangeValue": {
+              "color": "color(srgb 0.806274 0.934431 0.995529)",
+              "background": "color(srgb 0.490196 0.827451 0.988235 / 0.14)",
+              "border": "color(srgb 0.490196 0.827451 0.988235 / 0.3)"
+            },
+            "badge": {
+              "color": "color(srgb 0.806274 0.934431 0.995529)",
+              "background": "color(srgb 0.490196 0.827451 0.988235 / 0.14)",
+              "border": "color(srgb 0.490196 0.827451 0.988235 / 0.3)"
+            }
+          },
+          "tokens": {
+            "accent": "#7dd3fc",
+            "accent-dim": "color-mix(in srgb, #7dd3fc 14%, transparent)",
+            "accent-soft": "color-mix(in srgb, #7dd3fc 30%, transparent)",
+            "accent-mid": "color-mix(in srgb, #7dd3fc 55%, transparent)",
+            "accent-text": "color-mix(in srgb, #7dd3fc 38%, #ffffff)",
+            "accent-hover": "color-mix(in srgb, #7dd3fc 68%, #000)",
+            "border-hover": "color-mix(in srgb, #7dd3fc 45%, transparent)"
+          }
+        }
+      }
+    }
+  ],
+  "picked": "#7dd3fc",
+  "after": {
+    "unresolved": [],
+    "measured": 31,
+    "problems": [],
+    "survivors": [],
+    "consumers": {
+      "primaryButton": {
+        "color": "rgb(0, 0, 0)",
+        "background": "color(srgb 0.401961 0.67851 0.810353)",
+        "border": "rgba(0, 0, 0, 0)"
+      },
+      "rangeValue": {
+        "color": "color(srgb 0.806274 0.934431 0.995529)",
+        "background": "color(srgb 0.490196 0.827451 0.988235 / 0.14)",
+        "border": "color(srgb 0.490196 0.827451 0.988235 / 0.3)"
+      },
+      "badge": {
+        "color": "color(srgb 0.806274 0.934431 0.995529)",
+        "background": "color(srgb 0.490196 0.827451 0.988235 / 0.14)",
+        "border": "color(srgb 0.490196 0.827451 0.988235 / 0.3)"
+      }
+    },
+    "tokens": {
+      "accent": "#7dd3fc",
+      "accent-dim": "color-mix(in srgb, #7dd3fc 14%, transparent)",
+      "accent-soft": "color-mix(in srgb, #7dd3fc 30%, transparent)",
+      "accent-mid": "color-mix(in srgb, #7dd3fc 55%, transparent)",
+      "accent-text": "color-mix(in srgb, #7dd3fc 38%, #ffffff)",
+      "accent-hover": "color-mix(in srgb, #7dd3fc 68%, #000)",
+      "border-hover": "color-mix(in srgb, #7dd3fc 45%, transparent)"
+    }
+  },
+  "hoverBefore": {
+    "border": "color(srgb 0.231373 0.509804 0.964706 / 0.45)"
+  },
+  "pickedControl": {
+    "value": "#7dd3fc",
+    "label": "#7DD3FC"
+  },
+  "hoverAfter": {
+    "border": "color(srgb 0.490196 0.827451 0.988235 / 0.45)"
+  }
+}

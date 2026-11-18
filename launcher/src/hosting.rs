@@ -567,7 +567,10 @@ pub fn process_alive(pid: u32) -> bool {
 }
 
 /// Kills a process and its children.
-fn kill_tree(pid: u32) {
+///
+/// Shared with the game: a hosted server and a game are both trees that outlive the process the
+/// launcher holds.
+pub(crate) fn kill_tree(pid: u32) {
     #[cfg(windows)]
     {
         let _ = Command::new("taskkill")

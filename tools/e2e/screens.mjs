@@ -1,4 +1,4 @@
-// Drives the real Electron application over the Chrome DevTools Protocol and captures one
+// Drives the real launcher window over the Chrome DevTools Protocol and captures one
 // screenshot per screen, including the secondary states (empty lists, error toast, modal,
 // download in progress, a running session, a log file) and the narrowest supported window.
 //

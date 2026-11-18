@@ -1,18 +1,19 @@
-﻿{
+{
   "name": "aether-launcher",
   "version": "1.0.0",
-  "description": "The launcher of the Aether Client, a Rust core with an Electron interface.",
-    "main": "gui/src/main.cjs",
+  "description": "The launcher of the Aether Client: a Rust core and a native Tauri shell around one shared interface.",
+  "private": true,
   "author": "Aether",
   "license": "MIT",
   "scripts": {
-    "start": "electron .",
-    "build:exe": "rustc -O -C opt-level=z -C lto=yes -C strip=symbols ../tools/launcher-runner.rs -o ../MimiMax.exe && copy ..\\MimiMax.exe ..\\Aether-Launcher.exe",
     "core": "cargo build --release",
     "core:debug": "cargo build",
+    "shell": "cargo build --release --manifest-path desktop/Cargo.toml",
+    "start": "cargo run --release --manifest-path desktop/Cargo.toml",
     "test": "cargo test --release",
-    "test:security": "node --test tests/security.test.cjs",
+    "test:shell": "cargo test --release --manifest-path desktop/Cargo.toml",
     "lint": "cargo clippy --release --all-targets",
+    "build:exe": "rustc -O -C opt-level=z -C lto=yes -C strip=symbols ../tools/launcher-runner.rs -o ../MimiMax.exe && copy ..\\MimiMax.exe ..\\Aether-Launcher.exe",
     "e2e:drive": "node ../tools/e2e/drive.mjs",
     "e2e:screens": "node ../tools/e2e/screens.mjs",
     "e2e:failure": "node ../tools/e2e/failure.mjs",
@@ -22,45 +23,6 @@
     "e2e:timeout": "node ../tools/e2e/timeout.mjs",
     "e2e:a11y": "node ../tools/e2e/a11y.mjs",
     "e2e:profiles": "node ../tools/e2e/profiles.mjs",
-    "e2e:sliders": "node ../tools/e2e/sliders.mjs",
-    "pack": "electron-builder --dir",
-    "dist": "electron-builder"
-  },
-  "devDependencies": {
-    "electron": "^45.3.1"
-  },
-  "build": {
-    "appId": "dev.aether.launcher",
-    "productName": "Aether Launcher",
-    "files": [
-      "gui/**/*",
-      "src/**/*",
-      "tests/**/*",
-      "Cargo.toml",
-      "Cargo.lock",
-      "package.json"
-    ],
-    "extraResources": [
-      {
-        "from": "target/release",
-        "to": ".",
-        "filter": ["aether-launcher", "aether-launcher.exe"]
-      }
-    ],
-    "directories": {
-      "output": "release"
-    },
-    "win": {
-      "target": [
-        "nsis",
-        "zip"
-      ]
-    },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true
-    }
+    "e2e:sliders": "node ../tools/e2e/sliders.mjs"
   }
 }
-
-

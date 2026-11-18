@@ -43,7 +43,7 @@ MimiMax/
 │   ├── src/                       # Sources avec GUI CyberDeck et HUD modules
 │   └── build/libs/                # Jar compilé prêt pour le modpack
 │
-├── launcher/                      # Lanceur de bureau (Rust + Electron UI)
+├── launcher/                      # Lanceur de bureau (Rust + coquille native Tauri)
 │   ├── src/                       # Core engine en Rust (téléchargements, auth, process)
 │   ├── gui/src/ui/styles.css      # Design System Linear/Vercel refondu
 │   └── tests/                     # 151 tests automatisés

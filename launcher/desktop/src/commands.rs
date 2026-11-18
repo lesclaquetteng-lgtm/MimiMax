@@ -671,22 +671,35 @@ pub async fn game_launch(app: AppHandle, options: Option<Value>) -> Value {
 	}
 }
 
+// An asynchronous command cannot borrow the state across its await, so the slot is read and released
+// in a block of its own; the answer is a `Result` because the command is asynchronous.
 #[tauri::command(rename_all = "snake_case")]
-pub fn game_stop(state: State<'_, RunState>) -> Value {
-	let mut guard = match state.game.lock() {
-		Ok(guard) => guard,
-		Err(_) => return failure("The state of the game is unavailable."),
+pub async fn game_stop(app: AppHandle) -> Result<Value, String> {
+	let pid = {
+		let state = app.state::<RunState>();
+		let mut guard = state
+			.game
+			.lock()
+			.map_err(|_| "The state of the game is unavailable.".to_string())?;
+
+		match guard.as_mut() {
+			Some(active) => {
+				active.stopped.store(true, Ordering::SeqCst);
+				Some(active.pid)
+			}
+			None => None,
+		}
 	};
 
-	let Some(active) = guard.as_mut() else {
-		return failure("No game is running.");
-	};
+	if let Some(pid) = pid {
+		core::kill_tree(pid);
+		return Ok(json!({ "ok": true }));
+	}
 
-	active.stopped.store(true, Ordering::SeqCst);
-	let pid = active.pid;
-	core::kill_tree(pid);
-
-	json!({ "ok": true })
+	// The shell has no child of its own: the game may have been started by a previous run that was
+	// killed, and only the record of the core still names it. Without this fallback that game would
+	// survive every restart of the launcher.
+	Ok(core::run_core(app, vec!["stop".to_string()]).await)
 }
 
 #[cfg(test)]

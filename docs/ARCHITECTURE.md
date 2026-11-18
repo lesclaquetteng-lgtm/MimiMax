@@ -7,7 +7,7 @@ This document describes how the current implementation is structured and the mai
 ```text
 ┌────────────────────────────────────┐        ┌──────────────────────────────────┐
 │          Aether Launcher           │        │           Aether Client          │
-│      (Rust core + Electron UI)     │        │            (Fabric mod)          │
+│   Rust core + native shell (Tauri)  │        │            (Fabric mod)          │
 │                                    │        │                                  │
 │  Rust core (src/*.rs, CLI/JSON):   │        │  AetherClient / Aether           │
 │   - accounts, settings, paths      │        │  ModuleManager / HudManager      │
@@ -15,9 +15,10 @@ This document describes how the current implementation is structured and the mai
 │   - installer (download/verify)    │───────►│  Mixins + session/config logic   │
 │   - game (classpath & launch)      │classpath│                                  │
 │                                    │        │                                  │
-│  Electron (gui/src/*):             │        │                                  │
-│   - spawns core binary via IPC     │        │                                  │
-│   - renders UI, streams progress   │        │                                  │
+│  Shell (desktop/src/*.rs):         │        │                                  │
+│   - window, single instance        │        │                                  │
+│   - runs the core, streams events  │        │                                  │
+│   - serves gui/src/ui (WebView2)   │        │                                  │
 └────────────────────────────────────┘        └──────────────────────────────────┘
 ```
 
@@ -29,12 +30,12 @@ provides the client-side features.
 ### Rust core (`launcher/src`)
 
 The core contains all business logic and exposes a command-line interface (`main.rs`) that emits
-JSON lines/events for the GUI.
+JSON lines/events for the interface.
 
 | Module | Responsibility |
 | --- | --- |
 | `main.rs` | CLI parsing/dispatch, JSON output, streaming wrappers for install/launch/auth flows. |
-| `lib.rs` | High-level `Launcher` API tying paths, settings, accounts, install and launch together. |
+| `lib.rs` | High-level `Launcher` API tying paths, settings, accounts, install, launch and the game record together. |
 | `paths.rs` | Resolution/creation of launcher and game directories (`AETHER_HOME`, `AETHER_SHARED_DIR`). |
 | `settings.rs` | Persistent settings, Java detection, mod jar discovery (`AETHER_MOD_JAR`). |
 | `accounts.rs` | Account store, offline accounts, Microsoft device-code login flow and session mapping. |
@@ -42,36 +43,65 @@ JSON lines/events for the GUI.
 | `minecraft.rs` | Mojang/Fabric metadata retrieval, rule evaluation, argument templating, library resolution/merging. |
 | `http.rs` | HTTP helpers, JSON/text/bytes requests, file download with checksum verification, SHA-1 utilities. |
 | `installer.rs` | Version installation pipeline (client, libraries, assets, Fabric API, natives, mod copy) with progress reporting. |
-| `game.rs` | Classpath construction, JVM/game argument construction, process launch and output forwarding. |
+| `game.rs` | Classpath construction, JVM/game argument construction, process launch, output forwarding, and the record of the running game (`game.pid`). |
 | `servers.rs` | Saved server list, Server List Ping, login probe that tells an offline-accepting server from a premium-only one. |
-| `hosting.rs` | Local Fabric server: shared installer, `server.properties`, RCON shutdown, process liveness. |
+| `hosting.rs` | Local Fabric server: shared installer, `server.properties`, RCON shutdown, process liveness (also provides the process probe and the tree killer the game uses). |
 | `performance.rs` | Optimisation pack resolved on Modrinth and verified by SHA-1, `options.txt` presets with backup, manifest of what was installed. |
 
 Key properties:
-- **Single source of truth for launch/install logic** in Rust; the GUI does not duplicate it.
-- **JSON CLI contract** enables scripting and decouples UI from core implementation details.
+- **Single source of truth for launch/install logic** in Rust; the interface does not duplicate it.
+- **JSON CLI contract** enables scripting and decouples the interface from the core.
 - **Checksum-verified downloads** (SHA-1 where provided/expected) to avoid corrupted/cached-bad files.
 
-### Electron GUI (`launcher/gui/src`)
+### Native shell (`launcher/desktop`)
+
+Tauri 2 serves the interface to the system WebView2 runtime. There is no bundled browser: the shell
+is a single ~8.5 MB executable, the backend is the same language as the core, and the interface files
+are the same ones the previous Electron shell loaded.
 
 | File | Responsibility |
 | --- | --- |
-| `main.cjs` | Active CommonJS Electron entry point (declared in `package.json`): creates the window, resolves/spawns the Rust binary, validates top-level IPC senders, restricts navigation and streams core events. |
-| `preload.js` | CommonJS preload bridge exposing the limited `window.aether` API with context isolation and renderer sandboxing enabled. |
-| `security.cjs` | Pure security helpers and operation gate, covered by Node's built-in test runner. |
-| `ui/*` | Renderer UI (layout, styling, interaction logic). |
+| `src/main.rs` | Window creation (shown only once the first frame is ready), single-instance lock, command registration, kill of the running processes on exit. |
+| `src/commands.rs` | One `#[tauri::command]` per call of the interface: same names, same arguments and same answers as the old IPC handlers. |
+| `src/core.rs` | Finds, embeds and runs the core; turns its JSON lines into events (`install:progress`, `game:output`, …); enforces a per-command timeout; exposes `kill_tree`. |
+| `src/state.rs` | The processes the window can stop while they run (installation, game). |
+| `tauri.conf.json` | Window size/behaviour, CSP, NSIS packaging (French), icons and licence. |
 
-The GUI invokes core commands (`info`, `settings`, `accounts`, `install`, `launch`, etc.) and renders
-structured progress/output messages emitted by the core.
+The interface (`launcher/gui/src/ui/`) is plain HTML/CSS/JavaScript. `bridge.js` exposes
+`window.aether` over Tauri's `invoke`, so `app.js` never learned that the shell changed.
+
+**Why the shell is native and not Electron.** The Electron build shipped a whole Chromium for a
+launcher: ~150 MB installed against one ~8.5 MB executable, and it added a Node runtime next to the
+Rust core for no benefit (the interface calls the core over JSON either way). The cost of the move
+was the shell only — not the interface, not the core, not the module system.
+
+### The record of the game (`game.pid`)
+
+The shell holds the child it started and kills it when the window closes. That covers the normal
+path, not the abnormal one: a shell killed from the task manager (or a game started from the command
+line) would leave Java running with nothing able to name it.
+
+`game::launch` therefore calls back with the process identifier as soon as Java exists, and
+`Launcher::launch` writes it to `<home>/aether/game.pid`. The record is:
+
+- removed when the game exits, whatever the exit code;
+- read by `Launcher::running_game()` / `game::running()`, which clear a record that names a dead
+  process instead of trusting it;
+- used by `Launcher::stop_game()` / `game::stop()`, which kills the tree (`taskkill /T /F`, or
+  `SIGTERM` elsewhere) and waits for the process to disappear before deleting the record;
+- exposed as `aether-launcher stop`, and as the fallback of the shell's `game_stop`: when the
+  in-memory slot is empty, the command runs the core's `stop` instead of answering "no game is
+  running" while an orphan keeps running.
 
 ## Launcher data flow
 
 1. **Open/load**: resolve paths → load settings/accounts → detect/configure Java if needed.
 2. **Install**: resolve metadata (vanilla + Fabric profile) → download/verify artifacts → place mod/API jars → prepare natives/assets/indexes.
-3. **Launch**: build merged version/classpath/arguments for selected account and profile → spawn Java process → stream logs/exit code.
-4. **Servers**: saved list → ping (`SLP`) → login probe (`Login Start` and the first answer of the server) → join with `--quickPlayMultiplayer`.
-5. **Hosting**: Fabric installer (downloaded once, shared) → `server.properties` with `online-mode=false` and RCON → start → wait for the ping → stop through RCON, then kill the tree if the server hangs.
-6. **Performance**: resolve each slug on Modrinth for the game version → download and verify the SHA-1 → write the manifest → write `options.txt` (backup first) → pick the JVM flags for the next launch.
+3. **Launch**: build merged version/classpath/arguments for selected account and profile → spawn Java process → write `game.pid` → stream logs/exit code → clear `game.pid`.
+4. **Stop**: the shell kills its own child; `stop` kills the recorded tree, which is the only path left after a shell crash.
+5. **Servers**: saved list → ping (`SLP`) → login probe (`Login Start` and the first answer of the server) → join with `--quickPlayMultiplayer`.
+6. **Hosting**: Fabric installer (downloaded once, shared) → `server.properties` with `online-mode=false` and RCON → start → wait for the ping → stop through RCON, then kill the tree if the server hangs.
+7. **Performance**: resolve each slug on Modrinth for the game version → download and verify the SHA-1 → write the manifest → write `options.txt` (backup first) → pick the JVM flags for the next launch.
 
 ### Offline-account probe
 
@@ -112,7 +142,7 @@ feature registries.
 | `setting/` | Typed module settings and UI-editable values. |
 | `hud/` | HUD element management, layout/position persistence, rendering integration. |
 | `gui/` | Click GUI, config screen, HUD editor and rendering helpers. |
-| `util/` | Shared utilities (render/color/animation/session/click tracking, etc.). |
+| `util/` | Shared utilities (render/color/animation/session/click tracking, bar chart, etc.). |
 | `mixin/` | Targeted game patches where Fabric hooks/events are insufficient. |
 
 ### Mixins (principle)
@@ -124,6 +154,7 @@ consistency against the target game classes where applicable.
 ## Configuration and persistence
 
 - **Launcher**: settings and accounts stored under the launcher data directory (e.g. `<home>/Aether/aether`).
+- **Running game**: `<home>/Aether/aether/game.pid`, written at spawn and removed at exit.
 - **Client**: module/HUD/config state stored in `config/aether/config.json` inside the game/config context.
 - **Game files**: assets, libraries, versions and mods are installed in the configured game directory.
 - **Servers**: the saved list lives in `aether/servers.json`, each hosted server owns a directory under
@@ -137,6 +168,8 @@ silently fall back to the defaults.
 
 ## Build/test components
 
-- **Launcher**: Cargo project (`Cargo.toml`), Rust tests under `tests/` and module tests.
+- **Launcher core**: Cargo project (`launcher/Cargo.toml`), Rust tests under `tests/` and in each module.
+- **Shell**: Cargo project (`launcher/desktop/Cargo.toml`, Tauri 2), NSIS packaging through
+  `cargo tauri build`; the core binary is embedded at compile time, so the core is built first.
 - **Client**: Gradle + Fabric Loom build (`build.gradle`, `gradle.properties`), JUnit tests under `src/test/java`.
-- **GUI**: npm/Electron project (`package.json`, `gui/src/*`) acting as a frontend over the Rust core.
+- **Interface**: `launcher/gui/src/ui/` (HTML/CSS/JavaScript), no build step, no npm dependency.

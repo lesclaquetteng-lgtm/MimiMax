@@ -339,9 +339,9 @@ function initFpsSplineGraph() {
 				ctx.lineTo(x, y);
 			}
 		}
-		ctx.strokeStyle = '#38BDF8';
+		ctx.strokeStyle = themeColors().graph;
 		ctx.lineWidth = 2.5;
-		ctx.shadowColor = 'rgba(56, 189, 248, 0.6)';
+		ctx.shadowColor = themeColors().glow;
 		ctx.shadowBlur = 8;
 		ctx.stroke();
 		ctx.shadowBlur = 0;
@@ -1868,7 +1868,7 @@ function bindSettings() {
 
 	$('#input-accent').addEventListener('input', (event) => {
 		$('#output-accent').textContent = event.target.value.toUpperCase();
-		document.documentElement.style.setProperty('--accent', event.target.value);
+		applyAccent(event.target.value);
 	});
 	$('#input-accent').addEventListener('change', (event) => {
 		api.settings.update({ accentColor: event.target.value });
@@ -1898,8 +1898,75 @@ function applySettings(settings) {
 	$('#input-fabric-api').value = settings.fabricApiVersion;
 	$('#check-g1').checked = settings.useG1gc !== false;
 
-	document.documentElement.style.setProperty('--accent', settings.accentColor);
+	applyAccent(settings.accentColor);
 	paintRanges();
+}
+
+/**
+ * The colours the canvas of the HUD reads, taken from the theme instead of being written here.
+ *
+ * Reading them once keeps the render loop free of a style recalculation on every frame; the cache
+ * is dropped when the accent changes.
+ */
+let themeCache = null;
+
+function themeColors() {
+	if (!themeCache) {
+		const styles = getComputedStyle(document.documentElement);
+		themeCache = {
+			graph: styles.getPropertyValue('--accent').trim() || '#3b82f6',
+			glow: styles.getPropertyValue('--accent-soft').trim() || 'rgba(59, 130, 246, 0.3)',
+		};
+	}
+
+	return themeCache;
+}
+
+/**
+ * Applies the accent chosen by the player.
+ *
+ * The theme reads `--accent-user`, not `--accent`: `--accent` is the alias
+ * `var(--accent-user, var(--color-accent))`, so a player who never picked a colour keeps the
+ * identity of `tokens.css`. The two values below were the default accent of older builds; a
+ * settings file that still carries one of them was never a choice, and it must not freeze the
+ * interface on the old palette.
+ */
+const LEGACY_ACCENT_DEFAULTS = new Set(['#6c5ce7', '#7c5cfc']);
+
+function applyAccent(color) {
+	const value = String(color ?? '').trim();
+	const root = document.documentElement.style;
+
+	themeCache = null;
+
+	if (!value || LEGACY_ACCENT_DEFAULTS.has(value.toLowerCase())) {
+		root.removeProperty('--accent-user');
+		root.removeProperty('--on-accent');
+		return;
+	}
+
+	root.setProperty('--accent-user', value);
+	root.setProperty('--on-accent', inkFor(value));
+}
+
+/**
+ * The ink of a label sitting on the accent.
+ *
+ * The decision is taken on the fill (`--accent-fill` is the accent mixed with black at 82%), not on
+ * the accent: white as long as the fill still clears the 4.5:1 floor of the WCAG, black below it.
+ */
+function inkFor(hex) {
+	const digits = String(hex).trim().replace('#', '');
+	if (!/^[0-9a-f]{6}$/i.test(digits)) return '#ffffff';
+
+	const fill = [0, 2, 4].map((offset) => parseInt(digits.slice(offset, offset + 2), 16) * 0.82);
+	const linear = (value) => {
+		const unit = value / 255;
+		return unit <= 0.03928 ? unit / 12.92 : ((unit + 0.055) / 1.055) ** 2.4;
+	};
+	const luminance = 0.2126 * linear(fill[0]) + 0.7152 * linear(fill[1]) + 0.0722 * linear(fill[2]);
+
+	return 1.05 / (luminance + 0.05) >= 4.5 ? '#ffffff' : '#000000';
 }
 
 async function loadLoaders(gameVersion) {

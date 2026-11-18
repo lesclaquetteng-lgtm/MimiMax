@@ -1,9 +1,11 @@
 //! The classpath and the arguments of the game.
 
 use std::collections::HashMap;
+use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::mpsc;
+use std::time::{Duration, Instant};
 
 use crate::minecraft::{
     apply_replacements, detect_os, evaluate_argument_template, resolve_libraries, FeatureContext,
@@ -339,8 +341,11 @@ pub fn build_command(options: &LaunchOptions) -> CommandLine {
 /// The standard output and the standard error are read at the same time, every line is forwarded as
 /// soon as it arrives. Reading them one after the other would reorder the log and can block the
 /// game when one of the two pipes fills up.
+/// `on_start` receives the process identifier as soon as Java exists, before a single line of its
+/// output is read: the caller records it so that the game can still be stopped later.
 pub fn launch(
     options: &LaunchOptions,
+    on_start: impl FnOnce(u32),
     mut on_output: impl FnMut(&str),
 ) -> Result<Child, std::io::Error> {
     let command = build_command(options);
@@ -361,6 +366,7 @@ pub fn launch(
     }
 
     let mut child = process.spawn()?;
+    on_start(child.id());
 
     // Both streams are forwarded through a channel, so the caller keeps a single output callback.
     let (sender, receiver) = mpsc::channel::<String>();
@@ -383,6 +389,78 @@ pub fn launch(
     }
 
     Ok(child)
+}
+
+/* -------------------------------------------------------------- the record of the process */
+
+/// The file that remembers the process of the game between two runs of the launcher.
+///
+/// The shell keeps the child it started in memory, which is enough while it lives. A shell that
+/// crashes, or that the player closes from the task manager, leaves Java behind with nothing to stop
+/// it; this record outlives the shell, so the next start closes the game instead of stacking a second
+/// one on top of an orphan.
+pub const GAME_PID_FILE: &str = "game.pid";
+
+/// The path of the record, inside the data directory of the launcher.
+pub fn pid_file(data: &Path) -> PathBuf {
+    data.join(GAME_PID_FILE)
+}
+
+/// The identifier written in the record, even when the process it names is long gone.
+fn read_pid(data: &Path) -> Option<u32> {
+    fs::read_to_string(pid_file(data))
+        .ok()
+        .and_then(|value| value.trim().parse().ok())
+}
+
+/// Records the process that was just started.
+pub fn record_pid(data: &Path, pid: u32) {
+    let _ = crate::settings::write_atomic(&pid_file(data), &pid.to_string());
+}
+
+/// Removes the record, the game is over.
+pub(crate) fn forget_pid(data: &Path) {
+    let _ = fs::remove_file(pid_file(data));
+}
+
+/// The game that is still running, including the one of a launcher that is gone.
+pub fn running(data: &Path) -> Option<u32> {
+    let pid = read_pid(data)?;
+    if crate::hosting::process_alive(pid) {
+        return Some(pid);
+    }
+
+    // A record that names a dead process is a leftover, not a running game.
+    forget_pid(data);
+    None
+}
+
+/// Stops the game from its record, even when the shell that started it is gone.
+///
+/// The whole tree is killed: stopping the first process alone would leave the game visible in the
+/// task manager, because Java starts children of its own.
+pub fn stop(data: &Path) -> Result<u32, String> {
+    let pid = read_pid(data).ok_or_else(|| "no game is running".to_string())?;
+
+    if !crate::hosting::process_alive(pid) {
+        forget_pid(data);
+        return Err("the game is no longer running".to_string());
+    }
+
+    crate::hosting::kill_tree(pid);
+
+    // The record is only removed once the process is really gone, so that a second Stop still finds
+    // the game it has to close.
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while Instant::now() < deadline {
+        if !crate::hosting::process_alive(pid) {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(200));
+    }
+
+    forget_pid(data);
+    Ok(pid)
 }
 
 /// Spawns a thread that forwards every line of a stream of the process.
@@ -409,6 +487,72 @@ fn forward_lines<R: std::io::Read + Send + 'static>(
 mod tests {
     use super::*;
     use crate::minecraft::{Argument, Arguments, Downloads, VersionJson};
+
+    fn scratch(name: &str) -> PathBuf {
+        let directory =
+            std::env::temp_dir().join(format!("aether-game-{}-{}", std::process::id(), name));
+        let _ = fs::remove_dir_all(&directory);
+        fs::create_dir_all(&directory).unwrap();
+        directory
+    }
+
+    /// A process that lives long enough to be stopped by the test.
+    fn long_running_child() -> Child {
+        #[cfg(windows)]
+        {
+            Command::new("cmd")
+                .args(["/C", "ping", "-n", "30", "127.0.0.1"])
+                .stdout(Stdio::null())
+                .spawn()
+                .unwrap()
+        }
+
+        #[cfg(not(windows))]
+        {
+            Command::new("sleep").arg("30").spawn().unwrap()
+        }
+    }
+
+    #[test]
+    fn the_record_of_the_game_is_written_and_read_back() {
+        let data = scratch("record");
+
+        assert_eq!(read_pid(&data), None);
+        record_pid(&data, 4242);
+
+        assert_eq!(read_pid(&data), Some(4242));
+        assert!(pid_file(&data).is_file());
+    }
+
+    #[test]
+    fn a_record_that_names_a_dead_process_is_cleared() {
+        let data = scratch("stale");
+        // PID 0 is never a process the launcher manages.
+        record_pid(&data, 0);
+
+        assert_eq!(running(&data), None);
+        assert_eq!(read_pid(&data), None, "the stale record was left behind");
+    }
+
+    #[test]
+    fn stopping_without_a_record_says_so() {
+        let data = scratch("nothing");
+
+        assert_eq!(stop(&data).unwrap_err(), "no game is running");
+    }
+
+    #[test]
+    fn stop_kills_the_process_named_by_the_record() {
+        let data = scratch("stop");
+        let mut child = long_running_child();
+        record_pid(&data, child.id());
+
+        assert_eq!(running(&data), Some(child.id()));
+        assert_eq!(stop(&data).unwrap(), child.id());
+
+        let _ = child.wait();
+        assert_eq!(read_pid(&data), None, "the record survived the stopped game");
+    }
 
     fn options() -> LaunchOptions {
         LaunchOptions {

@@ -1138,3 +1138,255 @@ JAVA_HOME_DIR="$(cat ../tools/jdk25-path.txt | tr -d '\r\n')"
   décrite en tête de section) et la retirer avant de livrer — elle n'a pas sa place dans le client ;
 - un monde solo est nécessaire pour le HUD : `AetherClient.onHudRender` (`AetherClient.java:194-201`)
   sort immédiatement tant qu'un écran est ouvert, et les éléments n'ont de valeurs qu'en jeu.
+
+---
+
+## Coquille Electron retirée, jeu orphelin réparé (18/11)
+
+### Trois défauts constatés
+
+| # | Défaut | Preuve |
+| --- | --- | --- |
+| 1 | Le lanceur de la racine ouvrait **Electron**, alors que le produit livré est la coquille Tauri | Avant : `tools/launcher-runner.rs:50` cherchait `launcher/node_modules/electron/dist/electron.exe`. Or `dist/Aether-Launcher-1.0.0-portable.exe` et `launcher/desktop/target/release/aether-desktop.exe` avaient **la même taille, 8 959 488 octets** : c'est la coquille native qui est publiée. Sur une machine sans `npm install`, `MimiMax.exe` n'ouvrait donc rien du tout. |
+| 2 | La doc présentait Electron comme l'interface active | `README.md:11,121,134,158-165,231-243`, `docs/ARCHITECTURE.md:9-21,55-61,142`, `launcher/README.md:9,100-112` |
+| 3 | Le pid du jeu n'était écrit nulle part | `launcher/src/lib.rs` gardait l'enfant en mémoire et `launcher/desktop/src/state.rs:31-45` tuait l'arbre à la fermeture. Une coquille tuée au gestionnaire de tâches laissait Java vivant, et le bouton Stop de la session suivante répondait « No game is running. » |
+
+### Ce qui a été fait
+
+1. **Une seule coquille : Tauri.** Supprimés : `launcher/gui/src/main.cjs`, `preload.js`, `security.cjs`,
+   `launcher/tests/security.test.cjs`, la dépendance `electron`, les scripts `test:security` / `pack` /
+   `dist` et le bloc de packaging `electron-builder` (`launcher/package.json`, lockfile réduit à un
+   paquet sans dépendance), les deux jobs GitHub Actions qui exigeaient Electron. L'interface
+   n'a pas bougé : `gui/src/ui/*` est servi par WebView2 et `bridge.js` expose toujours `window.aether`.
+2. **Le lanceur racine ouvre la coquille native** : `tools/launcher-runner.rs:44-58` la cherche à trois
+   endroits (à côté de l'exécutable, dans l'arbre de sources, dans `dist/`), et le message d'erreur
+   donne la commande de compilation. `build.bat` la compile en étape [2/4].
+3. **Le jeu est enregistré** : `launcher/src/game.rs:402-462` (`GAME_PID_FILE`, `pid_file`,
+   `record_pid`, `running`, `stop`), appelé dès l'existence du processus Java (`game.rs:369`,
+   `on_start(child.id())`), écrit depuis `lib.rs:467`, effacé à la sortie (`lib.rs:480,484`), exposé
+   par `Launcher::running_game` / `stop_game` (`lib.rs:495-505`).
+4. **Arrêt possible même orphelin** : commande `aether-launcher stop` (`main.rs:38,468-482`) et repli
+   de `game_stop` (`desktop/src/commands.rs:677-702`) quand la coquille n'a plus d'enfant en mémoire :
+   elle demande alors au cœur de tuer l'arbre enregistré au lieu de répondre qu'aucun jeu ne tourne.
+5. **Doc remise d'aplomb** : `README.md` (interface native, et une section « What this client is, and
+   what it is not » qui dit noir sur blanc que les modules de combat ne sont pas présentés comme
+   indétectables), `docs/ARCHITECTURE.md` (schéma, tableau de la coquille, section « The record of the
+   game »), `launcher/README.md`, `docs/VERIFICATION.md` §4, plus une ligne dans `NETTOYAGE.md` et
+   `RAPPORT-FINAL.md`. Les commentaires des scripts `tools/e2e/*.mjs` ne parlent plus d'Electron.
+
+### Preuves
+
+- `cargo test` (cœur) : **155 tests** (126 unitaires + 6 download + 20 intégration + 3 sha1), **0 échec**,
+  dont 4 nouveaux : `the_record_of_the_game_is_written_and_read_back`,
+  `a_record_that_names_a_dead_process_is_cleared`, `stopping_without_a_record_says_so`, et
+  `stop_kills_the_process_named_by_the_record` (lance un vrai processus, vérifie que `stop` le tue puis
+  que le fichier disparaît).
+- `cargo build --release` (cœur) puis `cargo build --release --manifest-path desktop/Cargo.toml` :
+  2 min 07 s, 0 erreur, `aether-desktop.exe` = 8 986 624 octets ; `cargo test --release --manifest-path
+  desktop/Cargo.toml` : 6 tests, 0 échec.
+- `aether-launcher stop` sans jeu : `{"error":"no game is running","ok":false}`, code de sortie 0.
+- `MimiMax.exe` recompilé (205 312 octets) et lancé pour de vrai : une seule fenêtre « Aether Launcher »
+  apparaît (pid 15444). L'ancien runner, lui, exigeait `launcher/node_modules/electron`.
+
+### Ce qui n'a pas été vérifié
+
+- Les scripts `tools/e2e/*.mjs` n'ont pas été rejoués contre WebView2. Ils sont maintenant lancés avec
+  `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS="--remote-debugging-port=…"` (`tools/run-ui-tests.ps1`) ; le
+  job CI a été remplacé par un job qui compile et teste la coquille.
+- La fenêtre n'a pas été inspectée visuellement : seul son titre a été relevé.
+- `dist/Aether-Launcher-1.0.0-portable.exe` reste l'ancien binaire ; `cargo tauri build` le régénère.
+- `launcher/node_modules` (Electron installé, ~150 Mo) n'a pas été supprimé : plus référencé par
+  `package.json`, il est supprimable sans risque.
+
+---
+
+## Direction artistique du launcher, et preuve qu'elle s'affiche (18/11)
+
+### Le diagnostic : `tokens.css` ne pilotait rien
+
+`launcher/gui/src/ui/styles.css` redéclarait sa propre palette dans son `:root` (lignes 8-55) :
+`--bg`, `--accent`, `--surface`, `--radius`, `--shadow*`, `--ring`, `--ease`… en valeurs **codées en
+dur**. Le fichier de tokens n'était donc lu qu'à travers les quelques alias qui pointaient encore
+dessus (`--bg`, `--surface`, `--border`), et changer un token ne changeait presque rien. Le script
+d'audit ajouté pour ce pass le mesure : **41/44 tokens résolus (93,2 %), 3 manquants, 1 doublon**
+(`--radius-sm` déclaré dans les deux fichiers). Les trois manquants étaient de vrais trous :
+`--fill` (la position du curseur d'un slider, écrite par `app.js`), `--success` et `--text-muted`
+(utilisés par `app.js:1510` dans un style en ligne) — ces deux derniers ne résolvaient rien du tout.
+
+### L'identité livrée — « ciel d'hiver »
+
+`tokens.css` devient la seule source : palette, échelles d'espacement, rayons, ombres, typographie,
+états et durées.
+
+| Rôle | Avant | Après |
+| --- | --- | --- |
+| Fond / surface / surface haute | `#0B0E14` / `#14181F` / `#1C222B` | `#070B12` / `#101826` / `#17212F` |
+| Bordure / bordure au survol | `#232B38` / `rgba(124,92,252,.35)` | `#223040` / dérivée de l'accent |
+| Texte principal / secondaire / discret | `#F1F5F9` / `#94A3B8` / `#64748B` | `#EEF4FA` / `#A3B5C6` / `#7C8FA1` |
+| Accent par défaut | `#6C5CE7` (violet) | `#3B82F6` (azur), secondaire `#8B5CF6` |
+| Rayons | 8 / 12 / 14 px | 6 / 10 / 14 px (échelle `xs→full`) |
+| Anneau de focus | `0 0 0 2px rgba(124,92,252,.5)` | double anneau fond + accent, lisible sur toute surface |
+| Statuts | `#10B981` / `#F59E0B` / `#EF4444` | `#34D399` / `#FBBF24` / `#F87171` (+ variantes texte) |
+
+Trois décisions qui font la cohérence plutôt que le coup de peinture :
+
+1. **Les teintes de l'accent sont dérivées, pas figées.** `--accent-dim/soft/mid/text`, `--accent-hover`
+   et `--border-hover` sont calculés avec `color-mix()` à partir de `--accent`, donc de la couleur que
+   le joueur a choisie. Avant ce pass, un accent personnalisé laissait des bordures bleues et une
+   pastille violette autour de lui.
+2. **L'accent du joueur ne gèle plus le thème.** `app.js` écrit `--accent-user` et non `--accent` ;
+   l'alias `--accent: var(--accent-user, var(--color-accent))` garde l'identité quand aucune couleur
+   n'a été choisie. Les deux valeurs qui ont été livrées comme défauts (`#6C5CE7`, `#7C5CFC`) sont
+   traitées comme « pas un choix » : un fichier de réglages qui les porte encore bascule sur le
+   nouveau défaut. `DEFAULT_ACCENT` (`launcher/src/settings.rs:10`) et le sélecteur
+   (`index.html:476-477`) passent à `#3B82F6`.
+3. **Les états sont visibles, pas supposés.** Un `:focus-visible` global (`outline` 2 px + décalage,
+   spécificité nulle pour ne rien écraser) et un état désactivé (`opacity: .45`, curseur interdit)
+   couvrent les contrôles qui n'en avaient pas. Le canevas du graphe FPS lit `--accent` au lieu d'un
+   `#38BDF8` écrit dans `app.js`.
+
+Aucune structure d'écran, aucun composant, aucune balise n'a été ajouté ou déplacé : la capture le
+montre, la mise en page est identique au pixel près.
+
+### Preuve 1 — zéro token fantôme
+
+```powershell
+node tools/check-theme-tokens.mjs
+# tokens: 104 defined, 60 referenced, 60/60 resolved (100.0%), 0 missing, 0 duplicated, 44 unused
+```
+
+Le script (`tools/check-theme-tokens.mjs`) lit `tokens.css`, `styles.css`, `index.html`, `app.js` et
+`bridge.js`, ignore les déclarations en commentaire, et sort en **code 1** s'il reste un `var(--…)`
+sans définition ou un token déclaré dans deux fichiers. Les 44 « unused » sont l'échelle du système
+(espacements, tailles de texte, poids) : les règles actuelles n'en consomment qu'une partie.
+
+### Preuve 2 — la fenêtre réelle, avant / après
+
+`tools/capture-window.ps1` lance la coquille, met la fenêtre au premier plan et capture son rectangle.
+`tools/theme-probe.mjs` interroge le moteur par le protocole DevTools de WebView2 et rend les valeurs
+**calculées**.
+
+| Point de la capture | Avant | Après |
+| --- | --- | --- |
+| Barre de titre | `#0B0E14` | `#070B12` |
+| Carte | `#14181F` | `#101826` |
+| Pastille « 1.21.11 FABRIC » | `#23223F` (violet) | `#191521` (teinté par l'accent du joueur) |
+| Valeur « 4096 MB » | `#BAA0D7` (violet) | `#B38E80` |
+| Piste des sliders | `#580B0A` | `#590B0A` (inchangée : c'est l'accent choisi) |
+| Pixels modifiés (> 24) | — | **8,5 %** de l'image |
+
+Sonde sur la même fenêtre : `background: rgb(7, 11, 18)`, `cardRadius: 10px`,
+`cardBackground: rgb(16, 24, 38)`, `primaryButton` = accent, `missing: []`, 2 feuilles chargées.
+
+Le joueur a enregistré un accent `#560b0b` (rouge presque noir) : l'interface réelle est donc déclinée
+autour de ce rouge, et c'est voulu — c'est sa couleur. Pour prouver l'identité **par défaut**, une
+seconde capture a été prise avec un `AETHER_HOME` neuf (`tools/theme-apres-defaut.png`) : accent
+`#3B82F6`, pastilles et sliders azur, crête du logo azur. Les deux écrans restent lisibles, la
+hiérarchie est intacte et aucun élément n'apparaît dégradé : l'état vide « No account yet » (bordure
+pointillée, icône, texte d'aide) se lit correctement sur la nouvelle surface.
+
+Captures : `tools/theme-avant.png`, `tools/theme-apres.png`, `tools/theme-apres-defaut.png`.
+
+### Artefact publié
+
+`cargo tauri build` a été exécuté (`launcher/desktop`, tauri-cli 2.12.1) : build 2 min 08 s, bundle NSIS
+`Aether Launcher_1.0.0_x64-setup.exe` de 4,27 MiB. `dist/Aether-Launcher-1.0.0-portable.exe` et
+`dist/Aether-Launcher-Setup-1.0.0.exe` ont été **régénérés** à partir de cette build.
+
+### Garde-fous
+
+- `cargo test` : **155 tests**, 0 échec (126 + 6 + 20 + 3).
+- `cargo clippy --all-targets -- -D warnings` : 0 avertissement.
+- `node tools/check-theme-tokens.mjs` : 100 % résolu, 0 doublon, code de sortie 0 (ajouté à la CI,
+  job `theme tokens`).
+
+### Ce qui n'est pas vérifié
+
+- Les scripts `tools/e2e/*.mjs` n'ont pas été rejoués (même limite que le pass précédent).
+- Le sélecteur de couleur des réglages n'a pas été manipulé à la souris : `applyAccent` est prouvé par
+  les deux états au démarrage (accent par défaut et accent enregistré), pas par un clic.
+- Le bas de la page Play dépasse la hauteur de l'écran dans la capture (fenêtre 1180×760 sur un écran
+  plus court) : c'est antérieur à ce pass, la carte « GAME SESSION » est simplement coupée par le bord.
+
+---
+
+## Sélecteur d'accent et huit pages, prouvés dans le moteur (18/11)
+
+### Les deux angles morts du pass précédent
+
+`applyAccent` n'était prouvé que par les deux états au démarrage, et seule la page Play avait été
+regardée. Ce pass les ferme avec un pilote qui parle au vrai moteur (`tools/theme-sweep.mjs`) : il
+clique les entrées de la barre latérale et le sélecteur d'accent avec de vrais événements souris
+(`Input.dispatchMouseEvent`), lit les valeurs **calculées** par WebView2 et capture chaque page.
+
+### 1. Le sélecteur d'accent, exercé par le chemin utilisateur
+
+Clic réel sur `.nav-item[data-page="settings"]`, puis sur `#input-accent` — le dialogue natif de Windows s'ouvre côté système, le script envoie
+`Échap` mais ne peut pas vérifier cette fenêtre depuis le moteur — puis la paire `input`/`change` que
+ce dialogue émet sur
+`#input-accent`. Le script n'écrit jamais `--accent` ni `--accent-user` : c'est `applyAccent` qui les
+pose, via les écouteurs de `app.js`.
+
+| Lecture | Avant le geste | Après le geste |
+| --- | --- | --- |
+| `#output-accent` | `#3B82F6` | `#560B0B` |
+| `--accent` | `#3B82F6` | `#560b0b` |
+| `--accent-dim` | `color-mix(in srgb, #3B82F6 14%, transparent)` | `… #560b0b 14% …` |
+| `--accent-text` | `… #3B82F6 38%, #ffffff …` | `… #560b0b 38%, #ffffff …` |
+| `--accent-hover` | `… #3B82F6 68%, #000 …` | `… #560b0b 68%, #000 …` |
+| `--border-hover` | `… #3B82F6 45%, transparent …` | `… #560b0b 45%, transparent …` |
+| **Bouton primaire (fond)** | `color(srgb 0.1897 0.4180 0.7911)` | `color(srgb 0.2765 0.0354 0.0354)` |
+| **Pastille de valeur (texte)** | `color(srgb 0.7079 0.8137 0.9866)` | `color(srgb 0.7482 0.6364 0.6364)` |
+| **Pastille de valeur (fond)** | `… / 0.14` du bleu | `… / 0.14` du rouge |
+| **Bordure d'un champ survolé** | `… / 0.45` du bleu | `… / 0.45` du rouge |
+
+La persistance est réelle : `tools/theme-sweep-home/aether/settings.json` contenait (home de test supprimé depuis)
+`"accentColor": "#560b0b"` — l'événement `change` a traversé le pont, le cœur Rust et le disque.
+
+### 2. Le défaut trouvé, et corrigé à la source
+
+L'audit de contraste (WCAG, en composant les fonds semi-transparents) a mesuré **3,68:1** sur
+`.btn--primary` : blanc sur `#3B82F6`, pour un plancher de 4,5:1 à 13 px. Sept boutons sur cinq pages
+étaient concernés — le défaut existait déjà avec l'ancien violet (3,4:1).
+
+- `--accent-fill: color-mix(in srgb, var(--accent) 82%, #000)` : le fond d'un contrôle qui porte un
+  libellé est plus sombre que l'accent. Blanc sur ce bleu mesure maintenant **5,21:1**.
+- `--on-accent` : `app.js` calcule l'encre par luminance (`inkFor`) et bascule en quasi-noir quand
+  l'accent est clair. Vérifié avec `#7DD3FC` : le bouton rend `color: rgb(11, 17, 26)` sur
+  `color(srgb 0.4020 0.6785 0.8104)`, et les huit pages restent à 0 problème de contraste.
+- `--accent-hover` passe à 68 % (le survol était devenu invisible, même valeur que le fond).
+- `--danger-fill` pour `.btn--danger:hover` et la croix de fermeture : blanc sur `#F87171` mesurait
+  2,6:1.
+- Le dégradé de la carte de preset active était resté **violet** (`--accent-cyan`) : il dérive
+  maintenant de `--accent-text`.
+
+### 3. Les huit pages, trois accents
+
+24 états audités (Play, Accounts, Versions, Mods, Servers, Performance, Logs, Settings × accent par
+défaut, accent du joueur, accent clair) :
+
+| Contrôle | Résultat |
+| --- | --- |
+| `var(--…)` non résolus dans le moteur | **0** sur les 24 états |
+| Textes sous le plancher de contraste | **0** après correction (7 avant) |
+| Couleurs de l'ancienne palette encore rendues | **0** |
+| Jetons statiques (`check-theme-tokens`) | 61/61 résolus, 0 manquant, 0 doublon |
+
+Captures : `tools/theme-pages/` (défaut + accent du joueur), `tools/theme-pages-clair/` (accent clair),
+rapports JSON à côté. Inspection visuelle : les huit pages avec l'accent par défaut, Performance et
+Serveurs et Settings et Play avec l'accent du joueur, Play en accent clair — la carte de preset active
+est passée du violet au bleu puis au rouge, le bouton primaire est lisible dans les trois cas.
+
+### 4. Artefact publié
+
+`cargo tauri build` relancé après les corrections (bundle NSIS 4,27 MiB) ;
+`dist/Aether-Launcher-1.0.0-portable.exe` (8 988 672 o) et `dist/Aether-Launcher-Setup-1.0.0.exe`
+(4 478 560 o) régénérés. L'exe publié a été **relancé** : son bouton primaire rend
+`color(srgb 0.1897 0.4180 0.7911)` (le fond dérivé, pas l'accent brut), fond `rgb(7, 11, 18)`,
+rayon 10 px, `missing: []`.
+
+### Ce qui n'est pas vérifié
+
+- Le dialogue couleur natif de Windows n'est pas automatisé (il est ouvert puis refermé par `Échap`) :
+  c'est la paire d'événements qu'il émet qui est rejouée, pas son interface.
+- Les scripts `tools/e2e/*.mjs` restent hors de ce pass.

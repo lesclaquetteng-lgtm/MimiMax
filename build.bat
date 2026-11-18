@@ -4,7 +4,7 @@ echo   Compilation MimiMax / Aether Launcher
 echo ========================================================
 
 echo.
-echo [1/3] Compilation du Core Rust...
+echo [1/4] Compilation du Core Rust...
 cd launcher
 call cargo build --release
 if %errorlevel% neq 0 (
@@ -13,10 +13,20 @@ if %errorlevel% neq 0 (
     pause
     exit /b %errorlevel%
 )
+
+echo.
+echo [2/4] Compilation de la coquille native (Tauri)...
+call cargo build --release --manifest-path desktop\Cargo.toml
+if %errorlevel% neq 0 (
+    echo [ERREUR] Echec de compilation de la coquille.
+    cd ..
+    pause
+    exit /b %errorlevel%
+)
 cd ..
 
 echo.
-echo [2/3] Generation du Mod Minecraft (Fabric)...
+echo [3/4] Generation du Mod Minecraft (Fabric)...
 cd aether-client
 call gradlew.bat build --offline
 if %errorlevel% neq 0 (
@@ -27,12 +37,12 @@ if %errorlevel% neq 0 (
 cd ..
 
 echo.
-echo [3/3] Creation des executables racines (.exe)...
+echo [4/4] Creation des executables racines (.exe)...
 rustc -O -C opt-level=z -C lto=yes -C strip=symbols tools\launcher-runner.rs -o MimiMax.exe
 copy /Y MimiMax.exe Aether-Launcher.exe >nul
 
 echo.
 echo ========================================================
 echo   SUCCES : MimiMax.exe et Aether-Launcher.exe sont prets !
-echo   Vous pouvez les lancer directement dans ce dossier.
+echo   Ils ouvrent la coquille launcher\desktop\target\release\aether-desktop.exe
 echo ========================================================

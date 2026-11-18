@@ -1,4 +1,4 @@
-// Drives the real Electron application over the Chrome DevTools Protocol.
+// Drives the real launcher window over the Chrome DevTools Protocol.
 //
 // The script attaches to the renderer of the launcher, calls the same bridge the interface uses
 // (`window.aether`), and clicks the real buttons. Nothing is simulated: every call goes through the

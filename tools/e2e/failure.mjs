@@ -1,4 +1,4 @@
-// A real failure of the core during Install and Launch, clicked for real in a real Electron window.
+// A real failure of the core during Install and Launch, clicked for real in a real launcher window.
 //
 // The launcher is started with `AETHER_FAKE_FAIL` (see fake_core.rs), so the core really prints an
 // error document and stops on a non-zero code, or really dies without any document. The check then

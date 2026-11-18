@@ -1,5 +1,12 @@
 #![windows_subsystem = "windows"]
 
+//! The small executable at the root of the project (`MimiMax.exe`, `Aether-Launcher.exe`).
+//!
+//! It only finds the shell and starts it. The shell is the native Tauri one (`launcher/desktop`):
+//! the Electron build it used to start was removed, so a runner that still pointed at
+//! `launcher/node_modules/electron` would open nothing at all on a machine that never ran
+//! `npm install`.
+
 use std::env;
 use std::ffi::OsStr;
 use std::os::windows::ffi::OsStrExt;
@@ -29,6 +36,25 @@ fn show_error(title: &str, message: &str) {
     }
 }
 
+/// The shell, in the order an installation can carry it:
+///
+/// 1. beside the runner, the layout of a portable or installed build;
+/// 2. in the build directory of the source tree;
+/// 3. the artefact that `dist/` ships.
+fn find_shell(root: &Path) -> Option<PathBuf> {
+    for candidate in [
+        root.join("aether-desktop.exe"),
+        root.join("launcher").join("desktop").join("target").join("release").join("aether-desktop.exe"),
+        root.join("dist").join("Aether-Launcher-1.0.0-portable.exe"),
+    ] {
+        if candidate.is_file() {
+            return Some(candidate);
+        }
+    }
+
+    None
+}
+
 fn main() {
     let current_exe = match env::current_exe() {
         Ok(path) => path,
@@ -37,45 +63,21 @@ fn main() {
 
     let root = current_exe.parent().unwrap_or(Path::new("."));
 
-    // 1. Check for standalone packaged executable first if built
-    let packaged_exe = root.join("launcher").join("release").join("win-unpacked").join("Aether Launcher.exe");
-    if packaged_exe.exists() {
-        if let Err(e) = Command::new(&packaged_exe).spawn() {
-            show_error("MimiMax Launcher", &format!("Impossible de démarrer la version packagée:\n{}", e));
-        }
-        return;
-    }
-
-    // 2. Otherwise use local dev Electron
-    let electron_exe = root.join("launcher").join("node_modules").join("electron").join("dist").join("electron.exe");
-    let launcher_dir = root.join("launcher");
-
-    if !electron_exe.exists() {
+    let Some(shell) = find_shell(root) else {
         show_error(
             "MimiMax Launcher",
-            &format!(
-                "Fichier Electron introuvable :\n{}\nVeuillez exécuter 'npm install' dans le dossier launcher.",
-                electron_exe.display()
-            ),
+            "La coquille du lanceur est introuvable.\n\nCompilez-la avec :\n  cargo build --release --manifest-path launcher/desktop/Cargo.toml",
         );
         return;
-    }
+    };
 
-    let core_exe = root.join("launcher").join("target").join("release").join("aether-launcher.exe");
-
-    let mut cmd = Command::new(&electron_exe);
-    cmd.arg(&launcher_dir);
-    cmd.current_dir(&launcher_dir);
-    cmd.env_remove("ELECTRON_RUN_AS_NODE");
-
-    if core_exe.exists() {
-        cmd.env("AETHER_LAUNCHER_BIN", &core_exe);
-    }
-
-    match cmd.spawn() {
+    match Command::new(&shell).current_dir(root).spawn() {
         Ok(_) => {}
-        Err(e) => {
-            show_error("MimiMax Launcher", &format!("Erreur lors du lancement de l'interface:\n{}", e));
+        Err(error) => {
+            show_error(
+                "MimiMax Launcher",
+                &format!("Erreur lors du lancement de l'interface :\n{}", error),
+            );
         }
     }
 }

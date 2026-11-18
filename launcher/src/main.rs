@@ -35,6 +35,7 @@ fn main() {
         "loaders" => command_loaders(rest),
         "install" => command_install(rest),
         "launch" => command_launch(rest),
+        "stop" => command_stop(),
         "mods" => command_mods(rest),
         "logs" => command_logs(rest),
         "profiles" => command_profiles(rest),
@@ -463,6 +464,21 @@ fn command_launch(arguments: &[String]) -> Result<(), String> {
     }
 }
 
+/// Stops the game from the record it left, even when the launcher that started it is gone.
+fn command_stop() -> Result<(), String> {
+    let launcher = Launcher::open();
+
+    // No game to stop is a state of the launcher, not a failure of the command: the answer says so
+    // and the exit code stays zero, so a script can ask without handling an error.
+    let answer = match launcher.stop_game() {
+        Ok(pid) => serde_json::json!({ "ok": true, "pid": pid }),
+        Err(error) => serde_json::json!({ "ok": false, "error": error }),
+    };
+
+    emit(&answer);
+    Ok(())
+}
+
 fn command_mods(arguments: &[String]) -> Result<(), String> {
     let launcher = Launcher::open();
     let flags = Flags::parse(arguments);
@@ -808,6 +824,7 @@ fn print_help() {
         "  loaders [--version X]         list the Fabric loaders of a version",
         "  install [--version X]         download the game, the libraries and the assets",
         "  launch [--account ID]         start Minecraft",
+        "  stop                          stop the game, even after a crashed launcher",
         "  mods list                     list the jars of the mods folder",
         "  mods toggle <file>            enable or disable a mod (--enabled false to disable)",
         "  logs [--lines N]              print the installation log and the last sessions",

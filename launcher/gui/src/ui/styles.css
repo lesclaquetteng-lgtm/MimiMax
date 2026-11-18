@@ -7,48 +7,48 @@
  */
 
 :root {
-	--bg: var(--color-bg, #0B0E14);
-	--bg-elevated: var(--color-bg-elevated, #0F131A);
-	--surface: var(--color-surface, #14181F);
-	--surface-hover: var(--color-surface-hover, #1C222B);
-	--surface-active: var(--color-surface-active, #242B37);
-	--border: var(--color-border, #232B38);
-	--border-hover: rgba(124, 92, 252, 0.35);
-	--border-focus: #7C5CFC;
-	--text: #F1F5F9;
-	--text-secondary: #94A3B8;
-	--text-tertiary: #64748B;
+	/* Every colour, radius, shadow and duration comes from `tokens.css`. This block only gives the
+	 * rules below the names they were written with: a literal here overrides the theme silently,
+	 * which is exactly how this interface had stopped following `tokens.css`. */
+	--bg: var(--color-bg);
+	--surface: var(--color-surface);
+	--surface-hover: var(--color-surface-hover);
+	--surface-active: var(--color-surface-active);
+	--border: var(--color-border);
+	--border-hover: color-mix(in srgb, var(--accent) 45%, transparent);
+	--text: var(--color-text-primary);
+	--text-secondary: var(--color-text-secondary);
+	--text-tertiary: var(--color-text-muted);
+	--text-muted: var(--color-text-muted);
 
+	/* Layout, not theme. */
 	--sidebar-w: 220px;
 
-	--accent: #7C5CFC;
-	--accent-cyan: #38BDF8;
-	--accent-gradient: linear-gradient(135deg, #7C5CFC 0%, #38BDF8 100%);
-	--accent-dim: rgba(124, 92, 252, 0.14);
-	--accent-soft: rgba(124, 92, 252, 0.25);
-	--accent-mid: rgba(124, 92, 252, 0.50);
-	--accent-text: #C4B5FD;
-	--accent-hover: #9061F9;
+	--accent: var(--accent-user, var(--color-accent));
+	/* The tints follow the accent instead of being frozen on the shipped one: the player can pick
+	 * any colour, and every badge, border, glow and label has to keep agreeing with it. */
+	--accent-hover: color-mix(in srgb, var(--accent) 68%, #000);
+	/* The fill of a control that carries a label. It is darker than the accent on purpose: white on
+	 * `#3B82F6` measures 3.68:1, below the 4.5:1 a 13 px label needs, and the player may pick any
+	 * accent. `app.js` flips `--on-accent` to a dark ink when the accent is light enough to need it. */
+	--accent-fill: color-mix(in srgb, var(--accent) 82%, #000);
+	--danger-fill: color-mix(in srgb, var(--color-danger) 72%, #000);
+	--accent-gradient: var(--gradient-aether);
+	--accent-dim: color-mix(in srgb, var(--accent) 14%, transparent);
+	--accent-soft: color-mix(in srgb, var(--accent) 30%, transparent);
+	--accent-mid: color-mix(in srgb, var(--accent) 55%, transparent);
+	--accent-text: color-mix(in srgb, var(--accent) 38%, #ffffff);
 
-	--green: #10B981;
-	--green-dim: rgba(16, 185, 129, 0.15);
-	--red: #EF4444;
-	--red-dim: rgba(239, 68, 68, 0.15);
-	--yellow: #F59E0B;
-	--yellow-dim: rgba(245, 158, 11, 0.15);
+	--green: var(--color-success);
+	--green-dim: var(--color-success-dim);
+	--red: var(--color-danger);
+	--red-dim: var(--color-danger-dim);
+	--yellow: var(--color-warning);
+	--yellow-dim: var(--color-warning-dim);
+	--success: var(--color-success);
 
-	--radius: 14px;
-	--radius-sm: 8px;
-	--radius-xs: 6px;
-
-	--shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.6);
-	--shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
-	--shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.7);
-
-	--ring: 0 0 0 2px rgba(124, 92, 252, 0.5);
-	--ease: cubic-bezier(0.22, 1, 0.36, 1);
-	--ease-spring: cubic-bezier(0.22, 1, 0.36, 1);
-	--dur: 0.15s;
+	/* The rules were written with `--radius`; the scale itself lives in the tokens. */
+	--radius: var(--radius-md);
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -71,6 +71,22 @@ body {
 }
 
 button, input, select { font: inherit; color: inherit; }
+
+/* The states of a control have to be visible, not inferred: a keyboard user reaches a button the
+ * same way a mouse user reaches it, and a disabled control has to look disabled. `:where()` keeps
+ * the specificity at zero, so every rule of this file that already styles these states wins. */
+:where(button, a, input, select, textarea, [tabindex]):focus-visible {
+	outline: 2px solid var(--color-border-focus);
+	outline-offset: 2px;
+}
+
+:where(button, input, select, textarea):disabled,
+:where([aria-disabled="true"]) {
+	opacity: var(--state-disabled-opacity);
+	cursor: var(--state-disabled-cursor);
+}
+
+body { font-variant-numeric: tabular-nums; }
 
 svg {
 	width: 16px;
@@ -148,7 +164,7 @@ svg {
 
 .win-button svg { width: 11px; height: 11px; }
 .win-button:hover { background: rgba(255, 255, 255, 0.06); color: var(--text); }
-.win-button--close:hover { background: var(--red); color: #fff; }
+.win-button--close:hover { background: var(--danger-fill); color: #fff; }
 
 /* ============================================================== SHELL == */
 
@@ -431,7 +447,7 @@ svg {
 .hero-tag--boost {
 	background: var(--green-dim);
 	color: var(--green);
-	border-color: rgba(52, 199, 89, 0.25);
+	border-color: rgba(52, 211, 153, 0.25);
 }
 
 .hero-heading {
@@ -732,9 +748,9 @@ input[type="checkbox"] {
 .btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
 .btn--primary {
-	background: var(--accent);
+	background: var(--accent-fill);
 	border-color: transparent;
-	color: #fff;
+	color: var(--on-accent);
 	font-weight: 600;
 }
 
@@ -798,13 +814,13 @@ input[type="checkbox"] {
 
 .btn--danger {
 	background: var(--red-dim);
-	border-color: rgba(255, 69, 58, 0.2);
+	border-color: rgba(248, 113, 113, 0.2);
 	color: var(--red);
 }
 
 .btn--danger:hover {
-	background: var(--red);
-	border-color: var(--red);
+	background: var(--danger-fill);
+	border-color: var(--danger-fill);
 	color: #fff;
 }
 
@@ -829,7 +845,7 @@ input[type="checkbox"] {
 
 .icon-btn:hover {
 	color: var(--red);
-	border-color: rgba(255, 69, 58, 0.3);
+	border-color: rgba(248, 113, 113, 0.3);
 	background: var(--red-dim);
 }
 
@@ -913,13 +929,13 @@ input[type="checkbox"] {
 .tag--offline {
 	background: var(--yellow-dim);
 	color: var(--yellow);
-	border: 1px solid rgba(255, 214, 10, 0.2);
+	border: 1px solid rgba(251, 191, 36, 0.2);
 }
 
 .tag--microsoft {
 	background: var(--green-dim);
 	color: var(--green);
-	border: 1px solid rgba(52, 199, 89, 0.2);
+	border: 1px solid rgba(52, 211, 153, 0.2);
 }
 
 .badge {
@@ -1400,8 +1416,8 @@ input[type="range"]:disabled::-webkit-slider-thumb { box-shadow: none; cursor: n
 	width: 3px;
 	height: 28px;
 	border-radius: 3px;
-	background: var(--gradient-aether, linear-gradient(135deg, #7C5CFC, #38BDF8));
-	box-shadow: 0 0 10px rgba(124, 92, 252, 0.6);
+	background: var(--accent);
+	box-shadow: 0 0 10px var(--accent-mid);
 	pointer-events: none;
 	opacity: 0;
 	transform: translateY(0);
@@ -1427,9 +1443,9 @@ input[type="range"]:disabled::-webkit-slider-thumb { box-shadow: none; cursor: n
 .player-skin-canvas {
 	width: 110px;
 	height: 110px;
-	border-radius: var(--radius-md, 12px);
+	border-radius: var(--radius-md);
 	background: radial-gradient(circle at center, rgba(124, 92, 252, 0.18) 0%, rgba(15, 19, 26, 0.8) 75%);
-	border: 1px solid rgba(124, 92, 252, 0.3);
+	border: 1px solid var(--accent-soft);
 	cursor: grab;
 	transition: transform 150ms ease, box-shadow 150ms ease;
 	z-index: 2;
@@ -1441,8 +1457,8 @@ input[type="range"]:disabled::-webkit-slider-thumb { box-shadow: none; cursor: n
 }
 
 .player-skin-canvas:hover {
-	border-color: rgba(56, 189, 248, 0.5);
-	box-shadow: 0 0 18px rgba(124, 92, 252, 0.35);
+	border-color: var(--accent-soft);
+	box-shadow: 0 0 18px var(--accent-soft);
 }
 
 /* 3. Skeleton Loaders */
@@ -1451,9 +1467,9 @@ input[type="range"]:disabled::-webkit-slider-thumb { box-shadow: none; cursor: n
 	align-items: center;
 	gap: 12px;
 	padding: 12px 14px;
-	border-radius: var(--radius-sm, 8px);
-	background: var(--surface, #14181F);
-	border: 1px solid var(--border, #232B38);
+	border-radius: var(--radius-sm);
+	background: var(--surface);
+	border: 1px solid var(--border);
 	margin-bottom: 6px;
 	position: relative;
 	overflow: hidden;
@@ -1512,9 +1528,9 @@ input[type="range"]:disabled::-webkit-slider-thumb { box-shadow: none; cursor: n
 	flex-direction: column;
 	gap: 10px;
 	padding: 14px 16px;
-	border-radius: var(--radius-md, 12px);
-	background: var(--surface, #14181F);
-	border: 1px solid var(--border, #232B38);
+	border-radius: var(--radius-md);
+	background: var(--surface);
+	border: 1px solid var(--border);
 	margin-bottom: 10px;
 	transition: border-color 150ms ease, transform 150ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 150ms ease;
 	position: relative;
@@ -1522,7 +1538,7 @@ input[type="range"]:disabled::-webkit-slider-thumb { box-shadow: none; cursor: n
 }
 
 .server-card-discord:hover {
-	border-color: rgba(124, 92, 252, 0.35);
+	border-color: var(--accent-soft);
 	transform: translateY(-1px);
 	box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
 }
@@ -1544,7 +1560,7 @@ input[type="range"]:disabled::-webkit-slider-thumb { box-shadow: none; cursor: n
 .server-card-discord-name {
 	font-weight: 700;
 	font-size: 14px;
-	color: var(--text, #F1F5F9);
+	color: var(--text);
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
@@ -1552,16 +1568,16 @@ input[type="range"]:disabled::-webkit-slider-thumb { box-shadow: none; cursor: n
 
 .server-card-discord-address {
 	font-size: 11px;
-	font-family: var(--font-mono, monospace);
-	color: var(--text-tertiary, #64748B);
+	font-family: var(--font-mono);
+	color: var(--text-tertiary);
 }
 
 .server-status-dot-pulse {
 	width: 8px;
 	height: 8px;
 	border-radius: 50%;
-	background: var(--green, #10B981);
-	box-shadow: 0 0 8px rgba(16, 185, 129, 0.7);
+	background: var(--green);
+	box-shadow: 0 0 8px rgba(52, 211, 153, 0.7);
 	flex: 0 0 8px;
 	animation: dot-pulse 2s infinite;
 }
@@ -1592,9 +1608,9 @@ input[type="range"]:disabled::-webkit-slider-thumb { box-shadow: none; cursor: n
 	font-size: 10px;
 	font-weight: 600;
 	letter-spacing: 0.3px;
-	background: rgba(124, 92, 252, 0.15);
-	color: #C4B5FD;
-	border: 1px solid rgba(124, 92, 252, 0.3);
+	background: var(--accent-dim);
+	color: var(--accent-text);
+	border: 1px solid var(--accent-soft);
 }
 
 .badge-offline-ok {
@@ -1608,7 +1624,7 @@ input[type="range"]:disabled::-webkit-slider-thumb { box-shadow: none; cursor: n
 	letter-spacing: 0.3px;
 	background: rgba(16, 185, 129, 0.15);
 	color: #6EE7B7;
-	border: 1px solid rgba(16, 185, 129, 0.3);
+	border: 1px solid rgba(52, 211, 153, 0.3);
 }
 
 .motd-container {
@@ -1619,7 +1635,7 @@ input[type="range"]:disabled::-webkit-slider-thumb { box-shadow: none; cursor: n
 	background: rgba(0, 0, 0, 0.3);
 	border: 1px solid rgba(255, 255, 255, 0.04);
 	word-break: break-word;
-	font-family: var(--font-ui, sans-serif);
+	font-family: var(--font-ui);
 }
 
 /* Minecraft color formatting spans */
@@ -1659,9 +1675,9 @@ input[type="range"]:disabled::-webkit-slider-thumb { box-shadow: none; cursor: n
 	align-items: center;
 	gap: 10px;
 	padding: 10px 12px;
-	border-radius: var(--radius-md, 12px);
-	background: var(--surface, #14181F);
-	border: 1px solid var(--border, #232B38);
+	border-radius: var(--radius-md);
+	background: var(--surface);
+	border: 1px solid var(--border);
 	cursor: pointer;
 	position: relative;
 	width: 100%;
@@ -1670,14 +1686,14 @@ input[type="range"]:disabled::-webkit-slider-thumb { box-shadow: none; cursor: n
 }
 
 .preset-card:hover {
-	background: var(--surface-hover, #1C222B);
+	background: var(--surface-hover);
 	transform: translateY(-2px);
 }
 
 .preset-card.is-active {
-	background: #171C26;
+	background: var(--surface-active);
 	border-color: transparent;
-	box-shadow: 0 0 16px rgba(124, 92, 252, 0.4);
+	box-shadow: 0 0 16px var(--accent-soft);
 }
 
 .preset-card.is-active::after {
@@ -1686,7 +1702,7 @@ input[type="range"]:disabled::-webkit-slider-thumb { box-shadow: none; cursor: n
 	inset: -1px;
 	border-radius: inherit;
 	padding: 1px;
-	background: linear-gradient(135deg, #7C5CFC, #38BDF8, #7C5CFC);
+	background: linear-gradient(135deg, var(--accent), var(--accent-text), var(--accent));
 	background-size: 200% 200%;
 	-webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
 	-webkit-mask-composite: xor;
@@ -1705,8 +1721,8 @@ input[type="range"]:disabled::-webkit-slider-thumb { box-shadow: none; cursor: n
 	width: 32px;
 	height: 32px;
 	border-radius: 8px;
-	background: rgba(124, 92, 252, 0.15);
-	color: #C4B5FD;
+	background: var(--accent-dim);
+	color: var(--accent-text);
 	display: grid;
 	place-items: center;
 	flex: 0 0 32px;
@@ -1729,12 +1745,12 @@ input[type="range"]:disabled::-webkit-slider-thumb { box-shadow: none; cursor: n
 .preset-card-title {
 	font-size: 13px;
 	font-weight: 700;
-	color: var(--text, #F1F5F9);
+	color: var(--text);
 }
 
 .preset-card-desc {
 	font-size: 11px;
-	color: var(--text-secondary, #94A3B8);
+	color: var(--text-secondary);
 	line-height: 1.3;
 }
 
@@ -1747,9 +1763,9 @@ input[type="range"]:disabled::-webkit-slider-thumb { box-shadow: none; cursor: n
 	width: 100%;
 	max-width: 100%;
 	height: 110px;
-	border-radius: var(--radius-sm, 8px);
-	background: #0C1017;
-	border: 1px solid var(--border, #232B38);
+	border-radius: var(--radius-sm);
+	background: var(--bg);
+	border: 1px solid var(--border);
 	margin-top: 10px;
 	display: block;
 	box-sizing: border-box;

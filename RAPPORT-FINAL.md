@@ -17,11 +17,11 @@ Deux binaires qui se parlent par un contrat JSON :
 | Partie | Techno | Rôle |
 | --- | --- | --- |
 | `aether-client/` | Mod Fabric, Java 21, mappings Mojang | Tout ce qui tourne **dans** Minecraft : ClickGUI, HUD, modules, configuration, détection de session hors-ligne. |
-| `launcher/` | Cœur Rust + interface Electron | Comptes, version/loader, installation, lancement, serveurs, hébergement, presets de performance. |
+| `launcher/` | Cœur Rust + coquille native Tauri (WebView2) | Comptes, version/loader, installation, lancement, serveurs, hébergement, presets de performance. |
 
 Le cœur Rust ne duplique jamais la logique dans l'interface : chaque commande imprime un document
 JSON par ligne (et des événements `{"type": ...}` pour les flux), que l'interface consomme. C'est ce
-qui permet de tout vérifier en ligne de commande, sans lancer Electron.
+qui permet de tout vérifier en ligne de commande, sans lancer la coquille.
 
 ### 1.2 Ce qui a été ajouté depuis la dernière discussion
 
