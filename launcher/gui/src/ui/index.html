@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="utf-8" />
+	<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost" />
+	<title>Aether Launcher</title>
+	<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+	<div class="titlebar" data-tauri-drag-region>
+		<div class="titlebar-brand" data-tauri-drag-region>
+			<span class="logo-dot"></span>
+			<span>Aether Launcher</span>
+		</div>
+		<div class="titlebar-actions">
+			<button class="win-button" data-window="minimize" aria-label="Minimize">
+				<svg viewBox="0 0 12 12"><path d="M2 6h8" /></svg>
+			</button>
+			<button class="win-button" data-window="maximize" aria-label="Maximize">
+				<svg viewBox="0 0 12 12"><rect x="2.5" y="2.5" width="7" height="7" rx="1" /></svg>
+			</button>
+			<button class="win-button win-button--close" data-window="close" aria-label="Close">
+				<svg viewBox="0 0 12 12"><path d="M3 3l6 6M9 3l-6 6" /></svg>
+			</button>
+		</div>
+	</div>
+
+	<div class="shell">
+		<aside class="sidebar">
+			<div class="sidebar-brand-block">
+				<div class="brand-crest">
+					<svg viewBox="0 0 24 24" class="brand-crest-svg">
+						<polygon points="12 2 2 19 22 19 12 2" />
+						<polygon points="12 6 18 17 6 17 12 6" />
+					</svg>
+					<span class="brand-crest-glow"></span>
+				</div>
+				<div class="brand-info">
+					<span class="brand-title">AETHER</span>
+					<span class="brand-subtitle">CLIENT v1.0</span>
+				</div>
+			</div>
+
+			<div class="nav-section-title"><span>CLIENT</span></div>
+			<nav class="nav">
+				<button class="nav-item is-active" data-page="play">
+					<svg viewBox="0 0 24 24"><path d="M6 4l14 8-14 8z" /></svg>
+					<span>Play</span>
+				</button>
+				<button class="nav-item" data-page="accounts">
+					<svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4" /><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7" /></svg>
+					<span>Accounts</span>
+				</button>
+				<button class="nav-item" data-page="versions">
+					<svg viewBox="0 0 24 24"><path d="M12 3l9 5-9 5-9-5z" /><path d="M3 13l9 5 9-5" /></svg>
+					<span>Versions</span>
+				</button>
+				<button class="nav-item" data-page="mods">
+					<svg viewBox="0 0 24 24"><path d="M10 4h4v2.6a2.2 2.2 0 002.6 2.4 2.2 2.2 0 010 4.4A2.2 2.2 0 0014 16v4h-4v-2.6a2.2 2.2 0 00-2.6-2.4 2.2 2.2 0 010-4.4A2.2 2.2 0 0010 8z" /></svg>
+					<span>Mods</span>
+				</button>
+			</nav>
+
+			<div class="nav-section-title"><span>NETWORK</span></div>
+			<nav class="nav">
+				<button class="nav-item" data-page="servers">
+					<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3c2.8 2.6 4 5.7 4 9s-1.2 6.4-4 9c-2.8-2.6-4-5.7-4-9s1.2-6.4 4-9z" /></svg>
+					<span>Servers</span>
+				</button>
+				<button class="nav-item" data-page="performance">
+					<svg viewBox="0 0 24 24"><path d="M4 17a8 8 0 1116 0" /><path d="M12 17l4-5" /></svg>
+					<span>Performance</span>
+				</button>
+			</nav>
+
+			<div class="nav-section-title"><span>SYSTEM</span></div>
+			<nav class="nav">
+				<button class="nav-item" data-page="logs">
+					<svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6z" /><path d="M9 8h3M9 12h7M9 16h7" /></svg>
+					<span>Logs</span>
+				</button>
+				<button class="nav-item" data-page="settings">
+					<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 00.3 1.9l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.9-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1A1.7 1.7 0 008 19.4a1.7 1.7 0 00-1.9.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.9 1.7 1.7 0 00-1.5-1H2a2 2 0 110-4h.1A1.7 1.7 0 003.6 8a1.7 1.7 0 00-.3-1.9l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.9.3H8a1.7 1.7 0 001-1.5V2a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.9-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.9V8a1.7 1.7 0 001.5 1H22a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z" /></svg>
+					<span>Settings</span>
+				</button>
+			</nav>
+
+			<div class="sidebar-footer">
+				<div class="status-pill" id="status-pill">
+					<span class="status-dot"></span>
+					<span id="status-text">Ready</span>
+				</div>
+				<p class="sidebar-note">Aether Client 1.0.0 &middot; Minecraft 1.21.11</p>
+			</div>
+		</aside>
+
+		<main class="content">
+			<!-- ============================ PLAY ============================ -->
+			<section class="page is-active" data-page="play">
+				<div class="hero-banner">
+					<div class="hero-banner-content">
+						<div class="hero-tag-row">
+							<span class="hero-tag hero-tag--neon">1.21.11 FABRIC</span>
+							<span class="hero-tag">OFFLINE READY</span>
+							<span class="hero-tag hero-tag--boost">⚡ 880+ FPS PACK</span>
+						</div>
+						<h1 class="hero-heading">AETHER <span class="hero-glow-text">CLIENT</span></h1>
+						<p class="hero-subtext">Competitive Minecraft client with built-in optimizations, offline mode and custom HUD.</p>
+					</div>
+					<div class="hero-banner-art">
+						<div class="hero-art-shield"></div>
+					</div>
+				</div>
+
+				<div class="grid grid--two">
+					<div class="card card--account">
+						<div class="card-head">
+							<h2 class="card-title">Active Account</h2>
+						</div>
+						<div id="play-accounts" class="account-list"></div>
+						<button class="btn btn--ghost btn--block" id="play-add-offline">Add offline account</button>
+					</div>
+
+					<div class="card card--profile">
+						<div class="card-head">
+							<h2 class="card-title">Profile Configuration</h2>
+						</div>
+						<label class="field">
+							<span class="field-label">Profile of this account</span>
+							<div class="field-row">
+								<select id="select-profile" class="input"></select>
+								<button type="button" class="icon-btn" id="btn-profile-new" title="New profile" aria-label="New profile">
+									<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg>
+								</button>
+								<button type="button" class="icon-btn" id="btn-profile-delete" title="Delete this profile" aria-label="Delete this profile">
+									<svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13" /></svg>
+								</button>
+							</div>
+						</label>
+						<label class="field">
+							<span class="field-label">Minecraft version</span>
+							<select id="select-version" class="input"></select>
+						</label>
+						<label class="field">
+							<span class="field-label">Fabric loader</span>
+							<select id="select-loader" class="input"></select>
+						</label>
+						<label class="field">
+							<span class="field-label">Memory</span>
+							<div class="range-row">
+								<input type="range" id="range-memory" min="1024" max="16384" step="256" value="4096" />
+								<output id="output-memory">4096 MB</output>
+							</div>
+						</label>
+						<label class="field">
+							<span class="field-label">Window size</span>
+							<div class="range-row">
+								<input type="range" id="range-width" min="640" max="3840" step="8" value="854" />
+								<output id="output-width">854</output>
+								<input type="range" id="range-height" min="480" max="2160" step="8" value="480" />
+								<output id="output-height">480</output>
+							</div>
+						</label>
+					</div>
+				</div>
+
+				<div class="card card--hero-launch">
+					<div class="card-head">
+						<h2 class="card-title">Game Session</h2>
+						<span class="badge" id="session-badge">offline ready</span>
+					</div>
+					<div class="progress" id="install-progress" hidden>
+						<div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+						<span class="progress-label" id="progress-label">Preparing…</span>
+					</div>
+					<div class="actions">
+						<button class="btn btn--ghost" id="btn-install">Install / repair</button>
+						<button class="btn btn--primary" id="btn-launch">Launch Minecraft</button>
+						<button class="btn btn--danger" id="btn-cancel-install" hidden>Cancel install</button>
+						<button class="btn btn--danger" id="btn-stop" hidden>Stop</button>
+					</div>
+					<pre class="console" id="console" aria-live="polite" data-empty="The output of the game appears here when you launch it."></pre>
+				</div>
+			</section>
+
+			<!-- ========================== ACCOUNTS ========================== -->
+			<section class="page" data-page="accounts">
+				<header class="page-header">
+					<h1>Accounts</h1>
+					<p>Offline accounts only need a name. The identifier is generated exactly like Minecraft does it.</p>
+				</header>
+				<div class="card">
+					<div class="card-head">
+						<h2 class="card-title">Accounts</h2>
+						<div class="actions actions--tight">
+							<button class="btn btn--ghost" id="btn-add-offline">Offline</button>
+							<button class="btn btn--ghost" id="btn-add-microsoft">Microsoft</button>
+						</div>
+					</div>
+					<div id="account-table" class="account-table"></div>
+				</div>
+			</section>
+
+			<!-- ========================== VERSIONS ========================== -->
+			<section class="page" data-page="versions">
+				<header class="page-header">
+					<h1>Versions</h1>
+					<p>Every released Minecraft version supported by the Aether client.</p>
+				</header>
+				<div class="card">
+					<div class="card-head">
+						<h2 class="card-title">Available versions</h2>
+						<button class="btn btn--ghost" id="btn-refresh-versions">Refresh</button>
+					</div>
+					<div id="version-table" class="version-table"></div>
+				</div>
+			</section>
+
+			<!-- ============================ MODS ============================ -->
+			<section class="page" data-page="mods">
+				<header class="page-header">
+					<h1>Mods</h1>
+					<p>The jars of the mods folder. A disabled mod stays on the disk and is renamed with a
+					<code>.disabled</code> suffix, so nothing has to be downloaded again.</p>
+				</header>
+				<div class="card">
+					<div class="card-head">
+						<h2 class="card-title">Installed mods</h2>
+						<div class="actions actions--tight">
+							<span class="badge" id="mods-count">0 mods</span>
+							<button class="btn btn--ghost" id="btn-mods-refresh">Refresh</button>
+							<button class="btn btn--ghost" id="btn-mods-folder">Open folder</button>
+						</div>
+					</div>
+					<div id="mods-table" class="mod-table"></div>
+					<p class="log-path" id="mods-path"></p>
+				</div>
+			</section>
+
+			<!-- =========================== SERVERS ========================== -->
+			<section class="page" data-page="servers">
+				<header class="page-header">
+					<h1>Servers</h1>
+					<p>Ping any server, check whether it accepts an offline account, and host your own
+					offline server in one click.</p>
+				</header>
+
+				<div class="grid grid--two">
+					<div class="card">
+						<h2 class="card-title">Add a server</h2>
+						<label class="field">
+							<span class="field-label">Name</span>
+							<input type="text" id="server-name" class="input" maxlength="48" placeholder="My server" />
+						</label>
+						<label class="field">
+							<span class="field-label">Address</span>
+							<input type="text" id="server-address" class="input" maxlength="128" placeholder="play.example.com:25565" />
+						</label>
+						<div class="actions actions--tight">
+							<button class="btn btn--primary" id="btn-server-add">Add server</button>
+							<button class="btn btn--ghost" id="btn-server-probe">Test address</button>
+						</div>
+						<p class="muted" id="server-verdict" aria-live="polite"></p>
+					</div>
+
+					<div class="card">
+						<h2 class="card-title">Host an offline server</h2>
+						<p class="muted">A local Fabric server with <code>online-mode=false</code>. You and
+						your friends can join with any name, without a Microsoft account.</p>
+						<label class="field">
+							<span class="field-label">World name</span>
+							<input type="text" id="host-name" class="input" maxlength="48" placeholder="Our world" />
+						</label>
+						<div class="field-row">
+							<label class="field">
+								<span class="field-label">Port</span>
+								<input type="number" id="host-port" class="input" value="25565" min="1024" max="65535" />
+							</label>
+							<label class="field">
+								<span class="field-label">Players</span>
+								<input type="number" id="host-players" class="input" value="20" min="1" max="100" />
+							</label>
+						</div>
+						<button class="btn btn--ghost btn--block" id="btn-host-create">Create the server</button>
+					</div>
+				</div>
+
+				<div class="card">
+					<div class="card-head">
+						<h2 class="card-title">Your servers</h2>
+						<div class="actions actions--tight">
+							<span class="badge" id="server-count">0 servers</span>
+							<button class="btn btn--ghost" id="btn-servers-refresh">Refresh</button>
+						</div>
+					</div>
+					<div id="server-list" class="mod-table"></div>
+				</div>
+
+				<div class="card">
+					<div class="card-head">
+						<h2 class="card-title">Local servers</h2>
+						<span class="badge" id="host-count">0 servers</span>
+					</div>
+					<div id="host-list" class="mod-table"></div>
+					<p class="muted">The console of a server is written to <code>console.log</code> in its
+					folder. Stop goes through RCON, so the world is saved before the process ends.</p>
+				</div>
+			</section>
+
+			<!-- ========================= PERFORMANCE ======================== -->
+			<section class="page" data-page="performance">
+				<header class="page-header">
+					<h1>Performance</h1>
+					<p>The optimisation pack, the JVM flags and the rendering options. Every change is
+					reversible, the original <code>options.txt</code> is kept.</p>
+				</header>
+
+				<div class="grid grid--two">
+					<div class="card">
+						<h2 class="card-title">JVM preset</h2>
+						<p class="muted">The garbage collector flags of the next launch. <strong>Ultra</strong>
+						uses Aikar's flags with string tuning.</p>
+						<label class="field">
+							<span class="field-label">Preset</span>
+							<select id="select-jvm" class="input">
+								<option value="balanced">Balanced</option>
+								<option value="performance">Performance</option>
+								<option value="ultra">Ultra</option>
+								<option value="custom">Plain arguments</option>
+							</select>
+						</label>
+						<button class="btn btn--primary btn--block" id="btn-jvm-apply">Apply the preset</button>
+						<p class="muted" id="jvm-current"></p>
+					</div>
+
+					<div class="card">
+						<h2 class="card-title">Game options</h2>
+						<p class="muted">Writes the rendering options. The original file is copied to
+						<code>options.txt.aether-backup</code> on the first change.</p>
+						<div class="actions actions--tight">
+							<button class="btn btn--primary" id="btn-tune-max">Maximum FPS</button>
+							<button class="btn btn--ghost" id="btn-tune-balanced">Balanced</button>
+							<button class="btn btn--ghost" id="btn-tune-restore">Restore</button>
+						</div>
+						<p class="muted" id="options-current"></p>
+					</div>
+				</div>
+
+				<div class="card">
+					<div class="card-head">
+						<h2 class="card-title">Optimisation pack</h2>
+						<div class="actions actions--tight">
+							<span class="badge" id="perf-count">0/10</span>
+							<button class="btn btn--ghost" id="btn-perf-refresh">Refresh</button>
+							<button class="btn btn--primary" id="btn-perf-install">Install missing</button>
+						</div>
+					</div>
+					<div id="perf-mods" class="mod-table"></div>
+					<p class="log-path" id="perf-path"></p>
+				</div>
+			</section>
+
+			<!-- ============================ LOGS ============================ -->
+			<section class="page" data-page="logs">
+				<header class="page-header">
+					<h1>Logs</h1>
+					<p>The output of the running session and the downloads of the last installation.</p>
+				</header>
+				<div class="card">
+					<div class="card-head">
+						<h2 class="card-title">Current session</h2>
+						<span class="badge" id="session-log-badge">empty</span>
+					</div>
+					<pre class="console console--tall" id="session-log" data-empty="No output yet. Launch the game and its lines appear here."></pre>
+				</div>
+
+				<div class="card card--stack">
+					<div class="card-head">
+						<h2 class="card-title">Past sessions</h2>
+						<span class="badge" id="sessions-count">no session</span>
+					</div>
+					<div id="sessions-table" class="session-table"></div>
+					<p class="log-path" id="sessions-note"></p>
+					<div id="session-view"></div>
+				</div>
+
+				<div class="card card--stack">
+					<div class="card-head">
+						<h2 class="card-title">Install log</h2>
+						<button class="btn btn--ghost" id="btn-logs-refresh">Refresh</button>
+					</div>
+					<div id="install-log-body"></div>
+					<p class="log-path" id="install-log-path"></p>
+				</div>
+			</section>
+
+			<!-- ========================== SETTINGS ========================== -->
+			<section class="page" data-page="settings">
+				<header class="page-header">
+					<h1>Settings</h1>
+					<p>Configure the runtime, the memory and the appearance of the launcher.</p>
+				</header>
+				<div class="grid grid--two">
+					<div class="card">
+						<h2 class="card-title">Runtime</h2>
+						<label class="field">
+							<span class="field-label">Java path</span>
+							<input type="text" id="input-java" class="input" placeholder="Auto detected" />
+						</label>
+						<label class="field">
+							<span class="field-label">Maximum memory</span>
+							<div class="range-row">
+								<input type="range" id="range-max-memory" min="1024" max="16384" step="256" value="4096" />
+								<output id="output-max-memory">4096 MB</output>
+							</div>
+						</label>
+						<label class="field">
+							<span class="field-label">Initial memory</span>
+							<div class="range-row">
+								<input type="range" id="range-min-memory" min="256" max="8192" step="256" value="1024" />
+								<output id="output-min-memory">1024 MB</output>
+							</div>
+						</label>
+						<label class="field field--inline">
+							<input type="checkbox" id="check-g1" checked />
+							<span>Use the G1 garbage collector</span>
+						</label>
+					</div>
+
+					<div class="card">
+						<h2 class="card-title">Appearance</h2>
+						<label class="field">
+							<span class="field-label">Accent colour</span>
+							<div class="range-row">
+								<input type="color" id="input-accent" value="#6c5ce7" />
+								<output id="output-accent">#6C5CE7</output>
+							</div>
+						</label>
+						<label class="field">
+							<span class="field-label">Fabric API version</span>
+							<input type="text" id="input-fabric-api" class="input" />
+						</label>
+					</div>
+				</div>
+
+				<div class="card card--stack">
+					<h2 class="card-title">Paths</h2>
+					<pre class="console console--static" id="paths-output"></pre>
+				</div>
+			</section>
+		</main>
+	</div>
+
+	<!-- ============================ MODAL ============================ -->
+	<div class="modal-backdrop" id="modal" hidden>
+		<div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title" tabindex="-1">
+			<h2 id="modal-title">Add account</h2>
+			<div id="modal-body"></div>
+			<div class="modal-actions">
+				<button class="btn btn--ghost" id="modal-cancel">Cancel</button>
+				<button class="btn btn--primary" id="modal-confirm">Confirm</button>
+			</div>
+		</div>
+	</div>
+
+	<div class="toast-stack" id="toasts" role="status" aria-live="polite"></div>
+
+	<script src="bridge.js"></script>
+	<script src="app.js"></script>
+</body>
+</html>

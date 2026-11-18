@@ -1,0 +1,64 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Aether Launcher",
+  "version": "1.0.0",
+  "identifier": "dev.aether.launcher",
+  "build": {
+    "frontendDist": "../gui/src/ui"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Aether Launcher",
+        "width": 1180,
+        "height": 760,
+        "minWidth": 940,
+        "minHeight": 620,
+        "center": true,
+        "resizable": true,
+        "decorations": false,
+        "visible": false,
+        "backgroundColor": "#0e0f13",
+        "dragDropEnabled": false
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "publisher": "Aether",
+    "copyright": "Copyright (c) 2026 Aether",
+    "category": "Game",
+    "shortDescription": "A Minecraft client with first-class offline mode.",
+    "longDescription": "The launcher of the Aether Client: offline and Microsoft accounts, Fabric installation, servers, local hosting and a verified optimisation pack.",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.ico"
+    ],
+    "licenseFile": "installer/LICENSE-FR.txt",
+    "resources": {
+      "installer/LICENSE-FR.txt": "AETHER-LICENSE-FR.txt"
+    },
+    "windows": {
+      "webviewInstallMode": {
+        "type": "embedBootstrapper"
+      },
+      "nsis": {
+        "installerIcon": "icons/icon.ico",
+        "headerImage": "installer/header.bmp",
+        "sidebarImage": "installer/sidebar.bmp",
+        "languages": ["French"],
+        "displayLanguageSelector": false,
+        "installMode": "currentUser",
+        "startMenuFolder": "Aether",
+        "compression": "lzma"
+      }
+    }
+  }
+}

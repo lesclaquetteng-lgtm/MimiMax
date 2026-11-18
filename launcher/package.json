@@ -1,0 +1,64 @@
+{
+  "name": "aether-launcher",
+  "version": "1.0.0",
+  "description": "The launcher of the Aether Client, a Rust core with an Electron interface.",
+  "type": "module",
+  "main": "gui/src/main.js",
+  "author": "Aether",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "build:exe": "rustc -O -C opt-level=z -C lto=yes -C strip=symbols ../tools/launcher-runner.rs -o ../MimiMax.exe && copy ..\\MimiMax.exe ..\\Aether-Launcher.exe",
+    "core": "cargo build --release",
+    "core:debug": "cargo build",
+    "test": "cargo test --release",
+    "lint": "cargo clippy --release --all-targets",
+    "e2e:drive": "node ../tools/e2e/drive.mjs",
+    "e2e:screens": "node ../tools/e2e/screens.mjs",
+    "e2e:failure": "node ../tools/e2e/failure.mjs",
+    "e2e:crash": "node ../tools/e2e/crash-report.mjs",
+    "e2e:cancel": "node ../tools/e2e/cancel.mjs",
+    "e2e:stubborn": "node ../tools/e2e/stubborn.mjs",
+    "e2e:timeout": "node ../tools/e2e/timeout.mjs",
+    "e2e:a11y": "node ../tools/e2e/a11y.mjs",
+    "e2e:profiles": "node ../tools/e2e/profiles.mjs",
+    "e2e:sliders": "node ../tools/e2e/sliders.mjs",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder"
+  },
+  "devDependencies": {
+    "electron": "^45.3.1"
+  },
+  "build": {
+    "appId": "dev.aether.launcher",
+    "productName": "Aether Launcher",
+    "files": [
+      "gui/**/*",
+      "src/**/*",
+      "tests/**/*",
+      "Cargo.toml",
+      "Cargo.lock",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "target/release",
+        "to": ".",
+        "filter": ["aether-launcher", "aether-launcher.exe"]
+      }
+    ],
+    "directories": {
+      "output": "release"
+    },
+    "win": {
+      "target": [
+        "nsis",
+        "zip"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  }
+}

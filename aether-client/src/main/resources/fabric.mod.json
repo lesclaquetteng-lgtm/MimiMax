@@ -1,0 +1,30 @@
+{
+	"schemaVersion": 1,
+	"id": "aether",
+	"version": "${version}",
+	"name": "Aether Client",
+	"description": "Aether Client - a modern, professional Minecraft client with first-class offline mode support.",
+	"authors": [
+		"Aether"
+	],
+	"contact": {
+		"homepage": "https://github.com/aether-client",
+		"sources": "https://github.com/aether-client"
+	},
+	"license": "MIT",
+	"environment": "client",
+	"entrypoints": {
+		"client": [
+			"dev.aether.client.AetherClient"
+		]
+	},
+	"mixins": [
+		"aether.mixins.json"
+	],
+	"depends": {
+		"fabricloader": ">=0.20.1",
+		"minecraft": "~1.21.11",
+		"java": ">=21",
+		"fabric-api": "*"
+	}
+}

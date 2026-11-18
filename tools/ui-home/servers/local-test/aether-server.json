@@ -1,0 +1,11 @@
+{
+  "name": "Local Test",
+  "directory": "C:\\Users\\ee\\Desktop\\MimiMax\\tools\\aether-home\\servers\\local-test",
+  "port": 25565,
+  "rconPort": 1783,
+  "onlineMode": false,
+  "gameVersion": "1.21.11",
+  "loaderVersion": "0.20.1",
+  "running": false,
+  "pid": null
+}

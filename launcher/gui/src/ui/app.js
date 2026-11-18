@@ -1,0 +1,1925 @@
+const api = window.aether;
+
+const state = {
+	page: 'play',
+	accounts: { accounts: [], selected: null },
+	settings: {},
+	versions: [],
+	loaders: [],
+	mods: [],
+	profiles: { profiles: [], activeFor: null },
+	servers: { servers: [], pings: {} },
+	hosts: [],
+	performance: { mods: [], state: {}, installing: false },
+	sessionLines: 0,
+	installing: false,
+	launching: false
+};
+
+// The state of the interface, read by the end to end check to see the flags go back to idle.
+window.aetherState = state;
+
+const $ = (selector) => document.querySelector(selector);
+const $$ = (selector) => Array.from(document.querySelectorAll(selector));
+
+/* ------------------------------------------------------------------ helpers */
+
+function toast(message, kind = '') {
+	const element = document.createElement('div');
+	element.className = `toast ${kind ? `toast--${kind}` : ''}`;
+	element.textContent = message;
+	// An error is announced at once, the other messages wait for a pause.
+	if (kind === 'error') element.setAttribute('role', 'alert');
+	$('#toasts').appendChild(element);
+	setTimeout(() => {
+		element.style.opacity = '0';
+		element.style.transition = 'opacity .25s';
+		setTimeout(() => element.remove(), 260);
+	}, 4200);
+}
+
+function setStatus(text, kind = '') {
+	const pill = $('#status-pill');
+	pill.className = `status-pill${kind ? ` is-${kind}` : ''}`;
+	$('#status-text').textContent = text;
+}
+
+/**
+ * Runs an action of the interface.
+ *
+ * The controls are given back even when the bridge rejects: without the `finally`, one failed
+ * answer left the buttons disabled and the action impossible to retry until the app restarted.
+ */
+async function withBusy(reset, work) {
+	try {
+		return await work();
+	} catch (error) {
+		setStatus('Error', 'error');
+		toast(error?.message || 'The action could not be completed.', 'error');
+		return null;
+	} finally {
+		reset();
+	}
+}
+
+function avatarColor(name) {
+	let hash = 0;
+	for (let i = 0; i < name.length; i++) {
+		hash = name.charCodeAt(i) + ((hash << 5) - hash);
+	}
+	const hue = Math.abs(hash) % 360;
+	return `hsl(${hue}, 62%, 52%)`;
+}
+
+function formatBytes(bytes) {
+	if (!bytes) return '0 B';
+	const units = ['B', 'KB', 'MB', 'GB'];
+	let index = 0;
+	let value = bytes;
+	while (value >= 1024 && index < units.length - 1) {
+		value /= 1024;
+		index++;
+	}
+	return `${value.toFixed(value >= 10 || index === 0 ? 0 : 1)} ${units[index]}`;
+}
+
+/* --------------------------------------------------------------- rendering */
+
+const ICON_USER = '<svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4" /><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7" /></svg>';
+const ICON_STACK = '<svg viewBox="0 0 24 24"><path d="M12 3l9 5-9 5-9-5z" /><path d="M3 13l9 5 9-5" /></svg>';
+const ICON_MOD = '<svg viewBox="0 0 24 24"><path d="M10 4h4v2.6a2.2 2.2 0 002.6 2.4 2.2 2.2 0 010 4.4A2.2 2.2 0 0014 16v4h-4v-2.6a2.2 2.2 0 00-2.6-2.4 2.2 2.2 0 010-4.4A2.2 2.2 0 0010 8z" /></svg>';
+const ICON_LOG = '<svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6z" /><path d="M9 8h3M9 12h7M9 16h7" /></svg>';
+const ICON_SERVER = '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3c2.8 2.6 4 5.7 4 9s-1.2 6.4-4 9c-2.8-2.6-4-5.7-4-9s1.2-6.4 4-9z" /></svg>';
+const ICON_GAUGE = '<svg viewBox="0 0 24 24"><path d="M4 17a8 8 0 1116 0" /><path d="M12 17l4-5" /></svg>';
+
+/** A list without entries says what it is waiting for instead of leaving a blank card. */
+function emptyState(icon, title, hint, actionLabel) {
+	const wrapper = document.createElement('div');
+	wrapper.className = 'empty';
+	wrapper.innerHTML = `
+		<span class="empty-icon">${icon}</span>
+		<p class="empty-title"></p>
+		<p class="empty-hint"></p>
+		${actionLabel ? '<button class="btn btn--primary" data-empty-action></button>' : ''}
+	`;
+	wrapper.querySelector('.empty-title').textContent = title;
+	wrapper.querySelector('.empty-hint').textContent = hint;
+	if (actionLabel) wrapper.querySelector('[data-empty-action]').textContent = actionLabel;
+	return wrapper;
+}
+
+function renderAccounts() {
+	const list = $('#play-accounts');
+	list.innerHTML = '';
+
+	if (state.accounts.accounts.length === 0) {
+		list.appendChild(emptyState(
+			ICON_USER,
+			'No account yet',
+			'Add an offline account to play right away, it only needs a player name.'
+		));
+	} else {
+		for (const account of state.accounts.accounts) {
+			const row = document.createElement('div');
+			row.className = `account-row${account.id === state.accounts.selected ? ' is-selected' : ''}`;
+
+			const avatar = document.createElement('div');
+			avatar.className = 'avatar';
+			avatar.style.background = avatarColor(account.username);
+			avatar.textContent = account.username.charAt(0);
+
+			const meta = document.createElement('div');
+			meta.className = 'account-meta';
+			const name = document.createElement('div');
+			name.className = 'account-name';
+			name.textContent = account.username;
+			const uuid = document.createElement('div');
+			uuid.className = 'account-uuid';
+			uuid.textContent = account.uuid;
+			meta.append(name, uuid);
+
+			const tag = document.createElement('span');
+			tag.className = `tag tag--${account.type}`;
+			tag.textContent = account.type === 'offline' ? 'Offline' : 'Microsoft';
+
+			row.append(avatar, meta, tag);
+			row.addEventListener('click', async () => {
+				state.accounts = await api.accounts.select(account.id);
+				renderAccounts();
+				renderAccountTable();
+				await loadProfiles();
+			});
+			list.appendChild(row);
+		}
+	}
+
+	const selected = state.accounts.accounts.find((a) => a.id === state.accounts.selected);
+	$('#session-badge').textContent = selected
+		? (selected.type === 'offline' ? 'offline session' : 'microsoft session')
+		: 'no account selected';
+}
+
+function renderAccountTable() {
+	const table = $('#account-table');
+	table.innerHTML = '';
+
+	if (state.accounts.accounts.length === 0) {
+		const empty = emptyState(
+			ICON_USER,
+			'No accounts yet',
+			'Offline accounts are created locally. Microsoft accounts use the device code sign in.',
+			'Add an offline account'
+		);
+		empty.querySelector('[data-empty-action]').addEventListener('click', offlineAccountModal);
+		table.appendChild(empty);
+		return;
+	}
+
+	for (const account of state.accounts.accounts) {
+		const row = document.createElement('div');
+		row.className = `account-row${account.id === state.accounts.selected ? ' is-selected' : ''}`;
+
+		const avatar = document.createElement('div');
+		avatar.className = 'avatar';
+		avatar.style.background = avatarColor(account.username);
+		avatar.textContent = account.username.charAt(0);
+
+		const meta = document.createElement('div');
+		meta.className = 'account-meta';
+		const name = document.createElement('div');
+		name.className = 'account-name';
+		name.textContent = account.username;
+		const uuid = document.createElement('div');
+		uuid.className = 'account-uuid';
+		uuid.textContent = account.uuid;
+		meta.append(name, uuid);
+
+		const tag = document.createElement('span');
+		tag.className = `tag tag--${account.type}`;
+		tag.textContent = account.type === 'offline' ? 'Offline' : 'Microsoft';
+
+		const select = document.createElement('button');
+		select.className = 'btn btn--ghost';
+		select.textContent = account.id === state.accounts.selected ? 'Selected' : 'Select';
+		select.addEventListener('click', async () => {
+			state.accounts = await api.accounts.select(account.id);
+			renderAccounts();
+			renderAccountTable();
+			await loadProfiles();
+		});
+
+		const remove = document.createElement('button');
+		remove.className = 'icon-btn';
+		remove.innerHTML = '<svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13" /></svg>';
+		remove.title = 'Remove';
+		remove.addEventListener('click', async () => {
+			state.accounts = await api.accounts.remove(account.id);
+			renderAccounts();
+			renderAccountTable();
+			toast(`Removed ${account.username}`, 'success');
+		});
+
+		row.append(avatar, meta, tag, select, remove);
+		table.appendChild(row);
+	}
+}
+
+function renderVersions() {
+	const table = $('#version-table');
+	table.innerHTML = '';
+
+	if (state.versions.length === 0) {
+		table.appendChild(emptyState(
+			ICON_STACK,
+			'Reading the version list…',
+			'The versions are published by Mojang, the list fills itself as soon as the answer arrives.'
+		));
+		return;
+	}
+
+	for (const version of state.versions) {
+		const row = document.createElement('div');
+		row.className = 'version-row';
+
+		const left = document.createElement('div');
+		const id = document.createElement('div');
+		id.className = 'version-id';
+		id.textContent = version.id;
+		const date = document.createElement('div');
+		date.className = 'version-date';
+		date.textContent = new Date(version.releaseTime).toLocaleDateString();
+		left.append(id, date);
+
+		const action = document.createElement('button');
+		action.className = 'btn btn--ghost';
+		action.textContent = 'Use';
+		action.addEventListener('click', async () => {
+			await updateProfile({ version: version.id });
+			toast(`Selected Minecraft ${version.id}`, 'success');
+			loadLoaders(version.id);
+		});
+
+		row.append(left, action);
+		table.appendChild(row);
+	}
+}
+
+function renderVersionSelect() {
+	const select = $('#select-version');
+	select.innerHTML = '';
+
+	// Without a network the list of Mojang cannot be read, the version of the profile still has to
+	// be selectable instead of leaving an empty dropdown behind.
+	const wanted = currentProfile().gameVersion;
+	const versions = state.versions.length > 0 ? state.versions : [{ id: wanted }];
+
+	for (const version of versions) {
+		const option = document.createElement('option');
+		option.value = version.id;
+		option.textContent = version.id;
+		if (version.id === wanted) option.selected = true;
+		select.appendChild(option);
+	}
+}
+
+function renderLoaders() {
+	const select = $('#select-loader');
+	const wanted = currentProfile().loaderVersion;
+	select.innerHTML = '';
+
+	if (state.loaders.length === 0) {
+		const option = document.createElement('option');
+		option.value = wanted || '';
+		option.textContent = wanted || 'default';
+		select.appendChild(option);
+		return;
+	}
+	for (const loader of state.loaders) {
+		const option = document.createElement('option');
+		option.value = loader;
+		option.textContent = loader;
+		if (loader === wanted) option.selected = true;
+		select.appendChild(option);
+	}
+}
+
+/** The number of lines that are kept, a long session must not grow without a limit. */
+const MAX_CONSOLE_LINES = 2000;
+
+/** The output of the game is shown twice: next to the launch button and on the page of the logs. */
+const consoles = () => ['#console', '#session-log'].map((selector) => $(selector));
+
+function log(line) {
+	for (const element of consoles()) {
+		element.appendChild(document.createTextNode(`${line}\n`));
+
+		while (element.childNodes.length > MAX_CONSOLE_LINES) {
+			element.removeChild(element.firstChild);
+		}
+
+		element.scrollTop = element.scrollHeight;
+	}
+
+	state.sessionLines += 1;
+	$('#session-log-badge').textContent =
+		state.sessionLines === 1 ? '1 line' : `${state.sessionLines} lines`;
+	$('#session-log-badge').classList.add('is-live');
+}
+
+/** A new game starts a new session, the previous output is dropped. */
+function clearSession() {
+	for (const element of consoles()) {
+		element.textContent = '';
+	}
+
+	state.sessionLines = 0;
+	$('#session-log-badge').textContent = 'empty';
+	$('#session-log-badge').classList.remove('is-live');
+}
+
+/* -------------------------------------------------------------------- mods */
+
+function renderMods() {
+	const table = $('#mods-table');
+	table.innerHTML = '';
+
+	const enabled = state.mods.filter((entry) => entry.enabled).length;
+	$('#mods-count').textContent = state.mods.length === 0
+		? 'no mod'
+		: `${enabled}/${state.mods.length} on`;
+
+	if (state.mods.length === 0) {
+		const empty = emptyState(
+			ICON_MOD,
+			'No mod in the folder',
+			'Drop a jar in the mods folder, or run “Install / repair” to download the Aether client.',
+			'Open the folder'
+		);
+		empty.querySelector('[data-empty-action]').addEventListener('click', openModsFolder);
+		table.appendChild(empty);
+		return;
+	}
+
+	for (const entry of state.mods) {
+		const row = document.createElement('div');
+		row.className = `mod-row${entry.enabled ? '' : ' is-disabled'}`;
+		row.title = entry.path;
+
+		const icon = document.createElement('span');
+		icon.className = 'mod-icon';
+		icon.innerHTML = ICON_MOD;
+
+		const meta = document.createElement('div');
+		meta.className = 'mod-meta';
+		const name = document.createElement('div');
+		name.className = 'mod-name';
+		name.textContent = entry.modId;
+		const sub = document.createElement('div');
+		sub.className = 'mod-sub';
+		sub.textContent = `${formatBytes(entry.size)} · ${entry.enabled ? 'enabled' : 'disabled'}`;
+		meta.append(name, sub);
+
+		const toggle = document.createElement('button');
+		toggle.className = 'switch';
+		toggle.setAttribute('role', 'switch');
+		toggle.setAttribute('aria-checked', String(entry.enabled));
+		toggle.setAttribute('aria-label', `${entry.enabled ? 'Disable' : 'Enable'} ${entry.modId}`);
+		toggle.addEventListener('click', async () => {
+			toggle.disabled = true;
+			const result = await api.mods.toggle(entry.name, !entry.enabled);
+			toggle.disabled = false;
+
+			if (!result.ok) {
+				toast(result.error || 'The mod could not be changed.', 'error');
+				return;
+			}
+
+			state.mods = result.mods;
+			renderMods();
+			toast(`${entry.modId} ${entry.enabled ? 'disabled' : 'enabled'}`, 'success');
+		});
+
+		row.append(icon, meta, toggle);
+		table.appendChild(row);
+	}
+}
+
+async function loadMods() {
+	const result = await api.mods.list();
+	if (!result.ok) {
+		toast(result.error || 'The mods could not be read.', 'error');
+		return;
+	}
+
+	state.mods = result.mods || [];
+	$('#mods-path').textContent = result.folder || '';
+	renderMods();
+}
+
+async function openModsFolder() {
+	const result = await api.mods.openFolder();
+	if (!result.ok) toast(result.error || 'The folder could not be opened.', 'error');
+}
+
+/* ----------------------------------------------------------------- servers */
+
+/** Builds a small button that lives in the actions of a row. */
+function rowButton(label, variant, onClick) {
+	const button = document.createElement('button');
+	button.className = `btn ${variant} btn--small`;
+	button.textContent = label;
+	button.addEventListener('click', onClick);
+	return button;
+}
+
+/** A badge that says whether something is installed or running. */
+function rowBadge(label, live) {
+	const badge = document.createElement('span');
+	badge.className = `badge${live ? ' is-live' : ''}`;
+	badge.textContent = label;
+	return badge;
+}
+
+/** The one line summary of a ping, empty when the server was never pinged. */
+function pingSummary(ping) {
+	if (!ping) return '';
+	if (!ping.online) return ping.error ? `offline · ${ping.error}` : 'offline';
+
+	const parts = [];
+	if (ping.playersMax > 0) parts.push(`${ping.playersOnline}/${ping.playersMax}`);
+	parts.push(`${ping.latencyMs} ms`);
+	if (ping.versionName) parts.push(ping.versionName);
+	return parts.join(' · ');
+}
+
+function renderServers() {
+	const table = $('#server-list');
+	table.innerHTML = '';
+
+	const list = state.servers.servers || [];
+	$('#server-count').textContent = list.length === 1 ? '1 server' : `${list.length} servers`;
+
+	if (list.length === 0) {
+		table.appendChild(emptyState(
+			ICON_SERVER,
+			'No server saved yet',
+			'Add an address above, or host a local server that accepts any name.'
+		));
+		return;
+	}
+
+	for (const entry of list) {
+		const ping = state.servers.pings[entry.address];
+		const row = document.createElement('div');
+		row.className = 'mod-row';
+		row.title = ping?.motd ? `${entry.address} · ${ping.motd}` : entry.address;
+
+		const icon = document.createElement('span');
+		icon.className = 'mod-icon';
+		icon.innerHTML = ICON_SERVER;
+
+		const meta = document.createElement('div');
+		meta.className = 'mod-meta';
+		const name = document.createElement('div');
+		name.className = 'mod-name';
+		name.textContent = entry.name;
+		const sub = document.createElement('div');
+		sub.className = 'mod-sub';
+		const summary = pingSummary(ping);
+		sub.textContent = summary ? `${entry.address} · ${summary}` : entry.address;
+		meta.append(name, sub);
+
+		const actions = document.createElement('div');
+		actions.className = 'row-actions';
+
+		const join = rowButton('Join', 'btn--primary', () => launch(entry.address));
+		const test = rowButton('Test', 'btn--ghost', async () => {
+			test.disabled = true;
+			await testAddress(entry.address);
+			test.disabled = false;
+		});
+		const remove = rowButton('Remove', 'btn--danger', async () => {
+			remove.disabled = true;
+			const result = await api.servers.remove(entry.address);
+			if (!result.ok) {
+				remove.disabled = false;
+				toast(result.error || 'The server could not be removed.', 'error');
+				return;
+			}
+
+			state.servers.servers = result.servers || [];
+			delete state.servers.pings[entry.address];
+			renderServers();
+			toast(`${entry.name} removed.`, 'success');
+		});
+
+		actions.append(join, test, remove);
+		row.append(icon, meta, actions);
+		table.appendChild(row);
+	}
+}
+
+async function loadServers() {
+	const result = await api.servers.list();
+	if (!result.ok) {
+		toast(result.error || 'The server list could not be read.', 'error');
+		return;
+	}
+
+	state.servers.servers = result.servers || [];
+	renderServers();
+}
+
+async function pingServer(address) {
+	const result = await api.servers.ping(address);
+	if (!result.ok) return null;
+
+	const saved = state.servers.servers.find(
+		(entry) => entry.address.toLowerCase() === address.toLowerCase()
+	);
+	state.servers.pings[saved ? saved.address : address] = result.ping;
+	if (saved) renderServers();
+	return result.ping;
+}
+
+/** Pings an address and probes its login state, then tells the player the verdict. */
+async function testAddress(address) {
+	const target = (address || $('#server-address').value || '').trim();
+	if (!target) {
+		toast('Enter an address to test.', 'error');
+		return;
+	}
+
+	const verdict = $('#server-verdict');
+	verdict.textContent = `Testing ${target}…`;
+
+	const [ping, probe] = await Promise.all([
+		api.servers.ping(target),
+		api.servers.probe(target)
+	]);
+
+	const saved = state.servers.servers.find(
+		(entry) => entry.address.toLowerCase() === target.toLowerCase()
+	);
+	if (ping.ok && saved) {
+		state.servers.pings[saved.address] = ping.ping;
+		renderServers();
+	}
+
+	const parts = [];
+	if (probe.ok) {
+		const result = probe.probe;
+		if (probe.verdict === 'offline') {
+			parts.push(`Offline accounts accepted (the server answered with ${result.packet}).`);
+		} else if (probe.verdict === 'premium') {
+			parts.push(`Premium only: ${result.detail}.`);
+		} else if (probe.verdict === 'refused') {
+			parts.push(`Refused: ${result.detail}.`);
+		} else {
+			parts.push(`Unreachable: ${result.detail}.`);
+		}
+	} else {
+		parts.push(probe.error || 'The login probe failed.');
+	}
+
+	if (ping.ok) {
+		const info = ping.ping;
+		parts.push(info.online
+			? `${info.playersOnline}/${info.playersMax} players · ${info.latencyMs} ms · ${info.versionName}`
+			: `offline: ${info.error}`);
+	}
+
+	verdict.textContent = parts.join(' ');
+	const accepted = probe.ok && probe.verdict === 'offline';
+	// The verdict stays on the page: a toast would cover the rows while the player reads it.
+	if (accepted) toast(`${target} accepts an offline account.`, 'success');
+}
+
+async function addServer() {
+	const address = $('#server-address').value.trim();
+	if (!address) {
+		toast('Enter the address of a server.', 'error');
+		return;
+	}
+
+	const name = $('#server-name').value.trim() || address;
+	const button = $('#btn-server-add');
+	button.disabled = true;
+
+	const result = await withBusy(
+		() => {
+			button.disabled = false;
+		},
+		() => api.servers.add(name, address)
+	);
+
+	if (!result) return;
+	if (!result.ok) {
+		toast(result.error || 'The server could not be added.', 'error');
+		return;
+	}
+
+	state.servers.servers = result.servers || [];
+	$('#server-name').value = '';
+	$('#server-address').value = '';
+	renderServers();
+	toast(`${name} added.`, 'success');
+	pingServer(address);
+}
+
+/* --------------------------------------------------------------- local servers */
+
+function renderHosts() {
+	const table = $('#host-list');
+	table.innerHTML = '';
+
+	const list = state.hosts || [];
+	$('#host-count').textContent = list.length === 1 ? '1 server' : `${list.length} servers`;
+
+	if (list.length === 0) {
+		table.appendChild(emptyState(
+			ICON_SERVER,
+			'No local server',
+			'Create one above: the launcher installs Fabric once, then the world starts with online-mode=false.'
+		));
+		return;
+	}
+
+	for (const server of list) {
+		const address = `127.0.0.1:${server.port}`;
+		const row = document.createElement('div');
+		row.className = 'mod-row';
+		row.title = server.directory;
+
+		const icon = document.createElement('span');
+		icon.className = 'mod-icon';
+		icon.innerHTML = ICON_SERVER;
+
+		const meta = document.createElement('div');
+		meta.className = 'mod-meta';
+		const name = document.createElement('div');
+		name.className = 'mod-name';
+		name.textContent = server.name;
+		const sub = document.createElement('div');
+		sub.className = 'mod-sub';
+		sub.textContent = `${address} · ${server.onlineMode ? 'online mode' : 'offline mode'} · ${server.gameVersion}`;
+		meta.append(name, sub);
+
+		const actions = document.createElement('div');
+		actions.className = 'row-actions';
+		actions.appendChild(rowBadge(server.running ? 'running' : 'stopped', server.running));
+
+		if (server.running) {
+			actions.appendChild(rowButton('Join', 'btn--primary', () => launch(address)));
+			actions.appendChild(rowButton('Stop', 'btn--danger', () => stopHost(server.name)));
+		} else {
+			actions.appendChild(rowButton('Start', 'btn--primary', () => startHost(server.name)));
+		}
+
+		row.append(icon, meta, actions);
+		table.appendChild(row);
+	}
+}
+
+async function loadHosts() {
+	const result = await api.hosts.list();
+	if (!result.ok) {
+		toast(result.error || 'The local servers could not be read.', 'error');
+		return;
+	}
+
+	state.hosts = result.servers || [];
+	renderHosts();
+}
+
+async function createHost() {
+	const name = $('#host-name').value.trim();
+	if (!name) {
+		toast('Give the world a name.', 'error');
+		return;
+	}
+
+	const button = $('#btn-host-create');
+	button.disabled = true;
+
+	const result = await withBusy(
+		() => {
+			button.disabled = false;
+		},
+		() => api.hosts.create({
+			name,
+			port: Number($('#host-port').value) || 25565,
+			maxPlayers: Number($('#host-players').value) || 20
+		})
+	);
+
+	if (!result) return;
+	if (!result.ok) {
+		toast(result.error || 'The server could not be created.', 'error');
+		return;
+	}
+
+	state.hosts = result.servers || [];
+	$('#host-name').value = '';
+	renderHosts();
+	toast(`${name} created. Press Start to launch it.`, 'success');
+}
+
+/** Pings until the server answers, a first start compiles its world for a few seconds. */
+async function waitForServer(address, attempts = 90) {
+	for (let index = 0; index < attempts; index++) {
+		const result = await api.servers.ping(address);
+		if (result.ok && result.ping?.online) {
+			state.servers.pings[address] = result.ping;
+			return true;
+		}
+
+		await new Promise((resolve) => setTimeout(resolve, 2000));
+	}
+
+	return false;
+}
+
+async function startHost(name) {
+	setStatus('Starting server…', 'busy');
+	const result = await withBusy(() => setStatus('Ready'), () => api.hosts.start(name));
+
+	if (!result) return;
+	if (!result.ok) {
+		toast(result.error || 'The server could not be started.', 'error');
+		return;
+	}
+
+	await loadHosts();
+	toast(`${name} is starting…`, 'success');
+
+	const address = `127.0.0.1:${result.server.port}`;
+	const ready = await waitForServer(address);
+
+	if (ready) {
+		renderHosts();
+		toast(`${name} is ready on ${address}.`, 'success');
+	} else {
+		toast(`${name} is still starting, watch console.log in its folder.`, 'error');
+	}
+}
+
+async function stopHost(name) {
+	setStatus('Stopping server…', 'busy');
+	const result = await withBusy(() => setStatus('Ready'), () => api.hosts.stop(name));
+
+	if (!result) return;
+	if (!result.ok) {
+		toast(result.error || 'The server could not be stopped.', 'error');
+		return;
+	}
+
+	state.hosts = result.servers || state.hosts;
+	renderHosts();
+	toast(`${name} stopped and the world was saved.`, 'success');
+}
+
+/* ------------------------------------------------------------- performance */
+
+/** The version number of a mod without the noise of its Minecraft suffix. */
+function displayModVersion(version) {
+	if (!version) return '';
+
+	return version
+		.replace(/^fabric-/, '')
+		.replace(/^mc[0-9.]+-/, '')
+		.replace(/\+minecraft-[0-9.]+(-fabric)?/, '')
+		.replace(/\+mc[0-9.]+/, '')
+		.replace(/-fabric$/, '')
+		.replace(/-1\.21\.11$/, '');
+}
+
+function renderPerformance() {
+	const table = $('#perf-mods');
+	table.innerHTML = '';
+
+	const mods = state.performance.mods || [];
+	const installed = mods.filter((mod) => mod.installed).length;
+	$('#perf-count').textContent = `${installed}/${mods.length}`;
+	$('#perf-path').textContent = state.performance.state?.modsFolder || '';
+
+	if (mods.length === 0) {
+		table.appendChild(emptyState(
+			ICON_GAUGE,
+			'The pack is not readable',
+			'Refresh the list, the core reads the mods folder of the game.'
+		));
+		return;
+	}
+
+	for (const mod of mods) {
+		const row = document.createElement('div');
+		row.className = `mod-row${mod.installed ? '' : ' is-disabled'}`;
+
+		const icon = document.createElement('span');
+		icon.className = 'mod-icon';
+		icon.innerHTML = ICON_MOD;
+
+		const meta = document.createElement('div');
+		meta.className = 'mod-meta';
+		const name = document.createElement('div');
+		name.className = 'mod-name';
+		name.textContent = mod.name;
+		const sub = document.createElement('div');
+		sub.className = 'mod-sub';
+		const version = displayModVersion(mod.version);
+		sub.textContent = mod.installed && version ? `${mod.description} · ${version}` : mod.description;
+		meta.append(name, sub);
+
+		row.append(icon, meta, rowBadge(mod.installed ? 'installed' : 'missing', mod.installed));
+		table.appendChild(row);
+	}
+}
+
+function renderPerformanceState() {
+	const settings = state.performance.state || {};
+
+	if (settings.jvmPreset) {
+		selectOption($('#select-jvm'), settings.jvmPreset);
+		$('#jvm-current').textContent = `Current preset: ${settings.jvmPreset}. It applies on the next launch.`;
+	}
+
+	const preset = settings.optionsPreset;
+	if (preset && preset !== 'vanilla') {
+		$('#options-current').textContent = preset === 'restore'
+			? 'The original options.txt is in place.'
+			: `Last applied preset: ${preset}.`;
+	} else {
+		$('#options-current').textContent = 'The original options.txt is in place.';
+	}
+}
+
+async function loadPerformance() {
+	const result = await api.performance.list();
+	if (!result.ok) {
+		toast(result.error || 'The optimisation pack could not be read.', 'error');
+		return;
+	}
+
+	state.performance.mods = result.mods || [];
+	state.performance.state = result.state || {};
+	renderPerformance();
+	renderPerformanceState();
+}
+
+async function installPack() {
+	if (state.performance.installing) return;
+
+	state.performance.installing = true;
+	const button = $('#btn-perf-install');
+	button.disabled = true;
+	$('#perf-path').textContent = 'Resolving the pack on Modrinth…';
+
+	const result = await withBusy(
+		() => {
+			state.performance.installing = false;
+			button.disabled = false;
+		},
+		() => api.performance.install([])
+	);
+
+	if (!result) return;
+	if (!result.mods) {
+		toast(result.error || 'The pack could not be installed.', 'error');
+		return;
+	}
+
+	state.performance.mods = result.mods;
+	state.performance.state = result.state || state.performance.state;
+	renderPerformance();
+	renderPerformanceState();
+
+	const failed = (result.report?.failed || []).length;
+	if (failed > 0) {
+		toast(`${failed} mod(s) could not be installed.`, 'error');
+	} else {
+		toast('The optimisation pack is installed. Restart the game.', 'success');
+	}
+}
+
+async function tuneOptions(preset) {
+	const result = await withBusy(() => {}, () => api.performance.tune(preset));
+
+	if (!result) return;
+	if (!result.ok) {
+		toast(result.error || 'The options could not be written.', 'error');
+		return;
+	}
+
+	state.performance.state = result.state || state.performance.state;
+	renderPerformanceState();
+
+	if (preset === 'restore') {
+		toast('The original options are back.', 'success');
+		return;
+	}
+
+	const changes = result.report?.changes?.length || 0;
+	toast(`${preset === 'max' ? 'Maximum FPS' : 'Balanced'}: ${changes} option(s) changed.`, 'success');
+}
+
+async function applyJvm() {
+	const preset = $('#select-jvm').value;
+	const result = await withBusy(() => {}, () => api.performance.jvm(preset));
+
+	if (!result) return;
+	if (!result.ok) {
+		toast(result.error || 'The JVM preset could not be saved.', 'error');
+		return;
+	}
+
+	state.performance.state = result.state || state.performance.state;
+	renderPerformanceState();
+	toast(`JVM preset set to ${preset}, it applies on the next launch.`, 'success');
+}
+
+/* -------------------------------------------------------------------- logs */
+
+async function loadLogs() {
+	const result = await api.logs.tail(200);
+
+	if (result.ok) {
+		renderSessions(result.sessions || []);
+	} else {
+		renderSessionsError(result.error);
+	}
+
+	renderInstallLog(result);
+
+	// The core removes the oldest sessions, the interface says how many are kept.
+	$('#sessions-note').textContent = result.ok
+		? `The last ${result.keep} sessions are kept, older files are removed automatically.`
+		: '';
+}
+
+/** A list of sessions that could not be read says why instead of looking empty. */
+function renderSessionsError(error) {
+	const table = $('#sessions-table');
+	table.innerHTML = '';
+	$('#sessions-count').textContent = 'unreadable';
+	table.appendChild(emptyState(
+		ICON_LOG,
+		'The sessions could not be read',
+		error || 'The core did not answer.'
+	));
+}
+
+function renderSessions(sessions) {
+	const table = $('#sessions-table');
+	table.innerHTML = '';
+
+	$('#sessions-count').textContent = sessions.length === 0
+		? 'no session'
+		: sessions.length === 1 ? '1 session' : `${sessions.length} sessions`;
+
+	if (sessions.length === 0) {
+		table.appendChild(emptyState(
+			ICON_LOG,
+			'No session yet',
+			'Every launch writes the output of the game to aether/logs/session-<date>.log.'
+		));
+		return;
+	}
+
+	for (const entry of sessions) {
+		const row = document.createElement('div');
+		row.className = 'session-row';
+		row.title = entry.path;
+
+		const icon = document.createElement('span');
+		icon.className = 'mod-icon';
+		icon.innerHTML = ICON_LOG;
+
+		const meta = document.createElement('div');
+		meta.className = 'mod-meta';
+		const name = document.createElement('div');
+		name.className = 'mod-name';
+		name.textContent = entry.started || entry.name;
+		const sub = document.createElement('div');
+		sub.className = 'mod-sub';
+		sub.append(`${formatBytes(entry.size)} · `);
+		const fileName = document.createElement('span');
+		fileName.className = 'log-name';
+		fileName.textContent = entry.name;
+		sub.append(fileName);
+		meta.append(name, sub);
+
+		const view = document.createElement('button');
+		view.className = 'btn btn--ghost';
+		view.textContent = 'View';
+		view.addEventListener('click', () => openSession(entry));
+
+		row.append(icon, meta, view);
+		table.appendChild(row);
+	}
+}
+
+/** The session that is being opened, a slow answer must not replace a newer one. */
+let sessionRequest = 0;
+
+/** The last lines of one run of the game, read back from its file. */
+async function openSession(entry) {
+	const view = $('#session-view');
+	const request = ++sessionRequest;
+	const result = await api.logs.read(entry.name, 400);
+
+	if (request !== sessionRequest) return;
+	view.innerHTML = '';
+
+	if (!result.ok) {
+		view.appendChild(emptyState(
+			ICON_LOG,
+			'The session could not be read',
+			result.error || 'The core did not answer.'
+		));
+		return;
+	}
+
+	const tail = result.session;
+	const label = document.createElement('p');
+	label.className = 'log-path';
+	label.textContent = `${tail.total} lines · ${tail.path}`;
+
+	const pre = document.createElement('pre');
+	pre.className = 'console console--tall';
+	pre.id = 'session-file';
+	pre.textContent = tail.lines.join('\n');
+
+	view.append(label, pre);
+	// The log opens under the list, the page follows it so the click has a visible answer.
+	pre.scrollIntoView({ block: 'nearest' });
+}
+
+function renderInstallLog(result) {
+	const body = $('#install-log-body');
+	body.innerHTML = '';
+
+	if (!result.ok) {
+		body.appendChild(emptyState(
+			ICON_LOG,
+			'The log could not be read',
+			result.error || 'The core did not answer.'
+		));
+		return;
+	}
+
+	const tail = result.install;
+	$('#install-log-path').textContent = tail.exists
+		? `${tail.total} lines · ${tail.path}`
+		: tail.path;
+
+	if (!tail.exists || tail.lines.length === 0) {
+		body.appendChild(emptyState(
+			ICON_LOG,
+			'No installation logged yet',
+			'Every download writes a line here. Run “Install / repair” to fill it.'
+		));
+		return;
+	}
+
+	const pre = document.createElement('pre');
+	pre.className = 'console console--tall';
+	pre.id = 'install-log';
+	pre.textContent = tail.lines.join('\n');
+	body.appendChild(pre);
+}
+
+/* ------------------------------------------------------------------ modals */
+
+/** The element that had the focus when the dialog opened, the focus goes back to it. */
+let modalReturnFocus = null;
+
+function openModal(title, bodyHtml, onConfirm, confirmLabel = 'Confirm') {
+	modalReturnFocus = document.activeElement;
+	$('#modal-title').textContent = title;
+	$('#modal-body').innerHTML = bodyHtml;
+	$('#modal-confirm').textContent = confirmLabel;
+	$('#modal').hidden = false;
+
+	// The dialog takes the focus, on its first field when it has one.
+	const first = $('#modal-body').querySelector('input, select, textarea');
+	(first || $('.modal')).focus();
+
+	const confirm = $('#modal-confirm');
+	confirm.onclick = async () => {
+		confirm.onclick = null;
+		closeModal();
+		if (typeof onConfirm === 'function') await onConfirm();
+	};
+}
+
+function closeModal() {
+	if ($('#modal').hidden) return;
+
+	$('#modal-confirm').onclick = null;
+	$('#modal').hidden = true;
+
+	// The keyboard is not left nowhere: Escape and Confirm both give the focus back.
+	const target = modalReturnFocus;
+	modalReturnFocus = null;
+	if (target && typeof target.focus === 'function' && document.contains(target)) target.focus();
+}
+
+function offlineAccountModal() {
+	openModal('Add an offline account', `
+		<p class="muted">An offline account only needs a name. The identifier is generated exactly
+		like Minecraft does it, so the player keeps the same identity on every offline server.</p>
+		<label class="field">
+			<span class="field-label">Player name</span>
+			<input type="text" id="offline-name" class="input" maxlength="16" placeholder="Notch" />
+		</label>
+		<p class="muted" id="offline-preview">3 to 16 characters, only letters, digits and underscores.</p>
+	`, async () => {
+		const username = $('#offline-name').value.trim();
+		const result = await api.accounts.addOffline(username);
+		if (!result.ok) {
+			toast(result.error, 'error');
+			return;
+		}
+		state.accounts = await api.accounts.get();
+		renderAccounts();
+		renderAccountTable();
+		toast(`Added ${result.account.username}`, 'success');
+	}, 'Create');
+
+	const input = $('#offline-name');
+	input.focus();
+	input.addEventListener('input', () => {
+		const value = input.value.trim();
+		const valid = /^[A-Za-z0-9_]{3,16}$/.test(value);
+		$('#offline-preview').textContent = valid
+			? `Ready to play as ${value}.`
+			: '3 to 16 characters, only letters, digits and underscores.';
+		$('#offline-preview').style.color = valid ? 'var(--success)' : 'var(--text-muted)';
+	});
+}
+
+async function microsoftAccountModal() {
+	// The core prints the code first and finishes the sign in in the background.
+	const pending = api.accounts.microsoft.signIn();
+
+	openModal('Sign in with Microsoft', `
+		<p class="muted">Open the following page and enter the code to sign in with your
+		Minecraft account.</p>
+		<div class="code-box">
+			<div class="code-label">Your code</div>
+			<div class="code-value" id="device-code">…</div>
+		</div>
+		<p class="muted" style="margin-top:10px"><a id="verify-link" target="_blank"
+			rel="noreferrer">Waiting for the code…</a></p>
+	`, async () => {
+		setStatus('Signing in…', 'busy');
+		const result = await pending;
+		setStatus('Ready');
+		if (!result.ok) {
+			toast(result.error || 'The sign in failed.', 'error');
+			return;
+		}
+		state.accounts = await api.accounts.get();
+		renderAccounts();
+		renderAccountTable();
+		toast(`Signed in as ${result.account.username}`, 'success');
+	}, 'I have signed in');
+}
+
+/* ----------------------------------------------------------------- actions */
+
+/** The controls of the installation are given back, whatever the outcome. */
+function releaseInstall(progress, frozen, card) {
+	progress.hidden = true;
+	progress.querySelector('.progress-fill').style.width = '0%';
+	$('#btn-install').disabled = false;
+	$('#btn-cancel-install').hidden = true;
+	$('#btn-cancel-install').disabled = false;
+	frozen.forEach((control) => {
+		control.disabled = false;
+	});
+	if (card) card.classList.remove('is-busy');
+	state.installing = false;
+}
+
+async function install() {
+	if (state.installing) return;
+	state.installing = true;
+	setStatus('Installing…', 'busy');
+
+	// The profile is frozen while it downloads, the values of the request cannot change under it.
+	const progress = $('#install-progress');
+	const frozen = [$('#select-version'), $('#select-loader')];
+	const card = progress.closest('.card');
+
+	$('#btn-install').disabled = true;
+	$('#btn-cancel-install').hidden = false;
+	frozen.forEach((control) => {
+		control.disabled = true;
+	});
+	if (card) card.classList.add('is-busy');
+	progress.hidden = false;
+
+	const result = await withBusy(
+		() => releaseInstall(progress, frozen, card),
+		() =>
+			api.install({
+				gameVersion: $('#select-version').value,
+				loaderVersion: $('#select-loader').value
+			})
+	);
+
+	// The failure was reported, the interface is usable again.
+	if (!result) return;
+
+	if (result.cancelled) {
+		setStatus('Ready');
+		toast('The installation was cancelled.', 'success');
+		return;
+	}
+
+	if (!result.ok) {
+		setStatus('Error', 'error');
+		toast(result.error, 'error');
+		loadLogs();
+		await showInstallReport(result.error);
+		return;
+	}
+	setStatus('Ready');
+	toast('The game is ready to play.', 'success');
+	loadLogs();
+}
+
+/**
+ * What a player can send when a session ends badly, whether the game or the core died.
+ *
+ * The exit code alone says nothing useful: the version, the loader, the runtime and the last lines
+ * of the session are what makes a crash diagnosable. The text is built as one array, the optional
+ * line is dropped when there is no code to show.
+ */
+async function showCrashReport({ title, problem, exitCode }) {
+	const logs = await api.logs.tail(20);
+	const session = logs.ok ? (logs.sessions || [])[0] : null;
+
+	let lines = [];
+	if (session) {
+		const read = await api.logs.read(session.name, 40);
+		if (read.ok) lines = read.session.lines;
+	}
+
+	// The shell hands the code over as an unsigned value, so a killed game arrived as 4294967295
+	// while its own log said -1. `| 0` reads it back as the signed 32-bit code Windows reports.
+	const code = exitCode === null || exitCode === undefined ? 0 : Number(exitCode) | 0;
+
+	const settings = state.settings;
+	const text = [
+		'Aether Launcher — report',
+		'',
+		`problem     ${problem}`,
+		code ? `exit code   ${code}` : null,
+		`version     ${settings.gameVersion}`,
+		`loader      ${settings.loaderVersion}`,
+		`java        ${settings.javaPath || 'detected automatically'}`,
+		`session     ${session ? session.name : 'no session file'}`,
+		'',
+		'last lines',
+		...(lines.length ? lines : ['(the session log is empty)'])
+	]
+		.filter((line) => line !== null)
+		.join('\n');
+
+	openModal(title, `
+		<p class="muted">The launcher wrote this report from the last session. Send it when you ask
+		for help.</p>
+		<pre class="console console--tall" id="crash-report"></pre>
+		<p><button class="btn btn--ghost" id="report-open-logs" type="button">Open the logs</button></p>
+	`, async () => {
+		const copied = await api.copy(text);
+		toast(
+			copied && copied.ok ? 'The report was copied.' : 'The report could not be copied.',
+			copied && copied.ok ? 'success' : 'error'
+		);
+	}, 'Copy report');
+
+	$('#crash-report').textContent = text;
+
+	// The report is a summary, the whole session is one click away.
+	$('#report-open-logs').addEventListener('click', () => {
+		closeModal();
+		showPage('logs');
+		if (session) openSession(session);
+	});
+}
+
+/**
+ * What a player can send when an installation fails.
+ *
+ * The toast alone says nothing about what was downloaded or refused; the installation log already
+ * holds one line per file. The report keeps the same shape as the crash report, and the files that
+ * did arrive are kept for the next attempt.
+ */
+async function showInstallReport(problem) {
+	const logs = await api.logs.tail(40);
+	const tail = logs.ok ? logs.install : null;
+	const lines = tail && tail.exists ? tail.lines : [];
+
+	const text = [
+		'Aether Launcher — installation report',
+		'',
+		`problem     ${problem}`,
+		`version     ${$('#select-version').value}`,
+		`loader      ${$('#select-loader').value}`,
+		`log         ${tail ? tail.path : 'install.log'}`,
+		'',
+		'last lines',
+		...(lines.length ? lines : ['(the installation log is empty)'])
+	].join('\n');
+
+	openModal('The installation failed', `
+		<p class="muted">The launcher wrote this report from the installation log. Send it when you
+		ask for help. The files already downloaded are kept, the next installation resumes them.</p>
+		<pre class="console console--tall" id="install-report"></pre>
+		<p><button class="btn btn--ghost" id="report-open-logs" type="button">Open the logs</button></p>
+	`, async () => {
+		const copied = await api.copy(text);
+		toast(
+			copied && copied.ok ? 'The report was copied.' : 'The report could not be copied.',
+			copied && copied.ok ? 'success' : 'error'
+		);
+	}, 'Copy report');
+
+	$('#install-report').textContent = text;
+
+	$('#report-open-logs').addEventListener('click', () => {
+		closeModal();
+		showPage('logs');
+	});
+}
+
+async function launch(server) {
+	if (state.launching) return;
+	if (!state.accounts.selected) {
+		toast('Add an account first.', 'error');
+		return;
+	}
+
+	state.launching = true;
+	setStatus(server ? `Joining ${server}…` : 'Launching…', 'busy');
+	$('#btn-launch').disabled = true;
+	$('#btn-stop').hidden = false;
+	clearSession();
+
+	const result = await withBusy(
+		() => {
+			state.launching = false;
+			$('#btn-launch').disabled = false;
+			$('#btn-stop').hidden = true;
+		},
+		() =>
+			api.launch({
+				accountId: state.accounts.selected,
+				gameVersion: $('#select-version').value,
+				server: server || ''
+			})
+	);
+
+	// The answer arrives when the game closes, not when it starts.
+	if (!result) return;
+
+	if (result.stopped) {
+		setStatus('Ready');
+		toast('The game was stopped.', 'success');
+		return;
+	}
+
+	if (!result.ok) {
+		setStatus('Error', 'error');
+		toast(result.error, 'error');
+
+		// A core that died without an answer is a crash, a request it refused is not.
+		if (result.crashed) {
+			loadLogs();
+			await showCrashReport({ title: 'The launcher core stopped', problem: result.error });
+		}
+		return;
+	}
+
+	setStatus('Ready');
+	// Same signed reading as the report: the shell sends a killed game back as 4294967295.
+	const code = result.exitCode ? Number(result.exitCode) | 0 : 0;
+	if (code) {
+		toast(`The game stopped with the code ${code}.`, 'error');
+		loadLogs();
+		await showCrashReport({
+			title: 'The game stopped',
+			problem: `the game stopped with the code ${code}`,
+			exitCode: code
+		});
+		return;
+	}
+
+	toast('The game closed.', 'success');
+}
+
+/** Asks the core to stop the installation that is running. */
+async function cancelInstall() {
+	$('#btn-cancel-install').disabled = true;
+
+	const result = await withBusy(() => {}, () => api.installStop());
+
+	if (!result) return;
+	if (!result.ok) {
+		$('#btn-cancel-install').disabled = false;
+		toast(result.error || 'No installation is running.', 'error');
+		return;
+	}
+
+	// The answer of the installation arrives on its own and clears the view.
+	if (state.installing) setStatus('Cancelling…', 'busy');
+}
+
+async function stopGame() {
+	const result = await withBusy(() => {}, () => api.stop());
+	if (!result) return;
+	if (!result.ok) {
+		toast(result.error || 'The game is not running.', 'error');
+		return;
+	}
+
+	setStatus('Stopping…', 'busy');
+}
+
+/* -------------------------------------------------------------------- init */
+
+/** The filled part of a slider follows its value. */
+function paintRange(input) {
+	const min = Number(input.min) || 0;
+	const max = Number(input.max) || 100;
+	const span = max - min;
+	const percent = span > 0 ? ((Number(input.value) - min) / span) * 100 : 0;
+	input.style.setProperty('--fill', `${percent}%`);
+}
+
+function paintRanges() {
+	$$('input[type="range"]').forEach(paintRange);
+}
+
+function bindSettings() {
+	const maxMemory = $('#range-max-memory');
+	const minMemory = $('#range-min-memory');
+
+	// Every slider of the launcher paints itself, wherever it lives.
+	$$('input[type="range"]').forEach((input) => {
+		input.addEventListener('input', () => paintRange(input));
+	});
+
+	maxMemory.addEventListener('input', () => {
+		$('#output-max-memory').textContent = `${maxMemory.value} MB`;
+	});
+	minMemory.addEventListener('input', () => {
+		$('#output-min-memory').textContent = `${minMemory.value} MB`;
+	});
+	// The settings page edits the default profile, the play page has to show the new values.
+	maxMemory.addEventListener('change', async () => {
+		await api.settings.update({ maxMemory: Number(maxMemory.value) });
+		await loadProfiles();
+	});
+	minMemory.addEventListener('change', async () => {
+		await api.settings.update({ minMemory: Number(minMemory.value) });
+		await loadProfiles();
+	});
+
+	$('#range-memory').addEventListener('input', (event) => {
+		$('#output-memory').textContent = `${event.target.value} MB`;
+	});
+	$('#range-memory').addEventListener('change', (event) => {
+		updateProfile({ memory: Number(event.target.value) });
+	});
+
+	$('#range-width').addEventListener('input', (event) => {
+		$('#output-width').textContent = event.target.value;
+	});
+	$('#range-height').addEventListener('input', (event) => {
+		$('#output-height').textContent = event.target.value;
+	});
+	$('#range-width').addEventListener('change', (event) => {
+		updateProfile({ width: Number(event.target.value) });
+	});
+	$('#range-height').addEventListener('change', (event) => {
+		updateProfile({ height: Number(event.target.value) });
+	});
+
+	$('#input-java').addEventListener('change', (event) => {
+		api.settings.update({ javaPath: event.target.value.trim() });
+	});
+
+	$('#input-accent').addEventListener('input', (event) => {
+		$('#output-accent').textContent = event.target.value.toUpperCase();
+		document.documentElement.style.setProperty('--accent', event.target.value);
+	});
+	$('#input-accent').addEventListener('change', (event) => {
+		api.settings.update({ accentColor: event.target.value });
+	});
+
+	$('#input-fabric-api').addEventListener('change', (event) => {
+		api.settings.update({ fabricApiVersion: event.target.value.trim() });
+	});
+}
+
+function applySettings(settings) {
+	state.settings = settings;
+
+	$('#range-memory').value = settings.maxMemory;
+	$('#output-memory').textContent = `${settings.maxMemory} MB`;
+	$('#range-max-memory').value = settings.maxMemory;
+	$('#output-max-memory').textContent = `${settings.maxMemory} MB`;
+	$('#range-min-memory').value = settings.minMemory;
+	$('#output-min-memory').textContent = `${settings.minMemory} MB`;
+	$('#range-width').value = settings.windowWidth;
+	$('#output-width').textContent = settings.windowWidth;
+	$('#range-height').value = settings.windowHeight;
+	$('#output-height').textContent = settings.windowHeight;
+	$('#input-java').value = settings.javaPath || '';
+	$('#input-accent').value = settings.accentColor;
+	$('#output-accent').textContent = settings.accentColor.toUpperCase();
+	$('#input-fabric-api').value = settings.fabricApiVersion;
+	$('#check-g1').checked = settings.useG1gc !== false;
+
+	document.documentElement.style.setProperty('--accent', settings.accentColor);
+	paintRanges();
+}
+
+async function loadLoaders(gameVersion) {
+	const result = await api.versions.loaders(gameVersion);
+	state.loaders = result.ok ? result.loaders : [];
+	renderLoaders();
+}
+
+/** Creates a profile from the one the selected account plays with right now. */
+function newProfileModal() {
+	openModal('New profile', `
+		<p class="muted">The new profile copies the one this account plays with right now: version,
+		loader, memory and window size.</p>
+		<label class="field">
+			<span class="field-label">Profile name</span>
+			<input type="text" id="profile-name" class="input" maxlength="32" placeholder="Cinematic" />
+		</label>
+	`, async () => {
+		const name = $('#profile-name').value.trim();
+		if (!name) {
+			toast('Name the profile first.', 'error');
+			return;
+		}
+
+		const source = state.profiles.activeFor;
+		const result = await api.profiles.add(name, {
+			version: source.gameVersion,
+			loader: source.loaderVersion,
+			memory: source.maxMemory,
+			minMemory: source.minMemory,
+			width: source.windowWidth,
+			height: source.windowHeight
+		});
+
+		if (!result.ok) {
+			toast(result.error, 'error');
+			return;
+		}
+
+		await loadProfiles();
+		toast(`Profile ${name} created.`, 'success');
+	}, 'Create');
+}
+
+/** Deletes the profile shown in the selector, once the player confirmed it. */
+function deleteProfile() {
+	const name = $('#select-profile').value;
+	if (!name) return;
+
+	openModal('Delete profile', `
+		<p class="muted">Delete the profile <strong id="profile-to-delete"></strong>? The version, the
+		loader, the memory and the window size of that profile are lost. An account that plays with
+		it falls back to the active profile.</p>
+	`, async () => {
+		const result = await api.profiles.remove(name);
+
+		if (!result.ok) {
+			toast(result.error, 'error');
+			return;
+		}
+
+		// The accounts that had chosen it fell back to the active profile.
+		state.accounts = await api.accounts.get();
+		renderAccounts();
+		renderAccountTable();
+		await loadProfiles();
+		toast(`Profile ${name} removed.`, 'success');
+	}, 'Delete');
+
+	$('#profile-to-delete').textContent = name;
+}
+
+/** The profile the selected account plays with: the values the play controls show. */
+function currentProfile() {
+	return state.profiles.activeFor || {
+		name: 'Default',
+		gameVersion: state.settings.gameVersion,
+		loaderVersion: state.settings.loaderVersion,
+		maxMemory: state.settings.maxMemory,
+		minMemory: state.settings.minMemory,
+		windowWidth: state.settings.windowWidth,
+		windowHeight: state.settings.windowHeight
+	};
+}
+
+/** Selects a value, adding the option when the list does not offer it yet. */
+function selectOption(select, value) {
+	if (!value) return;
+
+	if (!Array.from(select.options).some((option) => option.value === value)) {
+		const option = document.createElement('option');
+		option.value = value;
+		option.textContent = value;
+		select.appendChild(option);
+	}
+
+	select.value = value;
+}
+
+/** Shows the values of a profile in the play controls. */
+function applyProfile(profile) {
+	$('#range-memory').value = profile.maxMemory;
+	$('#output-memory').textContent = `${profile.maxMemory} MB`;
+	$('#range-width').value = profile.windowWidth;
+	$('#output-width').textContent = profile.windowWidth;
+	$('#range-height').value = profile.windowHeight;
+	$('#output-height').textContent = profile.windowHeight;
+
+	selectOption($('#select-version'), profile.gameVersion);
+	selectOption($('#select-loader'), profile.loaderVersion);
+
+	paintRanges();
+}
+
+/**
+ * Writes the play controls into the profile of the account, never into the flat settings: two
+ * accounts with two profiles must be able to play two different configurations.
+ */
+async function updateProfile(patch) {
+	const result = await api.profiles.update(currentProfile().name, patch);
+
+	if (!result.ok) {
+		toast(result.error, 'error');
+		await loadProfiles();
+		return;
+	}
+
+	await loadProfiles();
+}
+
+/** The named profiles and the one that applies to the selected account. */
+async function loadProfiles() {
+	const result = await api.profiles.list();
+	if (!result.ok) return;
+
+	state.profiles = result;
+
+	const select = $('#select-profile');
+	select.innerHTML = '';
+
+	for (const profile of result.profiles) {
+		const option = document.createElement('option');
+		option.value = profile.name;
+		option.textContent = `${profile.name} · ${profile.gameVersion} · ${profile.maxMemory} MB`;
+		option.selected = result.activeFor.name === profile.name;
+		select.appendChild(option);
+	}
+
+	applyProfile(result.activeFor);
+}
+
+/**
+ * Opens a page by its name, exactly like a click on the navigation does.
+ *
+ * The reports use it to bring the player to the logs instead of only telling them where the
+ * files are.
+ */
+function showPage(name) {
+	$$('.nav-item').forEach((other) => {
+		other.classList.toggle('is-active', other.dataset.page === name);
+	});
+	$$('.page').forEach((page) => page.classList.remove('is-active'));
+	$(`.page[data-page="${name}"]`).classList.add('is-active');
+
+	// A page opens at its top, a scroll of the previous one is not kept.
+	$('.content').scrollTop = 0;
+
+	// The folder and the log change on the disk, they are read again when shown.
+	if (name === 'mods') loadMods();
+	if (name === 'logs') loadLogs();
+	if (name === 'servers') {
+		loadServers();
+		loadHosts();
+	}
+	if (name === 'performance') loadPerformance();
+}
+
+async function init() {
+	// Window controls.
+	$$('[data-window]').forEach((button) => {
+		button.addEventListener('click', () => api.window(button.dataset.window));
+	});
+
+	// Navigation.
+	$$('.nav-item').forEach((item) => {
+		item.addEventListener('click', () => showPage(item.dataset.page));
+	});
+
+	$('#modal-cancel').addEventListener('click', closeModal);
+	$('#modal').addEventListener('click', (event) => {
+		if (event.target === $('#modal')) closeModal();
+	});
+
+	// Escape closes the dialog, Tab stays inside it while it is open.
+	document.addEventListener('keydown', (event) => {
+		if ($('#modal').hidden) return;
+
+		if (event.key === 'Escape') {
+			event.preventDefault();
+			closeModal();
+			return;
+		}
+
+		if (event.key !== 'Tab') return;
+
+		const fields = $$('#modal input, #modal select, #modal textarea, #modal button').filter(
+			(element) => !element.disabled && element.offsetParent !== null
+		);
+		if (!fields.length) return;
+
+		const first = fields[0];
+		const last = fields[fields.length - 1];
+
+		if (event.shiftKey && document.activeElement === first) {
+			event.preventDefault();
+			last.focus();
+		} else if (!event.shiftKey && document.activeElement === last) {
+			event.preventDefault();
+			first.focus();
+		}
+	});
+
+	$('#btn-add-offline').addEventListener('click', offlineAccountModal);
+	$('#play-add-offline').addEventListener('click', offlineAccountModal);
+	$('#btn-add-microsoft').addEventListener('click', microsoftAccountModal);
+	$('#btn-install').addEventListener('click', install);
+	$('#btn-cancel-install').addEventListener('click', cancelInstall);
+	$('#btn-launch').addEventListener('click', () => launch());
+	$('#btn-stop').addEventListener('click', stopGame);
+	$('#btn-refresh-versions').addEventListener('click', loadVersions);
+	$('#btn-mods-refresh').addEventListener('click', loadMods);
+	$('#btn-mods-folder').addEventListener('click', openModsFolder);
+	$('#btn-logs-refresh').addEventListener('click', loadLogs);
+
+	// The servers and the performance pages.
+	$('#btn-server-add').addEventListener('click', addServer);
+	$('#btn-server-probe').addEventListener('click', () => testAddress());
+	$('#btn-servers-refresh').addEventListener('click', () => {
+		loadServers();
+		loadHosts();
+	});
+	$('#btn-host-create').addEventListener('click', createHost);
+	$('#btn-perf-refresh').addEventListener('click', loadPerformance);
+	$('#btn-perf-install').addEventListener('click', installPack);
+	$('#btn-jvm-apply').addEventListener('click', applyJvm);
+	$('#btn-tune-max').addEventListener('click', () => tuneOptions('max'));
+	$('#btn-tune-balanced').addEventListener('click', () => tuneOptions('balanced'));
+	$('#btn-tune-restore').addEventListener('click', () => tuneOptions('restore'));
+	$('#server-address').addEventListener('keydown', (event) => {
+		if (event.key === 'Enter') addServer();
+	});
+	$('#host-name').addEventListener('keydown', (event) => {
+		if (event.key === 'Enter') createHost();
+	});
+
+	$('#check-g1').addEventListener('change', (event) => {
+		api.settings.update({ useG1GC: event.target.checked });
+	});
+
+	$('#select-version').addEventListener('change', async (event) => {
+		await updateProfile({ version: event.target.value });
+		loadLoaders(event.target.value);
+	});
+	$('#select-loader').addEventListener('change', (event) => {
+		updateProfile({ loader: event.target.value });
+	});
+
+	// A profile belongs to an account: changing it here changes it for the selected one.
+	$('#select-profile').addEventListener('change', async (event) => {
+		const account = state.accounts.selected;
+		if (!account) {
+			toast('Add an account first.', 'error');
+			loadProfiles();
+			return;
+		}
+
+		const result = await api.profiles.assign(account, event.target.value);
+		if (!result.ok) {
+			toast(result.error, 'error');
+			loadProfiles();
+			return;
+		}
+
+		await loadProfiles();
+		toast(`This account now plays with ${event.target.value}.`, 'success');
+	});
+
+	$('#btn-profile-new').addEventListener('click', newProfileModal);
+	$('#btn-profile-delete').addEventListener('click', deleteProfile);
+
+	bindSettings();
+
+	// The game output.
+	api.onGameOutput((line) => {
+		log(line);
+		// The first line of the game means that Java started, the launch only answers at its end.
+		if (state.launching) setStatus('Playing', 'busy');
+	});
+	api.onInstallProgress((progress) => {
+		// A progress line can arrive after the failure that ended the installation: it must not
+		// repaint a bar that is already hidden and reset.
+		if (!state.installing) return;
+
+		const percent = progress.total > 0
+			? Math.min(100, Math.round((progress.received / progress.total) * 100))
+			: 0;
+		$('#progress-label').textContent = `${progress.task} (${percent}%)`;
+		$('#progress-fill').style.width = `${percent}%`;
+	});
+	api.onOptimisationProgress((progress) => {
+		if (!state.performance.installing) return;
+
+		const detail = progress.detail ? ` — ${progress.detail}` : '';
+		$('#perf-path').textContent = `${progress.name}: ${progress.state}${detail}`;
+	});
+
+	// The code of the sign in with Microsoft.
+	api.onMicrosoftDeviceCode((code) => {
+		const value = document.querySelector('#device-code');
+		const link = document.querySelector('#verify-link');
+		if (value) value.textContent = code.userCode;
+		if (link) {
+			link.textContent = code.verificationUri;
+			link.href = code.verificationUri;
+		}
+	});
+
+	// The initial state.
+	const info = await api.info();
+	if (!info.ok) {
+		// Without an answer from the core there is nothing to show, the reason is reported instead
+		// of a stack trace from the panel that reads it.
+		$('#paths-output').textContent = info.error;
+		toast(info.error, 'error');
+		setStatus('Error', 'error');
+		return;
+	}
+
+	applySettings(info.settings);
+	$('#paths-output').textContent = [
+		`game   ${info.paths.game}`,
+		`mods   ${info.paths.mods}`,
+		`assets ${info.paths.assets}`,
+		`data   ${info.paths.data}`
+	].join('\n');
+
+	state.accounts = await api.accounts.get();
+	renderAccounts();
+	renderAccountTable();
+
+	await loadVersions();
+	await loadLoaders(state.settings.gameVersion);
+	await loadProfiles();
+	await loadMods();
+	await loadLogs();
+	await loadServers();
+	await loadHosts();
+	await loadPerformance();
+}
+
+async function loadVersions() {
+	const result = await api.versions.list();
+	if (!result.ok) {
+		toast(result.error, 'error');
+		return;
+	}
+	state.versions = result.versions;
+	renderVersionSelect();
+	renderVersions();
+}
+
+init().catch((error) => {
+	toast(`The launcher could not start: ${error.message}`, 'error');
+	setStatus('Error', 'error');
+});

@@ -1,0 +1,1 @@
+{"main-capability":{"identifier":"main-capability","description":"The permissions of the launcher window: the core commands are its own, the drag region and the events come from Tauri.","local":true,"windows":["main"],"permissions":["core:default","core:window:allow-start-dragging","core:window:allow-internal-toggle-maximize"]}}

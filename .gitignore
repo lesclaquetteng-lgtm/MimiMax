@@ -1,0 +1,52 @@
+# Build output
+build/
+out/
+release/
+dist/
+target/
+node_modules/
+.gradle/
+
+# Rust / Cargo (keep Cargo.lock tracked when present)
+**/*.rs.bk
+
+# Fabric/Minecraft client runtime state
+aether-client/run/
+
+# The toolchain that is downloaded by tools/setup.ps1
+tools/gradle-*/
+tools/jdk*/
+tools/*.zip
+
+# Runtime state of the launcher
+.aether/
+Aether/
+
+# Editors / IDE
+.idea/
+.vscode/
+*.iml
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs and temporary files
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+tools/mc/
+tools/mc-sources/
+tools/fapi-modules/
+tools/aether-home/
+tools/api/
+tools/__pycache__/
+launcher/__pycache__/
+aether-client/bin/
+aether-client/.classpath
+aether-client/.project
+aether-client/.settings/
+launcher/gui/.cache/

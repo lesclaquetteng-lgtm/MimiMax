@@ -1,0 +1,41 @@
+AETHER CLIENT — CONTRAT DE LICENCE D'UTILISATION
+================================================
+
+Version 1.0.0 — 14 novembre 2026
+
+En installant Aether Launcher et le client Aether, vous acceptez les conditions ci-dessous.
+
+1. OBJET
+   Le logiciel installe et lance Minecraft avec le client Aether, un ensemble de modules
+   d'interface et d'optimisation exécutés par Fabric. Il permet aussi de créer des comptes
+   hors-ligne et d'héberger un serveur local en mode hors-ligne.
+
+2. COMPTES ET IDENTITÉ
+   Un compte hors-ligne utilise un identifiant dérivé du pseudo, comme le fait Minecraft.
+   Il ne peut pas rejoindre un serveur configuré en online-mode=true : cette limitation
+   vient du jeu et non du logiciel. Le launcher l'indique avant le lancement.
+
+3. SERVEURS
+   Un serveur hébergé en mode hors-ligne accepte n'importe quel pseudo : ne l'ouvrez pas
+   sur Internet sans mot de passe, liste blanche ou proxy d'authentification. Vous êtes
+   responsable du serveur que vous démarrez.
+
+4. MODULES
+   Certains serveurs interdisent les modules de combat ou de triche. Activez-les à vos
+   risques : le logiciel ne contourne aucune protection anti-triche et ne modifie pas
+   l'authentification de Minecraft.
+
+5. DONNÉES
+   Les réglages, les comptes et les fichiers de jeu restent sur votre ordinateur, dans le
+   dossier Aether de votre profil utilisateur. Aucune donnée n'est envoyée à l'éditeur.
+   La désinstallation ne supprime pas ce dossier.
+
+6. GARANTIE
+   Le logiciel est fourni « en l'état », sans garantie. Minecraft est une marque de Mojang
+   Studios ; ce projet n'est ni affilié ni approuvé par Mojang ou Microsoft.
+
+7. LICENCE DU CODE
+   Le code du launcher et du client est distribué sous licence MIT. Les mods tiers
+   conservent leur licence propre, visible dans leur fichier fabric.mod.json.
+
+Vous pouvez refuser ce contrat : l'installation s'arrêtera et aucun fichier ne sera écrit.
