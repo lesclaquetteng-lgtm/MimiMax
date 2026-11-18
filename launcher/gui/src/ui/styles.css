@@ -2172,3 +2172,6 @@ html[data-theme="light"] .toast { background:rgba(255,255,255,.98); color:#1c274
 	body:not(.sidebar-collapsed) .sidebar .sidebar-note,
 	body:not(.sidebar-collapsed) .sidebar #status-text { display:none; }
 }
+
+/* Keep the sidebar toggle available in expanded desktop layout. */
+.topbar-menu { display:grid; }
