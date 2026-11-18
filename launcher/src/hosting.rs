@@ -530,6 +530,11 @@ fn wait_for_exit(pid: u32, timeout: Duration) -> bool {
 
 /// Whether a process is still running.
 pub fn process_alive(pid: u32) -> bool {
+    // PID 0 is not a process we manage, and Unix process IDs are signed.
+    if pid == 0 {
+        return false;
+    }
+
     #[cfg(windows)]
     {
         let output = Command::new("tasklist")
@@ -547,6 +552,12 @@ pub fn process_alive(pid: u32) -> bool {
 
     #[cfg(not(windows))]
     {
+        // Passing a u32 above i32::MAX to kill(1) can be parsed as a negative
+        // process-group ID. Reject it instead of probing an unintended group.
+        let Ok(pid) = i32::try_from(pid) else {
+            return false;
+        };
+
         Command::new("kill")
             .args(["-0", &pid.to_string()])
             .status()
@@ -841,6 +852,7 @@ mod tests {
 
     #[test]
     fn a_process_that_does_not_exist_is_not_alive() {
+        assert!(!process_alive(0));
         assert!(!process_alive(u32::MAX));
     }
 }
