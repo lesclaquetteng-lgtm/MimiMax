@@ -13,7 +13,8 @@ const state = {
 	performance: { mods: [], state: {}, installing: false, checked: false },
 	sessionLines: 0,
 	installing: false,
-	launching: false
+	launching: false,
+	status: 'Ready'
 };
 
 // The state of the interface, read by the end to end check to see the flags go back to idle.
@@ -42,6 +43,7 @@ function setStatus(text, kind = '') {
 	const pill = $('#status-pill');
 	pill.className = `status-pill${kind ? ` is-${kind}` : ''}`;
 	$('#status-text').textContent = text;
+	state.status = text;
 	const dashboardStatus = $('#dashboard-status');
 	if (dashboardStatus) dashboardStatus.textContent = text;
 }
@@ -71,7 +73,7 @@ function renderDashboard() {
 	const profile = currentProfile();
 	const javaPath = state.settings.javaPath || '';
 	const requiredJava = Number(state.settings.requiredJavaVersion) || 21;
-	const status = state.installing ? 'Installing…' : state.launching ? 'Starting Minecraft…' : 'Ready';
+	const status = state.installing ? 'Installing…' : state.launching ? 'Starting Minecraft…' : (state.status || 'Ready');
 	$('#dashboard-account').textContent = account?.username || 'No account selected';
 	$('#dashboard-account-meta').textContent = account
 		? (account.type === 'offline' ? 'Offline account · Local profile' : 'Microsoft account')
@@ -80,8 +82,8 @@ function renderDashboard() {
 	$('#dashboard-profile-meta').textContent = profile
 		? 'Minecraft ' + (profile.gameVersion || '—') + ' · ' + (Math.round(profile.maxMemory / 1024 * 10) / 10) + ' GB RAM'
 		: 'Choose a profile';
-	$('#dashboard-java').textContent = javaPath ? 'Custom runtime' : 'Auto-detected';
-	$('#dashboard-java-meta').textContent = 'Java ' + requiredJava + ' required';
+	$('#dashboard-java').textContent = javaPath ? 'Java configured' : 'Auto-detected';
+	$('#dashboard-java-meta').textContent = 'Java ' + requiredJava + ' required · ' + (javaPath ? 'Runtime path ready' : 'Automatic detection');
 	$('#dashboard-status').textContent = status;
 }
 
@@ -224,7 +226,6 @@ function initWorkspaceControls() {
 	$('#theme-toggle')?.addEventListener('click', () => {
 		applyTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
 	});
-	$('#select-theme')?.addEventListener('change', (event) => applyTheme(event.target.value));
 	$('#command-open')?.addEventListener('click', openCommandPalette);
 	$('#command-search')?.addEventListener('input', () => {
 		commandSelection = 0;
@@ -268,6 +269,7 @@ function initWorkspaceControls() {
 			}
 			return;
 		}
+		if (!$('#modal').hidden && event.key !== 'Escape') return;
 		if ((event.ctrlKey || event.metaKey) && /^[1-8]$/.test(event.key)) {
 			const pages = ['play', 'accounts', 'versions', 'mods', 'servers', 'performance', 'logs', 'settings'];
 			event.preventDefault();
