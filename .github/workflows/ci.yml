@@ -98,6 +98,8 @@ jobs:
           try {
             node ..\tools\e2e\profiles.mjs 9222
             if ($LASTEXITCODE -ne 0) { throw "Electron account/profile E2E failed" }
+            node ..\tools\e2e\a11y.mjs 9222
+            if ($LASTEXITCODE -ne 0) { throw "Electron accessibility/workspace E2E failed" }
           } finally {
             if ($electron -and -not $electron.HasExited) {
               Stop-Process -Id $electron.Id -Force -ErrorAction SilentlyContinue
