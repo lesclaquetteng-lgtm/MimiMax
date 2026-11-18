@@ -194,7 +194,8 @@ function openCommandPalette() {
 	$('#command-search').value = '';
 	commandSelection = 0;
 	renderCommandResults();
-	requestAnimationFrame(() => $('#command-search').focus());
+	// Focus synchronously: Ctrl+K should be ready for typing on the same interaction.
+	$('#command-search').focus({ preventScroll: true });
 }
 
 function closeCommandPalette() {
