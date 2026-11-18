@@ -59,7 +59,7 @@ jobs:
         working-directory: launcher
         run: npm ci
       - name: Install stable Rust
-        run: rustup toolchain install stable --profile minimal
+        run: rustup toolchain install stable --profile minimal && rustup default stable
       - name: Build launcher core
         working-directory: launcher
         run: cargo build --release --locked
