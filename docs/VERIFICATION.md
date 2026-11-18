@@ -127,11 +127,18 @@ Screenshots: [`images/launcher-servers.png`](images/launcher-servers.png),
 [`images/launcher-play.png`](images/launcher-play.png), and the narrow variants
 (`*-narrow.png`).
 
-### 4.1 End-to-end checks (`tools/e2e/`)
+### 4.2 End-to-end checks (`tools/e2e/`)
 
 The behavioural checks live in `tools/e2e/`, **not** in `target/`: `cargo clean` must not be able
 to delete them. They drive the real application over CDP; the launcher is started with a fake core
 so the failures are reproducible without touching the network:
+
+The GitHub Actions job **Electron account and profile flows (Windows)** runs
+`profiles.mjs` against the real Electron window and the real Rust core on an isolated data home.
+It creates an offline account through the Accounts dialog, then exercises profile selection,
+editing, creation and deletion through the Play page. This is the regression test for the complete
+renderer → preload → IPC → core path, not only for the helper functions.
+
 
 ```powershell
 # Build the fake cores once (they only use the standard library).
