@@ -74,6 +74,8 @@ function renderDashboard() {
 	const javaPath = state.settings.javaPath || '';
 	const requiredJava = Number(state.settings.requiredJavaVersion) || 21;
 	const status = state.installing ? 'Installing…' : state.launching ? 'Starting Minecraft…' : (state.status || 'Ready');
+	const heroVersion = $('#hero-version');
+	if (heroVersion) heroVersion.textContent = (profile?.gameVersion || 'Minecraft') + ' · FABRIC';
 	$('#dashboard-account').textContent = account?.username || 'No account selected';
 	$('#dashboard-account-meta').textContent = account
 		? (account.type === 'offline' ? 'Offline account · Local profile' : 'Microsoft account')
@@ -217,6 +219,7 @@ function initWorkspaceControls() {
 	try {
 		document.body.classList.toggle('sidebar-collapsed', localStorage.getItem('aether.sidebar.collapsed') === '1');
 	} catch { /* local storage can be disabled by the host */ }
+	$('#sidebar-toggle')?.setAttribute('aria-pressed', String(document.body.classList.contains('sidebar-collapsed')));
 	$$('.nav-item').forEach((button) => { button.dataset.tooltip = button.textContent.trim(); });
 	$('#sidebar-toggle')?.addEventListener('click', () => {
 		const collapsed = document.body.classList.toggle('sidebar-collapsed');
@@ -635,6 +638,9 @@ function renderAccountTable() {
 			state.accounts = await api.accounts.remove(account.id);
 			renderAccounts();
 			renderAccountTable();
+			await loadProfiles();
+			renderDashboard();
+			renderSetupChecklist();
 			toast(`Removed ${account.username}`, 'success');
 		});
 
@@ -1620,6 +1626,9 @@ function offlineAccountModal() {
 		state.accounts = await api.accounts.get();
 		renderAccounts();
 		renderAccountTable();
+		await loadProfiles();
+		renderDashboard();
+		renderSetupChecklist();
 		toast(`Added ${result.account.username}`, 'success');
 	}, 'Create');
 
@@ -1659,6 +1668,9 @@ async function microsoftAccountModal() {
 		state.accounts = await api.accounts.get();
 		renderAccounts();
 		renderAccountTable();
+		await loadProfiles();
+		renderDashboard();
+		renderSetupChecklist();
 		toast(`Signed in as ${result.account.username}`, 'success');
 	}, 'I have signed in');
 }
