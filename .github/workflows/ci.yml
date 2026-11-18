@@ -58,6 +58,15 @@ jobs:
       - name: Install Electron
         working-directory: launcher
         run: npm ci
+      - name: Ensure the Electron runtime is present
+        shell: pwsh
+        working-directory: launcher
+        run: |
+          Remove-Item Env:ELECTRON_SKIP_BINARY_DOWNLOAD -ErrorAction SilentlyContinue
+          node .\\node_modules\\electron\\install.js
+          $electronPath = (node -p "require('electron')").Trim()
+          if (-not (Test-Path $electronPath)) { throw "Electron runtime is missing at $electronPath" }
+          Write-Host "Electron runtime: $electronPath"
       - name: Install stable Rust
         run: rustup toolchain install stable --profile minimal && rustup default stable
       - name: Build launcher core
@@ -80,7 +89,9 @@ jobs:
           $env:AETHER_HOME = Join-Path $env:RUNNER_TEMP "aether-e2e-home"
           $env:AETHER_SHARED_DIR = Join-Path $env:RUNNER_TEMP "minecraft-e2e"
           $env:AETHER_ANCHOR = $env:GITHUB_WORKSPACE
-          $electron = Start-Process -FilePath "$PWD\node_modules\electron\dist\electron.exe" -ArgumentList @(".", "--remote-debugging-port=9222", "--disable-gpu") -WorkingDirectory $PWD -PassThru -WindowStyle Hidden
+          $electronPath = (node -p "require('electron')").Trim()
+          if (-not (Test-Path $electronPath)) { throw "Electron runtime is missing at $electronPath" }
+          $electron = Start-Process -FilePath $electronPath -ArgumentList @(".", "--remote-debugging-port=9222", "--disable-gpu") -WorkingDirectory $PWD -PassThru -WindowStyle Hidden
           try {
             node ..\tools\e2e\profiles.mjs 9222
             if ($LASTEXITCODE -ne 0) { throw "Electron account/profile E2E failed" }
