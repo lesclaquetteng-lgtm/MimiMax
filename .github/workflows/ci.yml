@@ -38,9 +38,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Check Electron main-process syntax
+      - name: Check Electron and renderer syntax
         working-directory: launcher
-        run: node --check gui/src/main.cjs && node --check gui/src/preload.js
+        run: node --check gui/src/main.cjs && node --check gui/src/preload.js && node --check gui/src/ui/bridge.js && node --check gui/src/ui/app.js
+      - name: Test launcher UI contracts
+        working-directory: launcher
+        run: node --test tests/ui-contract.test.cjs
       - name: Test security and operation guards
         working-directory: launcher
         run: npm run test:security
