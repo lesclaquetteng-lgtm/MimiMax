@@ -1,0 +1,63 @@
+'use strict';
+
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+
+const root = path.resolve(__dirname, '..');
+const html = fs.readFileSync(path.join(root, 'gui/src/ui/index.html'), 'utf8');
+const app = fs.readFileSync(path.join(root, 'gui/src/ui/app.js'), 'utf8');
+
+test('every navigation entry points to an existing page', () => {
+	const navigation = [...html.matchAll(/class="[^"]*\bnav-item\b[^"]*"[^>]*data-page="([^"]+)"/g)]
+		.map((match) => match[1]);
+	const pages = new Set([...html.matchAll(/class="[^"]*\bpage\b[^"]*"[^>]*data-page="([^"]+)"/g)]
+		.map((match) => match[1]));
+	assert.ok(navigation.length >= 8, 'expected all launcher sections in navigation');
+	for (const name of navigation) assert.ok(pages.has(name), 'missing page for ' + name);
+});
+
+test('the workspace components have unique DOM anchors', () => {
+	const ids = [
+		'sidebar-toggle', 'command-open', 'command-palette', 'command-search', 'command-results',
+		'theme-toggle', 'select-theme', 'hero-version', 'dashboard-account', 'dashboard-account-meta',
+		'dashboard-profile', 'dashboard-profile-meta', 'dashboard-java', 'dashboard-java-meta',
+		'dashboard-status', 'setup-card', 'setup-dismiss', 'setup-account', 'setup-account-state',
+		'setup-profile', 'setup-profile-state', 'setup-performance', 'setup-performance-state',
+		'perf-health-count', 'perf-health-progress', 'perf-health-percent', 'perf-jvm-summary',
+		'perf-options-summary', 'perf-health-message'
+	];
+	for (const id of ids) {
+		const occurrences = [...html.matchAll(new RegExp('\\bid="' + id + '"', 'g'))].length;
+		assert.equal(occurrences, 1, '#' + id + ' should exist exactly once');
+	}
+});
+
+test('the account, profile and launch entry points remain present', () => {
+	for (const id of ['btn-add-offline', 'btn-add-microsoft', 'select-profile',
+		'btn-profile-new', 'btn-profile-delete', 'btn-install', 'btn-launch', 'btn-stop']) {
+		assert.match(html, new RegExp('\\bid="' + id + '"'));
+	}
+	assert.match(html, /data-page="accounts"/);
+	assert.match(html, /data-page="play"/);
+});
+
+test('the command palette and keyboard shortcuts are wired', () => {
+	assert.match(app, /function openCommandPalette\(\)/);
+	assert.match(app, /function renderCommandResults\(\)/);
+	assert.match(app, /event\.key\.toLowerCase\(\) === 'k'/);
+	assert.match(app, /\['play', 'accounts', 'versions', 'mods', 'servers', 'performance', 'logs', 'settings'\]/);
+});
+
+test('appearance is persisted through the Rust settings API', () => {
+	assert.match(app, /api\.settings\.update\(\{ theme: normalized \}\)/);
+	assert.match(html, /id="select-theme"/);
+	assert.match(html, /data-theme/);
+});
+
+test('performance overview does not publish simulated FPS telemetry', () => {
+	assert.doesNotMatch(app, /fpsHistory|initFpsSplineGraph/);
+	assert.match(app, /installed \/ mods\.length/);
+	assert.match(html, /No FPS is simulated here/);
+});
