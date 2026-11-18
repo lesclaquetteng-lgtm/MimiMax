@@ -1773,7 +1773,7 @@ input[type="range"]:disabled::-webkit-slider-thumb { box-shadow: none; cursor: n
 	--text-tertiary: #71809c;
 	--accent: #8b7cff;
 	--accent-cyan: #55d6e8;
-	--accent-gradient: linear-gradient(112deg, #8b7cff 0%, #6d9bff 52%, #55d6e8 100%);
+	--accent-gradient: linear-gradient(112deg, var(--accent) 0%, color-mix(in srgb, var(--accent) 70%, #6d9bff) 52%, var(--accent-cyan) 100%);
 	--accent-dim: rgba(139, 124, 255, .12);
 	--accent-soft: rgba(139, 124, 255, .24);
 	--accent-mid: rgba(139, 124, 255, .5);
