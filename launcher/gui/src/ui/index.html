@@ -97,6 +97,26 @@
 		</aside>
 
 		<main class="content">
+			<div class="workspace-topbar">
+				<div class="workspace-topbar-start">
+					<button class="icon-btn topbar-menu" id="sidebar-toggle" type="button" aria-label="Toggle navigation" aria-pressed="false">
+						<svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
+					</button>
+					<div class="workspace-mark"><span class="workspace-mark-overline">AETHER / CLIENT</span><span class="workspace-mark-title">Workspace</span></div>
+				</div>
+				<button class="command-trigger" id="command-open" type="button" aria-haspopup="dialog" aria-controls="command-palette">
+					<svg viewBox="0 0 24 24"><circle cx="10.8" cy="10.8" r="6.8" /><path d="m16 16 4.5 4.5" /></svg>
+					<span>Search pages and actions…</span><kbd>Ctrl K</kbd>
+				</button>
+				<div class="workspace-topbar-end">
+					<button class="topbar-icon-button" id="theme-toggle" type="button" aria-label="Switch to light theme" title="Switch theme">
+						<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42" /></svg>
+						<span>Theme</span>
+					</button>
+					<div class="topbar-divider"></div>
+					<div class="topbar-live"><span class="topbar-live-dot"></span><span>Rust core</span></div>
+				</div>
+			</div>
 			<!-- ============================ PLAY ============================ -->
 			<section class="page is-active" data-page="play">
 				<div class="hero-banner">
@@ -104,14 +124,33 @@
 						<div class="hero-tag-row">
 							<span class="hero-tag hero-tag--neon">1.21.11 FABRIC</span>
 							<span class="hero-tag">OFFLINE READY</span>
-							<span class="hero-tag hero-tag--boost">⚡ 880+ FPS PACK</span>
+							<span class="hero-tag hero-tag--boost">PERFORMANCE TOOLKIT</span>
 						</div>
 						<h1 class="hero-heading">AETHER <span class="hero-glow-text">CLIENT</span></h1>
-						<p class="hero-subtext">Competitive Minecraft client with built-in optimizations, offline mode and custom HUD.</p>
+						<p class="hero-subtext">Your Minecraft setup, accounts, servers and performance tools — together in one place.</p>
 					</div>
 					<div class="hero-banner-art">
 						<canvas id="player-skin-canvas" class="player-skin-canvas" width="120" height="120" title="Player 3D Avatar (drag to rotate)"></canvas>
 						<div class="hero-art-shield"></div>
+					</div>
+				</div>
+
+				<div class="dashboard-strip" aria-label="Launcher overview">
+					<div class="dashboard-metric"><span class="dashboard-metric-label">ACTIVE ACCOUNT</span><strong id="dashboard-account">No account selected</strong><small id="dashboard-account-meta">Add an account to get started</small></div>
+					<div class="dashboard-metric"><span class="dashboard-metric-label">PLAY PROFILE</span><strong id="dashboard-profile">Default</strong><small id="dashboard-profile-meta">Minecraft version and memory</small></div>
+					<div class="dashboard-metric"><span class="dashboard-metric-label">JAVA RUNTIME</span><strong id="dashboard-java">Detecting…</strong><small id="dashboard-java-meta">Required runtime</small></div>
+					<div class="dashboard-metric dashboard-metric--status"><span class="dashboard-metric-label">LAUNCHER STATUS</span><strong id="dashboard-status">Ready</strong><small>Powered by the Rust core</small></div>
+				</div>
+
+				<div class="card card--setup" id="setup-card">
+					<div class="card-head">
+						<div><h2 class="card-title">Quick start</h2><p class="setup-intro">Three simple steps to prepare your client.</p></div>
+						<button class="text-button" id="setup-dismiss" type="button">Hide</button>
+					</div>
+					<div class="setup-steps">
+						<button class="setup-step" id="setup-account" type="button"><span class="setup-step-index">01</span><span class="setup-step-copy"><strong>Add an account</strong><small id="setup-account-state">Create an offline or Microsoft account</small></span><span class="setup-step-action">Open <b>→</b></span></button>
+						<button class="setup-step" id="setup-profile" type="button"><span class="setup-step-index">02</span><span class="setup-step-copy"><strong>Choose a profile</strong><small id="setup-profile-state">Set your Minecraft version and memory</small></span><span class="setup-step-action">Open <b>→</b></span></button>
+						<button class="setup-step" id="setup-performance" type="button"><span class="setup-step-index">03</span><span class="setup-step-copy"><strong>Prepare performance</strong><small id="setup-performance-state">Review or install the optimization pack</small></span><span class="setup-step-action">Open <b>→</b></span></button>
 					</div>
 				</div>
 
@@ -378,13 +417,18 @@
 					</div>
 				</div>
 
-				<div class="card card--fps-chart">
+				<div class="card card--overview">
 					<div class="card-head">
-						<h2 class="card-title">Live FPS Curve & Diagnostics</h2>
-						<span class="badge" id="fps-spline-status">880+ FPS Peak Target</span>
+						<div><h2 class="card-title">Optimization overview</h2><p class="setup-intro">A live summary of the configuration stored by the Rust core.</p></div>
+						<span class="badge" id="perf-health-count">Reading…</span>
 					</div>
-					<p class="muted">Real-time Catmull-Rom spline smoothed frame telemetry benchmark.</p>
-					<canvas id="fps-spline-canvas" class="fps-spline-canvas" width="600" height="110"></canvas>
+					<div class="health-progress"><div class="health-progress-track"><span id="perf-health-progress"></span></div><strong id="perf-health-percent">—</strong></div>
+					<div class="health-summary-grid">
+						<div class="health-summary-item"><span>JVM preset</span><strong id="perf-jvm-summary">Not loaded</strong></div>
+						<div class="health-summary-item"><span>Game options</span><strong id="perf-options-summary">Not loaded</strong></div>
+						<div class="health-summary-item"><span>Optimization pack</span><strong id="perf-health-message">Not checked</strong></div>
+					</div>
+					<p class="muted health-footnote">No FPS is simulated here. The pack count and presets are read from your local installation.</p>
 				</div>
 
 				<div class="card">
@@ -471,6 +515,10 @@
 					<div class="card">
 						<h2 class="card-title">Appearance</h2>
 						<label class="field">
+							<span class="field-label">Interface theme</span>
+							<select id="select-theme" class="input"><option value="dark">Dark</option><option value="light">Light</option></select>
+						</label>
+						<label class="field">
 							<span class="field-label">Accent colour</span>
 							<div class="range-row">
 								<input type="color" id="input-accent" value="#6c5ce7" />
@@ -501,6 +549,18 @@
 				<button class="btn btn--ghost" id="modal-cancel">Cancel</button>
 				<button class="btn btn--primary" id="modal-confirm">Confirm</button>
 			</div>
+		</div>
+	</div>
+
+	<div class="command-backdrop" id="command-palette" hidden>
+		<div class="command-dialog" role="dialog" aria-modal="true" aria-labelledby="command-title">
+			<div class="command-dialog-heading"><span id="command-title">Quick actions</span><kbd>ESC</kbd></div>
+			<label class="command-input-wrap">
+				<svg viewBox="0 0 24 24"><circle cx="10.8" cy="10.8" r="6.8" /><path d="m16 16 4.5 4.5" /></svg>
+				<input id="command-search" type="search" autocomplete="off" spellcheck="false" placeholder="Search pages, accounts, install…" />
+			</label>
+			<div class="command-results" id="command-results" role="listbox" aria-label="Available actions"></div>
+			<div class="command-dialog-footer"><span><kbd>↑</kbd><kbd>↓</kbd> Navigate</span><span><kbd>ENTER</kbd> Select</span></div>
 		</div>
 	</div>
 
