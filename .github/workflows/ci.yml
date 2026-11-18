@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches: [main, "codex/**"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  rust:
+    name: Rust core
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install stable Rust and Clippy
+        run: |
+          rustup toolchain install stable --profile minimal --component clippy
+          rustup default stable
+      - name: Test
+        working-directory: launcher
+        run: cargo test --locked
+      - name: Clippy
+        working-directory: launcher
+        run: cargo clippy --locked --all-targets -- -D warnings
+
+  electron-security:
+    name: Electron security helpers
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check Electron main-process syntax
+        working-directory: launcher
+        run: node --check gui/src/main.cjs
+      - name: Test security and operation guards
+        working-directory: launcher
+        run: npm run test:security
+
+  fabric-mod:
+    name: Fabric client
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "25"
+      - name: Build and test Fabric mod
+        working-directory: aether-client
+        run: bash ./gradlew --no-daemon build
