@@ -435,7 +435,8 @@ function init3DSkinViewer() {
 	function renderFrame() {
 		ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-		if (!skinIsDragging) {
+		const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+		if (!skinIsDragging && !reduceMotion) {
 			skinRotationAngle += 0.012; // Gentle idle spin
 		}
 
@@ -459,7 +460,12 @@ function init3DSkinViewer() {
 		drawIsometricBox(38, 62 + armSwing, 7, 24, 7, skinRotationAngle, colSkinTop, colSkinFront, colSkinSide);
 		drawIsometricBox(82, 62 - armSwing, 7, 24, 7, skinRotationAngle, colSkinTop, colSkinFront, colSkinSide);
 
-		skinCanvasAnimId = requestAnimationFrame(renderFrame);
+		const playPage = canvas.closest('.page');
+		if (!document.hidden && !reduceMotion && playPage?.classList.contains('is-active')) {
+			skinCanvasAnimId = requestAnimationFrame(renderFrame);
+		} else {
+			skinCanvasAnimId = null;
+		}
 	}
 
 	if (skinCanvasAnimId) cancelAnimationFrame(skinCanvasAnimId);
