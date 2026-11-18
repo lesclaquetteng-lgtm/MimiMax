@@ -2,11 +2,27 @@ const { app, BrowserWindow, clipboard, ipcMain, shell } = require('electron');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
 const { existsSync, mkdirSync } = require('node:fs');
+const { createOperationGate, isSameAppDocument, isTrustedIpcEvent, normalizeExternalUrl } = require('./security.cjs');
 
 const here = __dirname;
 const launcherRoot = path.resolve(here, '..', '..');
 
 let mainWindow = null;
+const operationGate = createOperationGate();
+
+function handleIpc(channel, handler) {
+	handleIpc(channel, (event, ...args) => {
+		if (!isTrustedIpcEvent(event, mainWindow)) {
+			return { ok: false, error: 'Untrusted IPC sender.' };
+		}
+		return handler(event, ...args);
+	});
+}
+
+function openExternalSafely(value) {
+	const url = normalizeExternalUrl(value);
+	if (url) void shell.openExternal(url).catch(() => {});
+}
 
 /**
  * The game that is running, so that the interface can stop it.
@@ -279,8 +295,14 @@ function createWindow() {
 	mainWindow.once('ready-to-show', () => mainWindow.show());
 
 	mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-		shell.openExternal(url);
+		openExternalSafely(url);
 		return { action: 'deny' };
+	});
+
+	mainWindow.webContents.on('will-navigate', (event, url) => {
+		if (isSameAppDocument(url, mainWindow.webContents.getURL())) return;
+		event.preventDefault();
+		openExternalSafely(url);
 	});
 }
 
@@ -316,25 +338,25 @@ if (!hasLock) {
 }
 
 function registerHandlers() {
-	ipcMain.handle('window:action', async (_event, action) => {
+	handleIpc('window:action', async (_event, action) => {
 		if (!mainWindow) return;
 		if (action === 'minimize') mainWindow.minimize();
 		else if (action === 'maximize') mainWindow.isMaximized() ? mainWindow.unmaximize() : mainWindow.maximize();
 		else if (action === 'close') mainWindow.close();
 	});
 
-	ipcMain.handle('app:info', async () => runCore(['info']));
+	handleIpc('app:info', async () => runCore(['info']));
 
 	// The report of a crash is copied from the main process, the clipboard of a `file://` page
 	// is not reliable in every Electron build.
-	ipcMain.handle('app:copy', async (_event, text) => {
+	handleIpc('app:copy', async (_event, text) => {
 		clipboard.writeText(String(text ?? ''));
 		return { ok: true };
 	});
 
-	ipcMain.handle('settings:get', async () => runCore(['settings']));
+	handleIpc('settings:get', async () => runCore(['settings']));
 
-	ipcMain.handle('settings:update', async (_event, patch) => {
+	handleIpc('settings:update', async (_event, patch) => {
 		const args = ['settings'];
 		for (const [key, value] of Object.entries(patch || {})) {
 			args.push('--key', key, '--value', String(value));
@@ -342,36 +364,36 @@ function registerHandlers() {
 		return runCore(args);
 	});
 
-	ipcMain.handle('accounts:get', async () => accountStore(await runCore(['accounts'])));
+	handleIpc('accounts:get', async () => accountStore(await runCore(['accounts'])));
 
-	ipcMain.handle('accounts:addOffline', async (_event, username) =>
+	handleIpc('accounts:addOffline', async (_event, username) =>
 		runCore(['account', 'add-offline', username]));
 
-	ipcMain.handle('accounts:remove', async (_event, id) =>
+	handleIpc('accounts:remove', async (_event, id) =>
 		accountStore(await runCore(['account', 'remove', id])));
 
-	ipcMain.handle('accounts:select', async (_event, id) =>
+	handleIpc('accounts:select', async (_event, id) =>
 		accountStore(await runCore(['account', 'select', id])));
 
-	ipcMain.handle('accounts:microsoft:signIn', async () =>
+	handleIpc('accounts:microsoft:signIn', async () =>
 		runCoreStreaming(['account', 'microsoft'], (line) => {
 			if (line.type === 'deviceCode') {
 				mainWindow?.webContents.send('microsoft:deviceCode', line);
 			}
 		}));
 
-	ipcMain.handle('versions:list', async (_event, limit) =>
+	handleIpc('versions:list', async (_event, limit) =>
 		runCore(['versions', '--limit', String(limit || 40)]));
 
-	ipcMain.handle('versions:loaders', async (_event, gameVersion) =>
+	handleIpc('versions:loaders', async (_event, gameVersion) =>
 		runCore(['loaders', '--version', gameVersion]));
 
-	ipcMain.handle('profiles:list', async () => runCore(['profiles', 'list']));
+	handleIpc('profiles:list', async () => runCore(['profiles', 'list']));
 
-	ipcMain.handle('profiles:assign', async (_event, accountId, name) =>
+	handleIpc('profiles:assign', async (_event, accountId, name) =>
 		runCore(['profiles', 'assign', String(accountId), String(name)]));
 
-	ipcMain.handle('profiles:add', async (_event, name, source) =>
+	handleIpc('profiles:add', async (_event, name, source) =>
 		runCore([
 			'profiles', 'add', String(name),
 			'--version', String(source.version),
@@ -382,7 +404,7 @@ function registerHandlers() {
 			'--height', String(source.height)
 		]));
 
-	ipcMain.handle('profiles:update', async (_event, name, patch) => {
+	handleIpc('profiles:update', async (_event, name, patch) => {
 		const flags = ['profiles', 'update', String(name)];
 
 		for (const [key, flag] of [
@@ -399,16 +421,16 @@ function registerHandlers() {
 		return runCore(flags);
 	});
 
-	ipcMain.handle('profiles:remove', async (_event, name) =>
+	handleIpc('profiles:remove', async (_event, name) =>
 		runCore(['profiles', 'remove', String(name)]));
 
-	ipcMain.handle('mods:list', async () => runCore(['mods', 'list']));
+	handleIpc('mods:list', async () => runCore(['mods', 'list']));
 
-	ipcMain.handle('mods:toggle', async (_event, name, enabled) =>
+	handleIpc('mods:toggle', async (_event, name, enabled) =>
 		runCore(['mods', 'toggle', String(name), '--enabled', String(Boolean(enabled))]));
 
 	// Opening a folder is a shell action, the core only says where the folder is.
-	ipcMain.handle('mods:openFolder', async () => {
+	handleIpc('mods:openFolder', async () => {
 		const info = await runCore(['info']);
 		const folder = info?.paths?.mods;
 		if (!folder) return { ok: false, error: 'The mods folder is unknown.' };
@@ -423,29 +445,29 @@ function registerHandlers() {
 		return failure ? { ok: false, error: failure, folder } : { ok: true, folder };
 	});
 
-	ipcMain.handle('logs:tail', async (_event, lines) =>
-		runCore(['logs', '--lines', String(lines || 200)]));	ipcMain.handle('logs:read', async (_event, name, lines) =>
+	handleIpc('logs:tail', async (_event, lines) =>
+		runCore(['logs', '--lines', String(lines || 200)]));	handleIpc('logs:read', async (_event, name, lines) =>
 		runCore(['logs', 'read', String(name), '--lines', String(lines || 400)]));
 
 	/* ------------------------------------------------------------- servers */
 
-	ipcMain.handle('servers:list', async () => runCore(['servers', 'list']));
+	handleIpc('servers:list', async () => runCore(['servers', 'list']));
 
-	ipcMain.handle('servers:add', async (_event, name, address) =>
+	handleIpc('servers:add', async (_event, name, address) =>
 		runCore(['servers', 'add', String(address), '--name', String(name || address)]));
 
-	ipcMain.handle('servers:remove', async (_event, key) =>
+	handleIpc('servers:remove', async (_event, key) =>
 		runCore(['servers', 'remove', String(key)]));
 
-	ipcMain.handle('servers:ping', async (_event, address) =>
+	handleIpc('servers:ping', async (_event, address) =>
 		runCore(['servers', 'ping', String(address)]));
 
-	ipcMain.handle('servers:probe', async (_event, address) =>
+	handleIpc('servers:probe', async (_event, address) =>
 		runCore(['servers', 'probe', String(address)]));
 
-	ipcMain.handle('hosts:list', async () => runCore(['hosts', 'list']));
+	handleIpc('hosts:list', async () => runCore(['hosts', 'list']));
 
-	ipcMain.handle('hosts:create', async (_event, options) => {
+	handleIpc('hosts:create', async (_event, options) => {
 		const args = [
 			'hosts', 'create', String(options?.name || ''),
 			'--port', String(options?.port || 25565),
@@ -456,62 +478,68 @@ function registerHandlers() {
 		return runCore(args);
 	});
 
-	ipcMain.handle('hosts:start', async (_event, name) =>
+	handleIpc('hosts:start', async (_event, name) =>
 		runCore(['hosts', 'start', String(name)]));
 
-	ipcMain.handle('hosts:stop', async (_event, name) =>
+	handleIpc('hosts:stop', async (_event, name) =>
 		runCore(['hosts', 'stop', String(name)]));
 
 	/* --------------------------------------------------------- performance */
 
-	ipcMain.handle('performance:list', async () => runCore(['performance', 'list']));
+	handleIpc('performance:list', async () => runCore(['performance', 'list']));
 
-	ipcMain.handle('performance:tune', async (_event, preset) =>
+	handleIpc('performance:tune', async (_event, preset) =>
 		runCore(['performance', 'tune', '--preset', String(preset || 'max')]));
 
-	ipcMain.handle('performance:jvm', async (_event, preset) =>
+	handleIpc('performance:jvm', async (_event, preset) =>
 		runCore(['performance', 'jvm', String(preset || 'balanced')]));
 
-	ipcMain.handle('performance:install', async (_event, slugs) => {
-		const args = ['performance', 'install'];
-		if (Array.isArray(slugs) && slugs.length > 0) args.push('--slugs', slugs.join(','));
+	handleIpc('performance:install', async (_event, slugs) =>
+		operationGate.run('install', async () => {
+			const args = ['performance', 'install'];
+			if (Array.isArray(slugs) && slugs.length > 0) args.push('--slugs', slugs.join(','));
 
-		return runCoreStreaming(args, (line) => {
-			if (line.type === 'optimisation') {
-				mainWindow?.webContents.send('optimisation:progress', line);
-			}
-		});
-	});
-
-	ipcMain.handle('install:start', async (_event, profile) => {
-		const args = ['install'];
-		if (profile?.gameVersion) args.push('--version', profile.gameVersion);
-		if (profile?.loaderVersion) args.push('--loader', profile.loaderVersion);
-
-		// The core reads `cancel` on its standard input while the installation runs.
-		const installation = { child: null, cancelled: false };
-		activeInstall = installation;
-
-		const result = await runCoreStreaming(
-			args,
-			(line) => {
-				if (line.type === 'progress') {
-					mainWindow?.webContents.send('install:progress', line);
+			return runCoreStreaming(args, (line) => {
+				if (line.type === 'optimisation') {
+					mainWindow?.webContents.send('optimisation:progress', line);
 				}
-			},
-			(child) => {
-				installation.child = child;
+			});
+		})
+	);
+
+	handleIpc('install:start', async (_event, profile) =>
+		operationGate.run('install', async () => {
+			const args = ['install'];
+			if (profile?.gameVersion) args.push('--version', profile.gameVersion);
+			if (profile?.loaderVersion) args.push('--loader', profile.loaderVersion);
+
+			// The core reads `cancel` on its standard input while the installation runs.
+			const installation = { child: null, cancelled: false };
+			activeInstall = installation;
+
+			try {
+				const result = await runCoreStreaming(
+					args,
+					(line) => {
+						if (line.type === 'progress') {
+							mainWindow?.webContents.send('install:progress', line);
+						}
+					},
+					(child) => {
+						installation.child = child;
+					}
+				);
+
+				return installation.cancelled
+					? { ok: false, cancelled: true, error: 'The installation was cancelled.' }
+					: result;
+			} finally {
+				if (activeInstall === installation) activeInstall = null;
 			}
-		);
+		})
+	);
 
-		activeInstall = null;
-
-		return installation.cancelled
-			? { ok: false, cancelled: true, error: 'The installation was cancelled.' }
-			: result;
-	});
-
-	ipcMain.handle('install:stop', async () => {
+	handleIpc('install:stop', async () => {
 		const installation = activeInstall;
 		if (!installation || !installation.child) {
 			return { ok: false, error: 'No installation is running.' };
@@ -535,32 +563,37 @@ function registerHandlers() {
 		return { ok: true };
 	});
 
-	ipcMain.handle('game:launch', async (_event, options) => {
-		const args = ['launch'];
-		if (options?.accountId) args.push('--account', options.accountId);
-		if (options?.gameVersion) args.push('--version', options.gameVersion);
-		if (options?.server) args.push('--server', String(options.server));
+	handleIpc('game:launch', async (_event, options) =>
+		operationGate.run('game', async () => {
+			const args = ['launch'];
+			if (options?.accountId) args.push('--account', options.accountId);
+			if (options?.gameVersion) args.push('--version', options.gameVersion);
+			if (options?.server) args.push('--server', String(options.server));
 
-		const game = { child: null, stopped: false };
-		activeGame = game;
+			const game = { child: null, stopped: false };
+			activeGame = game;
 
-		const result = await runCoreStreaming(
-			args,
-			(line) => {
-				if (line.type === 'output') {
-					mainWindow?.webContents.send('game:output', line.line);
-				}
-			},
-			(child) => {
-				game.child = child;
+			try {
+				const result = await runCoreStreaming(
+					args,
+					(line) => {
+						if (line.type === 'output') {
+							mainWindow?.webContents.send('game:output', line.line);
+						}
+					},
+					(child) => {
+						game.child = child;
+					}
+				);
+
+				return game.stopped ? { ok: true, stopped: true } : result;
+			} finally {
+				if (activeGame === game) activeGame = null;
 			}
-		);
+		})
+	);
 
-		activeGame = null;
-		return game.stopped ? { ok: true, stopped: true } : result;
-	});
-
-	ipcMain.handle('game:stop', async () => {
+	handleIpc('game:stop', async () => {
 		if (!activeGame || !activeGame.child || !activeGame.child.pid) {
 			return { ok: false, error: 'No game is running.' };
 		}
