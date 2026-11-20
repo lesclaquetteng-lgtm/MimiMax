@@ -17,6 +17,9 @@ pub const DEFAULT_PROFILE: &str = "Default";
 #[serde(rename_all = "camelCase")]
 pub struct Profile {
     pub name: String,
+    /// A short note explaining when this configuration should be used.
+    #[serde(default)]
+    pub description: String,
     pub game_version: String,
     pub loader_version: String,
     pub max_memory: u32,
@@ -35,6 +38,7 @@ impl Profile {
     pub fn named(name: &str, settings: &Settings) -> Profile {
         Profile {
             name: name.to_string(),
+            description: String::new(),
             game_version: settings.game_version.clone(),
             loader_version: settings.loader_version.clone(),
             max_memory: settings.max_memory,
@@ -681,6 +685,7 @@ mod tests {
         let mut settings = Settings::default();
         settings.profiles.push(Profile {
             name: "Hardcore".to_string(),
+            description: "Long-form survival with a stable mod set.".to_string(),
             game_version: "1.20.1".to_string(),
             loader_version: "0.15.11".to_string(),
             max_memory: 8192,
@@ -697,6 +702,14 @@ mod tests {
         assert_eq!(settings.profile_for(None).name, "Hardcore");
         // The account still decides when it names a profile itself.
         assert_eq!(settings.profile_for(Some("Default")).name, DEFAULT_PROFILE);
+    }
+
+    #[test]
+    fn profiles_from_older_settings_files_default_the_description() {
+        let settings: Settings = serde_json::from_str(
+            r#"{"profiles":[{"name":"PvP","gameVersion":"1.8.9","loaderVersion":"0.15.11","maxMemory":4096,"minMemory":1024,"windowWidth":854,"windowHeight":480}]}"#
+        ).expect("older profile JSON remains readable");
+        assert_eq!(settings.profile("PvP").unwrap().description, "");
     }
 
     #[test]
