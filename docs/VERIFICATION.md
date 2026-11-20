@@ -284,6 +284,36 @@ in both directions, and `node --test tools/e2e/click.test.mjs` keeps every press
 | `sliders.mjs` | a real drag updates the value and the `--fill` of every slider |
 | `hit.mjs` | the click guard: a covered button is refused without any event, a child counts, off-screen/hidden/disabled/missing are named |
 
+### 4.3 Identity Studio (workspace appearance)
+
+The former generic appearance controls are now grouped into **Identity Studio**. It treats the
+launcher as a designed workspace rather than a collection of unrelated skin settings:
+
+- Four material colourways: graphite, oxide, field and blueprint.
+- A custom personal accent that overrides the material's signature accent.
+- Three surface treatments: contour (topographic linework), draft (technical grid) and plain.
+- Two real layout densities (roomy / compact) and two navigation layouts (wide / rail).
+- A live preview that reflects the active colourway, surface, density, navigation and memory setting.
+- Preferences are saved through the existing Rust settings command to the local settings.json.
+  Older settings files acquire the new values through the Settings serde defaults.
+
+The palette values live once in gui/src/ui/tokens.css. The interface switches twelve palette
+aliases at runtime; it does not redefine colour tokens in separate theme blocks. This keeps the
+same single-source-of-truth rule that tools/check-theme-tokens.mjs enforces.
+
+```powershell
+node --check launcher/gui/src/ui/app.js
+node --check launcher/gui/src/ui/bridge.js
+node tools/check-theme-tokens.mjs
+node tools/check-identity-studio.mjs
+```
+
+The Identity Studio contract check verifies unique control IDs, all 48 colourway channel definitions,
+the interaction bindings, actual CSS behaviour for each surface/density/navigation choice, and the
+persisted Rust settings fields plus their round-trip regression test. CI also runs the JavaScript
+syntax checks. These are source/contract checks, not a screenshot-based proof of final WebView2
+geometry; use the CDP visual probe in §4.1 to capture the rendered app at both supported window sizes.
+
 ## 5. Offline servers
 
 ### 5.1 A premium server says so
