@@ -113,6 +113,14 @@ test('Modrinth downloads are restricted to Fabric-compatible, checksum-verified 
 	assert.match(html, /third-party code loaded by Minecraft/i);
 });
 
+test('Modrinth project icons use only the official CDN and have a visual fallback', () => {
+	assert.match(app, /project\.iconUrl\.startsWith\('https:\/\/cdn\.modrinth\.com\/'\)/);
+	assert.match(app, /image\.addEventListener\('error'/);
+	assert.match(html, /img-src 'self' data: https:\/\/cdn\.modrinth\.com/);
+	assert.match(css, /\.catalog-project-icon img/);
+	assert.match(modsRust, /project\.icon_url\.filter\(\|url\| is_official_cdn_url\(url\)\)/);
+});
+
 test('the launcher never simulates FPS in its desktop UI', () => {
 	assert.doesNotMatch(app, /initFpsSplineGraph|fpsHistory|fps-spline-canvas/);
 	assert.doesNotMatch(html, /fps-spline-canvas|Live FPS curve|880\+ FPS peak target/i);
