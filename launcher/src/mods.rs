@@ -466,7 +466,7 @@ fn install_version_tree(
     if destination.exists() {
         return Err(format!(
             "The file {} already exists with different contents. It was left untouched.",
-            destination.file_name().unwrap_or_default().to_string_lossy()
+            destination.file_name().and_then(|value| value.to_str()).unwrap_or("unknown")
         ));
     }
 
