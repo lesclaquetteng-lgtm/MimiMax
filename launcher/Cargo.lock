@@ -26,6 +26,7 @@ dependencies = [
  "chrono",
  "getrandom 0.3.4",
  "md-5",
+ "zeroize",
  "serde",
  "serde_json",
  "ureq",
