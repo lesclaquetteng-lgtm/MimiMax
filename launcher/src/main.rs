@@ -554,6 +554,19 @@ fn command_logs(arguments: &[String]) -> Result<(), String> {
     }
 }
 
+/// Prevents a diagnostic launch command from exposing the current Microsoft access token.
+fn redact_access_token(arguments: &mut [String], access_token: &str) {
+    if access_token.is_empty() {
+        return;
+    }
+
+    for argument in arguments {
+        if argument.contains(access_token) {
+            *argument = argument.replace(access_token, "<redacted>");
+        }
+    }
+}
+
 fn command_command(arguments: &[String]) -> Result<(), String> {
     let mut launcher = Launcher::open();
     let flags = Flags::parse(arguments);
@@ -565,16 +578,7 @@ fn command_command(arguments: &[String]) -> Result<(), String> {
     let options = launcher.launch_options_for(account.as_deref(), version.as_deref(), server.as_deref())?;
     let built = game::build_command(&options);
     let mut displayed_arguments = built.arguments.clone();
-
-    // This diagnostic command prints launch arguments. Never echo a live Microsoft access token
-    // into a terminal, shell history, CI log or copied support report.
-    if !options.access_token.is_empty() {
-        for argument in &mut displayed_arguments {
-            if argument.contains(&options.access_token) {
-                *argument = argument.replace(&options.access_token, "<redacted>");
-            }
-        }
-    }
+    redact_access_token(&mut displayed_arguments, &options.access_token);
 
     emit(&serde_json::json!({
         "ok": true,
@@ -882,4 +886,35 @@ fn read_lines() -> Vec<String> {
 #[allow(dead_code)]
 pub fn default_version() -> String {
     minecraft::VERSION_MANIFEST_URL.to_string()
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::redact_access_token;
+
+    #[test]
+    fn command_preview_redacts_tokens_embedded_in_arguments() {
+        let secret = "live-microsoft-access-token";
+        let mut arguments = vec![
+            "--username".to_string(),
+            "AetherTester".to_string(),
+            format!("--accessToken={secret}"),
+        ];
+
+        redact_access_token(&mut arguments, secret);
+
+        assert_eq!(arguments[2], "--accessToken=<redacted>");
+        assert!(!arguments.join(" ").contains(secret));
+    }
+
+    #[test]
+    fn command_preview_leaves_arguments_unchanged_without_a_token() {
+        let mut arguments = vec!["--username".to_string(), "OfflinePlayer".to_string()];
+        let original = arguments.clone();
+
+        redact_access_token(&mut arguments, "");
+
+        assert_eq!(arguments, original);
+    }
 }
