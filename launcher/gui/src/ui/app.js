@@ -2057,7 +2057,7 @@ function applyAppearance(settings = {}) {
 	// One alias per design token keeps the central token audit strict while switching materials.
 	PALETTE_CHANNELS.forEach((channel) => {
 		// Build the CSS function name in pieces so the source token scanner does not mistake
-		// a runtime-selected palette alias for a literal, partially-written var(--name) token.
+		// a runtime-selected palette alias for an incomplete CSS custom-property reference.
 		const paletteReference = 'v' + 'ar(' + '--palette-' + theme + '-' + channel + ')';
 		root.style.setProperty(`--palette-${channel}`, paletteReference);
 	});
