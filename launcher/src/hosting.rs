@@ -14,7 +14,7 @@ use std::io::{self, Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
 
@@ -143,24 +143,13 @@ fn free_port(preferred: u16) -> u16 {
         .unwrap_or(25565)
 }
 
-/// The password of RCON, from the clock and the process. It only guards a loopback port.
-fn random_password() -> String {
-    let nanos = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|duration| duration.as_nanos() as u64)
-        .unwrap_or(0);
+/// Generates a 192-bit RCON password using the operating system's CSPRNG.
+fn random_password() -> Result<String, String> {
+    let mut bytes = [0u8; 24];
+    getrandom::fill(&mut bytes)
+        .map_err(|error| format!("could not generate a secure RCON password: {}", error))?;
 
-    let mut state = nanos ^ ((std::process::id() as u64) << 32) ^ 0x9E37_79B9_7F4A_7C15;
-    let mut password = String::new();
-
-    for _ in 0..24 {
-        state ^= state << 13;
-        state ^= state >> 7;
-        state ^= state << 17;
-        password.push(char::from_digit((state % 16) as u32, 16).unwrap_or('0'));
-    }
-
-    password
+    Ok(bytes.iter().map(|byte| format!("{:02x}", byte)).collect())
 }
 
 /// One value of `server.properties`, on a single line.
@@ -239,20 +228,28 @@ pub fn create(
 
     let port = free_port(existing.as_ref().map(|server| server.port).unwrap_or(port));
     let rcon_port = free_port(existing.as_ref().map(|server| server.rcon_port).unwrap_or(0));
-    let password = existing
-        .as_ref()
-        .map(|_| server_password(&directory))
-        .unwrap_or_else(random_password);
-
     let properties_file = directory.join("server.properties");
+    let stored_password = server_password(&directory);
+    let password = if stored_password.is_empty() {
+        random_password()?
+    } else {
+        stored_password
+    };
+
     if !properties_file.exists() {
         let motd = motd.unwrap_or(name);
         let content = properties(motd, port, rcon_port, &password, max_players);
         write_atomic(&properties_file, &content)
             .map_err(|error| format!("could not write server.properties: {}", error))?;
-    } else if online_mode {
-        // A server that already exists keeps its world, but the mode is explicit in the request.
-        set_property(&properties_file, "online-mode", "true")?;
+    } else {
+        if online_mode {
+            // A server that already exists keeps its world, but the mode is explicit in the request.
+            set_property(&properties_file, "online-mode", "true")?;
+        }
+        // Migrate an old or incomplete configuration without replacing an existing secret.
+        if stored_password.is_empty() {
+            set_property(&properties_file, "rcon.password", &password)?;
+        }
     }
 
     let eula = directory.join("eula.txt");
@@ -783,6 +780,16 @@ mod tests {
     fn a_path_of_a_property_uses_slashes_and_escapes_spaces() {
         let path = Path::new("C:\\Users\\A B\\server.jar");
         assert_eq!(property_path(path), "C:/Users/A\\ B/server.jar");
+    }
+
+    #[test]
+    fn rcon_passwords_are_hex_encoded_and_have_192_bits() {
+        let first = random_password().expect("the OS random source is available");
+        let second = random_password().expect("the OS random source is available");
+
+        assert_eq!(first.len(), 48);
+        assert!(first.bytes().all(|byte| byte.is_ascii_hexdigit()));
+        assert_ne!(first, second);
     }
 
     #[test]
