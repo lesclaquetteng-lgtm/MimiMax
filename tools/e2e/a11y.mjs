@@ -232,6 +232,49 @@ await waitFor(
 	'the original theme to be restored'
 );
 
+// The dashboard must display the Java runtime resolved by the Rust core, not infer it from an
+// empty custom path. Both the dashboard and Settings must use the same diagnostic object.
+const runtime = await evaluate('window.aether.info().then((info) => info.javaRuntime)');
+const displayedJava = await evaluate(`({
+	label: document.querySelector('#dashboard-java').textContent,
+	help: document.querySelector('#java-runtime-status').textContent,
+	stateCompatible: window.aetherState.javaRuntime?.compatible
+})`);
+const expectedJavaLabel = runtime?.compatible
+	? 'Java ' + runtime.majorVersion + ' · Ready'
+	: runtime?.available ? 'Java version too old' : 'Java not found';
+record('the Java dashboard reflects Rust runtime detection',
+	displayedJava.label === expectedJavaLabel && displayedJava.stateCompatible === runtime?.compatible,
+	JSON.stringify({ runtime, displayedJava }));
+
+// A saved server appears on Home and its Join action uses the same Rust launch path as the
+// full Servers page. The test address is loopback and is removed immediately afterwards.
+const quickServer = await evaluate(`window.aether.servers.add('Aether QA', '127.0.0.1:25570')`);
+record('a saved server can be created through the Rust command bridge', quickServer?.ok === true, quickServer?.error || '');
+await evaluate(`document.querySelector('.nav-item[data-page="servers"]').click(), true`);
+await waitFor(
+	`document.querySelector('#quick-servers .quick-server-row .quick-server-copy strong')?.textContent === 'Aether QA'`,
+	'the saved server to appear in Quick Connect'
+);
+const quickRow = await evaluate(`(() => {
+	const row = document.querySelector('#quick-servers .quick-server-row');
+	return {
+		name: row?.querySelector('strong')?.textContent,
+		address: row?.querySelector('.quick-server-copy small')?.textContent,
+		joinDisabled: row?.querySelector('button')?.disabled
+	};
+})()`);
+record('Quick Connect displays a saved server and enables Join for the active account',
+	quickRow.name === 'Aether QA' && quickRow.address === '127.0.0.1:25570' && quickRow.joinDisabled === false,
+	JSON.stringify(quickRow));
+const removeQuickServer = await evaluate(`window.aether.servers.remove('127.0.0.1:25570')`);
+record('a Quick Connect test server can be removed cleanly', removeQuickServer?.ok === true, removeQuickServer?.error || '');
+await evaluate(`document.querySelector('#quick-servers-open').click(), true`);
+await waitFor(
+	`!Array.from(document.querySelectorAll('#quick-servers .quick-server-row .quick-server-copy strong')).some((node) => node.textContent === 'Aether QA')`,
+	'the removed server to disappear from Quick Connect'
+);
+
 socket.close();
 await sleep(200);
 const failed = results.filter((entry) => !entry.ok).length;
