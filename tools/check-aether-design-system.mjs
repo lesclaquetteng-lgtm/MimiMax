@@ -14,7 +14,8 @@ function cssColor(name){
 function javaValues(id){
  const start=java.indexOf(`${id.toUpperCase()}("${id}"`);
  assert.notEqual(start,-1,`Missing Java palette ${id}`);
- const end=java.indexOf("));",start);
+ let end=java.indexOf(")),",start);
+ if(end===-1)end=java.indexOf("));",start);
  assert.notEqual(end,-1,`Palette ${id} is not closed`);
  return [...java.slice(start,end).matchAll(/0xFF([0-9A-Fa-f]{6})/g)].map(m=>`#${m[1]}`.toUpperCase());
 }
