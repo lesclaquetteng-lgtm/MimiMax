@@ -650,4 +650,62 @@ mod tests {
 
         fs::remove_dir_all(&root).ok();
     }
+
+    #[test]
+    fn modrinth_search_queries_are_encoded_as_single_query_components() {
+        assert_eq!(encode_query_component("Sodium & Iris"), "Sodium%20%26%20Iris");
+        assert_eq!(encode_query_component("1.21.11"), "1.21.11");
+        assert_eq!(encode_query_component(r#"[["project_type:mod"]]"#), "%5B%5B%22project_type%3Amod%22%5D%5D");
+    }
+
+    #[test]
+    fn only_the_official_modrinth_cdn_is_accepted_for_mod_downloads() {
+        assert!(is_official_cdn_url("https://cdn.modrinth.com/data/abc/file.jar"));
+        assert!(!is_official_cdn_url("http://cdn.modrinth.com/data/abc/file.jar"));
+        assert!(!is_official_cdn_url("https://cdn.modrinth.com.evil.test/file.jar"));
+        assert!(!is_official_cdn_url("https://evil.test/cdn.modrinth.com/file.jar"));
+        assert!(!is_official_cdn_url("https://user@cdn.modrinth.com/file.jar"));
+    }
+
+    #[test]
+    fn modrinth_project_ids_versions_and_filename_components_are_validated() {
+        assert!(valid_project_id("A1b2C3d4"));
+        assert!(valid_project_id("sodium_1234"));
+        assert!(!valid_project_id("../sodium"));
+        assert!(!valid_project_id("x"));
+        assert!(valid_game_version("1.21.11").is_ok());
+        assert!(valid_game_version("26.1").is_ok());
+        assert!(valid_game_version("../1.21").is_err());
+        assert!(valid_game_version("1.21.11?facets=*").is_err());
+        assert!(safe_filename_component("1.21.11-0.6.0+fabric").is_ok());
+        assert!(safe_filename_component("../escape").is_err());
+        assert!(safe_filename_component(".hidden").is_err());
+    }
+
+    #[test]
+    fn required_dependencies_are_parsed_without_treating_optional_mods_as_required() {
+        let version: CatalogVersion = serde_json::from_str(r#"{
+            "id": "version01",
+            "project_id": "project01",
+            "version_number": "1.0.0",
+            "game_versions": ["1.21.11"],
+            "loaders": ["fabric"],
+            "files": [{
+                "url": "https://cdn.modrinth.com/data/project01/file.jar",
+                "filename": "project.jar",
+                "primary": true,
+                "hashes": {"sha1": "0123456789012345678901234567890123456789"}
+            }],
+            "dependencies": [
+                {"project_id": "dependency1", "dependency_type": "required"},
+                {"project_id": "dependency2", "dependency_type": "optional"}
+            ]
+        }"#).unwrap();
+
+        assert_eq!(version.dependencies.len(), 2);
+        assert_eq!(version.dependencies[0].dependency_type.as_deref(), Some("required"));
+        assert_eq!(version.dependencies[1].dependency_type.as_deref(), Some("optional"));
+        assert_eq!(version.files[0].filename, "project.jar");
+    }
+
 }
