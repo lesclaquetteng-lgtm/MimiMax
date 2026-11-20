@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 	<meta charset="utf-8" />
-	<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost" />
+	<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data: https://cdn.modrinth.com; connect-src 'self' ipc: http://ipc.localhost" />
 	<title>Aether Launcher</title>
 	<link rel="stylesheet" href="tokens.css" />
 	<link rel="stylesheet" href="styles.css" />
@@ -284,33 +284,60 @@
 			<section class="page" data-page="mods">
 				<header class="page-header">
 					<h1>Mods</h1>
-					<p>The jars of the mods folder. A disabled mod stays on the disk and is renamed with a
-					<code>.disabled</code> suffix, so nothing has to be downloaded again.</p>
+					<p>Manage your installed mods or discover Fabric mods for the Minecraft version selected in your profile.</p>
 				</header>
-				<div class="card">
-					<div class="card-head">
-						<h2 class="card-title">Installed mods</h2>
-						<div class="actions actions--tight">
-							<span class="badge" id="mods-count">0 mods</span>
-							<button class="btn btn--ghost" id="btn-mods-refresh">Refresh</button>
-							<button class="btn btn--ghost" id="btn-mods-folder">Open folder</button>
-						</div>
-					</div>
-					<div class="mods-toolbar">
-						<label class="mods-search-wrap">
-							<span class="sr-only">Search installed mods</span>
-							<input type="search" id="mods-search" class="input" placeholder="Search your mods…" autocomplete="off" />
-						</label>
-						<select id="mods-filter" class="input mods-filter" aria-label="Filter mods">
-							<option value="all">All mods</option>
-							<option value="enabled">Enabled</option>
-							<option value="disabled">Disabled</option>
-						</select>
-					</div>
-					<p class="list-summary" id="mods-summary" aria-live="polite"></p>
-					<div id="mods-table" class="mod-table"></div>
-					<p class="log-path" id="mods-path"></p>
+				<div class="mods-tabs" role="tablist" aria-label="Mods library">
+					<button class="mods-tab is-active" id="mods-tab-installed" type="button" role="tab" aria-selected="true" aria-controls="mods-installed-panel">Installed <span id="mods-tab-count">0</span></button>
+					<button class="mods-tab" id="mods-tab-discover" type="button" role="tab" aria-selected="false" aria-controls="mods-discover-panel">Discover <span class="mods-tab-tag">MODRINTH</span></button>
 				</div>
+				<div id="mods-installed-panel" role="tabpanel" aria-labelledby="mods-tab-installed">
+					<div class="card">
+						<div class="card-head">
+							<h2 class="card-title">Installed mods</h2>
+							<div class="actions actions--tight">
+								<span class="badge" id="mods-count">0 mods</span>
+								<button class="btn btn--ghost" id="btn-mods-refresh">Refresh</button>
+								<button class="btn btn--ghost" id="btn-mods-folder">Open folder</button>
+							</div>
+						</div>
+						<div class="mods-toolbar">
+							<label class="mods-search-wrap">
+								<span class="sr-only">Search installed mods</span>
+								<input type="search" id="mods-search" class="input" placeholder="Search your mods…" autocomplete="off" />
+							</label>
+							<select id="mods-filter" class="input mods-filter" aria-label="Filter mods">
+								<option value="all">All mods</option>
+								<option value="enabled">Enabled</option>
+								<option value="disabled">Disabled</option>
+							</select>
+						</div>
+						<p class="list-summary" id="mods-summary" aria-live="polite"></p>
+						<div id="mods-table" class="mod-table"></div>
+						<p class="log-path" id="mods-path"></p>
+					</div>
+				</div>
+				<div id="mods-discover-panel" role="tabpanel" aria-labelledby="mods-tab-discover" hidden>
+					<div class="card mods-library-card">
+						<div class="mods-library-heading">
+							<div><h2 class="card-title">Modrinth library</h2><p class="setup-intro" id="mods-library-version">Compatible Fabric mods for your active profile.</p></div>
+							<span class="mods-source-mark">MODRINTH</span>
+						</div>
+					<div class="mods-library-search">
+						<label class="mods-search-wrap">
+							<span class="sr-only">Search the Modrinth library</span>
+							<input type="search" id="mods-library-search" class="input" maxlength="120" placeholder="Search Sodium, Iris, Xaero’s Minimap…" autocomplete="off" />
+						</label>
+						<button class="btn btn--primary" id="btn-mods-library-search" type="button">Search</button>
+					</div>
+					<p class="list-summary" id="mods-library-summary" aria-live="polite">Search for a mod to install it into this profile.</p>
+					<div class="mods-library-progress" id="mods-library-progress" hidden>
+						<span class="mods-library-progress-dot"></span><span id="mods-library-progress-text">Preparing download…</span>
+						<div class="mods-library-progress-track"><span id="mods-library-progress-fill"></span></div>
+					</div>
+					<div class="mods-library-grid" id="mods-library-results"></div>
+					<p class="mods-library-footnote">Downloads come from Modrinth. Required dependencies are installed automatically and every JAR is checksum-verified before it is added.</p>
+				</div>
+			</div>
 			</section>
 
 			<!-- =========================== SERVERS ========================== -->
