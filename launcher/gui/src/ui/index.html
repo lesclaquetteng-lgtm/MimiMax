@@ -70,19 +70,17 @@
 				<div class="gate-content">
 					<header class="gate-header">
 						<div class="gate-heading">
-							<span class="gate-overline">AETHER / PERSONAL GAME ENVIRONMENT</span>
-							<h1>Leave the launcher.<br /><em>Enter your world.</em></h1>
-							<p class="gate-intro">Everything is where it should be. Your world is one step away.</p>
+							<span class="gate-overline">AETHER / THE FOLD</span>
 						</div>
 						<div class="gate-status" id="status-pill" aria-live="polite">
 							<span class="gate-status-mark" aria-hidden="true"></span>
 							<span id="status-text">Ready</span>
+							<span id="gate-state-line" class="gate-visually-hidden">READY WHEN YOU ARE</span>
 						</div>
 					</header>
 
 					<div class="gate-stage">
 						<div class="gate-art" aria-label="The Fold, Aether's identity mark">
-							<div class="gate-art-coordinate">FORM 001 <span> / </span> THE FOLD</div>
 							<svg class="gate-emblem" viewBox="0 0 360 360" role="img" aria-labelledby="gate-emblem-title">
 								<title id="gate-emblem-title">Aether Fold</title>
 								<defs>
@@ -105,15 +103,9 @@
 								<path class="fold-edge" d="m171 30 10 0M67 292h226M132 292l43-105h58l44 105" />
 								<path class="fold-cut" d="m173 128 31 73h-27l-19-45z" />
 							</svg>
-							<div class="gate-art-caption"><span>ANOTHER WAY IN</span><span>EST. AETHER</span></div>
 						</div>
 
 						<div class="gate-action-column">
-							<div class="gate-state-copy">
-								<span class="gate-state-index">01 — READY STATE</span>
-								<strong id="gate-state-line">READY WHEN YOU ARE</strong>
-								<span class="gate-state-rule"></span>
-							</div>
 							<div class="gate-player">
 								<div class="dock-avatar gate-avatar" id="dock-avatar">?</div>
 								<div class="gate-player-copy">
@@ -138,10 +130,6 @@
 							</details>
 
 							<div class="gate-action-bottom">
-								<div class="gate-prompt">
-									<span>YOUR NEXT WORLD IS WAITING</span>
-									<span>PRESS TO CONTINUE <b>↓</b></span>
-								</div>
 								<div class="progress gate-progress" id="install-progress" hidden>
 									<div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
 									<span class="progress-label" id="progress-label">Preparing…</span>
@@ -211,15 +199,11 @@
 								<div class="gate-runtime" aria-hidden="true">
 									<span id="dock-version">1.21.11</span>
 									<span id="dock-memory">4096 MB</span>
+									<pre class="console" id="console" aria-live="polite"></pre>
 								</div>
 							</div>
 						</details>
-						<details class="gate-disclosure gate-output-disclosure">
-							<summary><span>DIAGNOSTICS</span><span class="gate-disclosure-value">SESSION OUTPUT</span></summary>
-							<div class="gate-disclosure-content">
-								<pre class="console" id="console" aria-live="polite" data-empty="The output of the game appears here when you launch it."></pre>
-							</div>
-						</details>
+						
 					</footer>
 				</div>
 			</section>
