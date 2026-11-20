@@ -298,6 +298,26 @@
 						<button class="btn btn--ghost" id="btn-mods-folder">Open folder</button>
 					</div>
 				</header>
+				<div class="block catalog-block">
+					<div class="block-head">
+						<div>
+							<h2 class="block-title">Discover Fabric mods</h2>
+							<span class="block-subtitle" id="mods-catalog-version">Search Modrinth for the active Minecraft profile</span>
+						</div>
+						<span class="badge">MODRINTH</span>
+					</div>
+					<div class="library-toolbar">
+						<label class="library-search">
+							<span class="sr-only">Search Modrinth Fabric mods</span>
+							<input type="search" id="mods-catalog-search" class="input" maxlength="96" placeholder="Search Sodium, Iris, minimap…" autocomplete="off" />
+						</label>
+						<button class="btn btn--primary" id="mods-catalog-search-button" type="button">Search</button>
+					</div>
+					<p class="library-summary" id="mods-catalog-status" aria-live="polite">Search the Modrinth catalog for Fabric mods compatible with your selected profile.</p>
+					<div id="mods-catalog-results" class="mods-catalog-results"></div>
+					<p class="catalog-safety-note">Mods are third-party code loaded by Minecraft. Check the project and its permissions before installing. Downloads are verified by SHA-1 in the Rust core.</p>
+				</div>
+
 				<div class="block">
 					<div class="block-head">
 						<h2 class="block-title">Installed mods</h2>
