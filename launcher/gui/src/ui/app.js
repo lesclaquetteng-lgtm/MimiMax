@@ -8,7 +8,7 @@ const state = {
 	versions: [],
 	loaders: [],
 	mods: [],
-	modsCatalog: { projects: [], query: '', gameVersion: null, installing: null },
+	modsCatalog: { projects: [], query: '', gameVersion: null, installing: null, progress: null },
 	profiles: { profiles: [], activeFor: null },
 	servers: { servers: [], pings: {} },
 	hosts: [],
@@ -699,6 +699,41 @@ async function searchModCatalog() {
 	}
 }
 
+function handleModCatalogProgress(progress) {
+	if (!state.modsCatalog.installing || !progress) return;
+	state.modsCatalog.progress = progress;
+
+	const rootProject = state.modsCatalog.projects.find(
+		(entry) => entry.projectId === state.modsCatalog.installing
+	);
+	const isRoot = progress.projectId === state.modsCatalog.installing;
+	const label = isRoot ? (rootProject?.title || progress.projectId) : progress.projectId;
+	const stateLabel = progress.state === 'resolving'
+		? 'Resolving required dependencies'
+		: progress.state === 'downloading'
+			? 'Downloading and verifying'
+			: progress.state === 'skipped'
+				? 'Already installed'
+				: progress.state === 'installed'
+					? 'Verified and installed'
+					: progress.state;
+
+	const percent = progress.total > 0
+		? Math.min(100, Math.round((progress.received / progress.total) * 100))
+		: (progress.state === 'installed' || progress.state === 'skipped' ? 100 : 0);
+	const amount = progress.total > 0
+		? ' · ' + formatBytes(progress.received) + ' / ' + formatBytes(progress.total)
+		: '';
+
+	$('#mods-catalog-progress').hidden = false;
+	$('#mods-catalog-progress-label').textContent = label + ' · ' + stateLabel + amount;
+	$('#mods-catalog-progress-percent').textContent = percent + '%';
+	$('#mods-catalog-progress-fill').style.width = percent + '%';
+	$('#mods-catalog-status').textContent = progress.state === 'resolving'
+		? 'Preparing ' + label + ' and checking required dependencies…'
+		: 'Installing ' + label + ' · SHA-1 verification is performed before the JAR is accepted.';
+}
+
 async function installCatalogMod(project) {
 	const gameVersion = currentProfile().gameVersion;
 	if (state.modsCatalog.gameVersion !== gameVersion) {
@@ -708,12 +743,18 @@ async function installCatalogMod(project) {
 	if (state.modsCatalog.installing) return;
 
 	state.modsCatalog.installing = project.projectId;
+	state.modsCatalog.progress = { projectId: project.projectId, state: 'resolving', received: 0, total: 0 };
+	$('#mods-catalog-progress').hidden = false;
+	$('#mods-catalog-progress-label').textContent = 'Resolving ' + project.title + ' and required dependencies…';
+	$('#mods-catalog-progress-percent').textContent = '0%';
+	$('#mods-catalog-progress-fill').style.width = '0%';
 	renderModCatalog();
 
 	try {
 		const result = await api.mods.install(project.projectId, gameVersion);
 		if (!result?.ok) {
 			toast(result?.error || 'The mod could not be installed.', 'error');
+			$('#mods-catalog-status').textContent = result?.error || 'The mod could not be installed.';
 			return;
 		}
 
@@ -728,11 +769,15 @@ async function installCatalogMod(project) {
 				: project.title + ' installed' + (dependencyCount ? ' with ' + dependencyCount + ' required dependenc' + (dependencyCount === 1 ? 'y' : 'ies') : '') + '. Restart Minecraft to load it.',
 			'success'
 		);
-		$('#mods-catalog-status').textContent = 'Installed ' + project.title + ' for Minecraft ' + gameVersion + '. Restart the game to load new mods.';
+		$('#mods-catalog-status').textContent = 'Installed ' + project.title + ' and verified ' + addedCount + ' JAR(s) for Minecraft ' + gameVersion + '. Restart the game to load new mods.';
 	} catch (error) {
 		toast(error.message || 'The mod could not be installed.', 'error');
+		$('#mods-catalog-status').textContent = error.message || 'The mod could not be installed.';
 	} finally {
 		state.modsCatalog.installing = null;
+		state.modsCatalog.progress = null;
+		$('#mods-catalog-progress').hidden = true;
+		$('#mods-catalog-progress-fill').style.width = '0%';
 		renderMods();
 		renderModCatalog();
 	}
@@ -2892,6 +2937,7 @@ async function init() {
 		$('#progress-label').textContent = `${progress.task} (${percent}%)`;
 		$('#progress-fill').style.width = `${percent}%`;
 	});
+	api.onModrinthProgress(handleModCatalogProgress);
 	api.onOptimisationProgress((progress) => {
 		if (!state.performance.installing) return;
 
