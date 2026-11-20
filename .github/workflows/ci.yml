@@ -74,6 +74,10 @@ jobs:
       # keeps an inherited value and nobody notices until a screen looks wrong.
       - name: Check every custom property of the interface
         run: node tools/check-theme-tokens.mjs
+      - name: Validate launcher interface scripts
+        run: |
+          node --check launcher/gui/src/ui/app.js
+          node --check launcher/gui/src/ui/bridge.js
 
   fabric-mod:
     name: Fabric client
