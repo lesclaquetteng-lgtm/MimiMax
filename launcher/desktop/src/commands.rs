@@ -262,6 +262,36 @@ pub async fn mods_list(app: AppHandle) -> Value {
 }
 
 #[tauri::command(rename_all = "snake_case")]
+pub async fn mods_search(app: AppHandle, query: String, game_version: String) -> Value {
+	core::run_core(
+		app,
+		vec![
+			"mods".to_string(),
+			"search".to_string(),
+			query,
+			"--game-version".to_string(),
+			game_version,
+		],
+	)
+	.await
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn mods_install(app: AppHandle, project_id: String, game_version: String) -> Value {
+	core::run_core(
+		app,
+		vec![
+			"mods".to_string(),
+			"install".to_string(),
+			project_id,
+			"--game-version".to_string(),
+			game_version,
+		],
+	)
+	.await
+}
+
+#[tauri::command(rename_all = "snake_case")]
 pub async fn mods_toggle(app: AppHandle, name: String, enabled: bool) -> Value {
 	core::run_core(
 		app,
