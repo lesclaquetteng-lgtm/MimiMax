@@ -290,6 +290,38 @@ fn invalid_path(kind: &str, value: &str) -> InstallError {
     ))
 }
 
+/// Asset object files are addressed by their content hash, not by their logical name.
+/// A vanilla index can list the same hash under multiple names; downloading those entries in
+/// parallel would make workers write the same destination and temporary file at the same time.
+fn unique_asset_objects(
+    objects: impl IntoIterator<Item = AssetObject>,
+) -> Result<Vec<AssetObject>, InstallError> {
+    let mut sizes = std::collections::HashMap::<String, u64>::new();
+    let mut unique = Vec::new();
+
+    for object in objects {
+        if !crate::minecraft::is_sha1_hash(&object.hash) {
+            return Err(invalid_path("asset object SHA-1", &object.hash));
+        }
+
+        match sizes.get(&object.hash) {
+            Some(size) if *size != object.size => {
+                return Err(invalid_path(
+                    "asset duplicate hash size",
+                    &format!("{} has conflicting sizes {} and {}", object.hash, size, object.size),
+                ));
+            }
+            Some(_) => continue,
+            None => {
+                sizes.insert(object.hash.clone(), object.size);
+                unique.push(object);
+            }
+        }
+    }
+
+    Ok(unique)
+}
+
 /// Stops the installation when the player asked for it.
 fn check_cancelled(cancel: &AtomicBool) -> Result<(), InstallError> {
     if cancel.load(Ordering::Relaxed) {
@@ -344,16 +376,15 @@ fn install_assets(
         }
     };
 
-    let objects: Vec<AssetObject> = index.objects.into_values().collect();
+    // The object path is derived from its hash, so duplicated names in the index must become
+    // one download job. Otherwise two workers can race over the same destination and partial file.
+    let objects = unique_asset_objects(index.objects.into_values())?;
     let total: u64 = objects.iter().map(|object| object.size).sum();
 
     // The files that are already there are not downloaded again.
     let mut received = 0u64;
     let mut pending: Vec<AssetObject> = Vec::new();
     for object in objects {
-        if !crate::minecraft::is_sha1_hash(&object.hash) {
-            return Err(invalid_path("asset object SHA-1", &object.hash));
-        }
         let destination = paths.assets.join(asset_path(&object.hash));
         let present = fs::metadata(&destination)
             .map(|metadata| metadata.len() == object.size)
@@ -748,6 +779,45 @@ mod tests {
     /// The log tests share one counter of written bytes, they run one at a time and start from
     /// zero so the moment of a size check is known exactly.
     static LOG_WRITER_LOCK: Mutex<()> = Mutex::new(());
+
+    #[test]
+    fn duplicate_asset_hashes_are_downloaded_only_once() {
+        let hash = "0123456789abcdef0123456789abcdef01234567".to_string();
+        let objects = vec![
+            AssetObject { hash: hash.clone(), size: 128 },
+            AssetObject { hash: hash.clone(), size: 128 },
+            AssetObject {
+                hash: "abcdef0123456789abcdef0123456789abcdef01".to_string(),
+                size: 64,
+            },
+        ];
+
+        let unique = unique_asset_objects(objects).unwrap();
+
+        assert_eq!(unique.len(), 2);
+        assert_eq!(unique.iter().map(|object| object.size).sum::<u64>(), 192);
+    }
+
+    #[test]
+    fn duplicate_asset_hashes_with_conflicting_sizes_are_rejected() {
+        let hash = "0123456789abcdef0123456789abcdef01234567".to_string();
+        let objects = vec![
+            AssetObject { hash: hash.clone(), size: 128 },
+            AssetObject { hash, size: 256 },
+        ];
+
+        assert!(unique_asset_objects(objects).is_err());
+    }
+
+    #[test]
+    fn asset_hashes_are_validated_before_deduplication() {
+        let objects = vec![AssetObject {
+            hash: "../outside".to_string(),
+            size: 1,
+        }];
+
+        assert!(unique_asset_objects(objects).is_err());
+    }
 
     #[test]
     fn library_destination_rejects_remote_path_traversal() {
