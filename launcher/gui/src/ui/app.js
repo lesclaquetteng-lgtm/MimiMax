@@ -2509,25 +2509,40 @@ function newProfileModal() {
 
 	versionSelect.addEventListener('change', async () => {
 		const selectedVersion = versionSelect.value;
-		const result = await api.versions.loaders(selectedVersion);
-		if (!result?.ok) {
-			toast(result?.error || 'Fabric versions could not be loaded.', 'error');
-			return;
-		}
+		loaderSelect.disabled = true;
 		loaderSelect.replaceChildren();
-		for (const loader of result.loaders || []) {
-			const option = document.createElement('option');
-			option.value = loader;
-			option.textContent = loader;
-			loaderSelect.appendChild(option);
+		const loading = document.createElement('option');
+		loading.value = '';
+		loading.textContent = 'Loading Fabric versions…';
+		loaderSelect.appendChild(loading);
+
+		try {
+			const result = await api.versions.loaders(selectedVersion);
+			if (!result?.ok) throw new Error(result?.error || 'Fabric versions could not be loaded.');
+			loaderSelect.replaceChildren();
+			for (const loader of result.loaders || []) {
+				const option = document.createElement('option');
+				option.value = loader;
+				option.textContent = loader;
+				loaderSelect.appendChild(option);
+			}
+			if (loaderSelect.options.length === 0) {
+				const unavailable = document.createElement('option');
+				unavailable.value = '';
+				unavailable.textContent = 'No Fabric loader for this version';
+				loaderSelect.appendChild(unavailable);
+			}
+			loaderSelect.value = loaderSelect.options[0].value;
+		} catch (error) {
+			loaderSelect.replaceChildren();
+			const unavailable = document.createElement('option');
+			unavailable.value = '';
+			unavailable.textContent = 'Fabric loader unavailable';
+			loaderSelect.appendChild(unavailable);
+			toast(error.message || 'Fabric versions could not be loaded.', 'error');
+		} finally {
+			loaderSelect.disabled = false;
 		}
-		if (loaderSelect.options.length === 0) {
-			const option = document.createElement('option');
-			option.value = source.loaderVersion;
-			option.textContent = source.loaderVersion + ' (saved profile)';
-			loaderSelect.appendChild(option);
-		}
-		loaderSelect.value = loaderSelect.options[0].value;
 	});
 }
 /** Deletes the profile shown in the selector, once the player confirmed it. */
