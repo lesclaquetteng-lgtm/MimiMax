@@ -119,6 +119,11 @@ pub fn install_version(
     // A cancelled installation does not touch the network at all.
     check_cancelled(cancel)?;
 
+    // This value becomes both a local JAR filename and part of the Fabric Maven URL.
+    if !crate::minecraft::is_safe_path_component(fabric_api_version) {
+        return Err(invalid_path("Fabric API version", fabric_api_version));
+    }
+
     let total_tasks = 5;
     let mut completed = 0usize;
 
@@ -180,7 +185,7 @@ pub fn install_version(
     for library in &libraries {
         check_cancelled(cancel)?;
 
-        let destination = paths.libraries.join(&library.path);
+        let destination = library_destination(paths, &library.path)?;
         let metrics = client.download(
             &library.url,
             &destination,
@@ -270,6 +275,66 @@ pub fn install_version(
     })
 }
 
+/// Builds a local destination only from validated metadata paths.
+fn library_destination(paths: &Paths, relative: &str) -> Result<PathBuf, InstallError> {
+    if !crate::minecraft::is_safe_relative_path(relative) {
+        return Err(invalid_path("library path", relative));
+    }
+    Ok(paths.libraries.join(relative))
+}
+
+fn invalid_path(kind: &str, value: &str) -> InstallError {
+    InstallError::Io(io::Error::new(
+        io::ErrorKind::InvalidInput,
+        format!("unsafe {kind} from remote metadata: {value}"),
+    ))
+}
+
+/// Asset object files are addressed by their content hash, not by their logical name.
+/// A vanilla index can list the same hash under multiple names; downloading those entries in
+/// parallel would make workers write the same destination and temporary file at the same time.
+fn unique_asset_objects(
+    objects: impl IntoIterator<Item = AssetObject>,
+) -> Result<Vec<AssetObject>, InstallError> {
+    let mut sizes = std::collections::HashMap::<String, u64>::new();
+    let mut unique = Vec::new();
+
+    for mut object in objects {
+        if !crate::minecraft::is_sha1_hash(&object.hash) {
+            return Err(invalid_path("asset object SHA-1", &object.hash));
+        }
+
+        // SHA-1 is case-insensitive. Canonicalizing prevents duplicate paths/checksum mismatches
+        // when an index repeats one digest with different hexadecimal letter casing.
+        object.hash.make_ascii_lowercase();
+
+        match sizes.get(&object.hash) {
+            Some(size) if *size != object.size => {
+                return Err(invalid_path(
+                    "asset duplicate hash size",
+                    &format!("{} has conflicting sizes {} and {}", object.hash, size, object.size),
+                ));
+            }
+            Some(_) => continue,
+            None => {
+                sizes.insert(object.hash.clone(), object.size);
+                unique.push(object);
+            }
+        }
+    }
+
+    Ok(unique)
+}
+
+/// Adds remote asset sizes without allowing a malformed index to wrap the progress total.
+fn total_asset_size(objects: &[AssetObject]) -> Result<u64, InstallError> {
+    objects.iter().try_fold(0u64, |total, object| {
+        total.checked_add(object.size).ok_or_else(|| {
+            invalid_path("asset index total size", "the sum exceeds the u64 range")
+        })
+    })
+}
+
 /// Stops the installation when the player asked for it.
 fn check_cancelled(cancel: &AtomicBool) -> Result<(), InstallError> {
     if cancel.load(Ordering::Relaxed) {
@@ -294,6 +359,9 @@ fn install_assets(
         None => return Ok(()),
     };
 
+    if !crate::minecraft::is_safe_path_component(&index_id) {
+        return Err(invalid_path("asset index identifier", &index_id));
+    }
     let index_file = paths.asset_indexes.join(format!("{}.json", index_id));
     let index = match read_asset_index(&index_file) {
         Some(index) => index,
@@ -321,8 +389,10 @@ fn install_assets(
         }
     };
 
-    let objects: Vec<AssetObject> = index.objects.into_values().collect();
-    let total: u64 = objects.iter().map(|object| object.size).sum();
+    // The object path is derived from its hash, so duplicated names in the index must become
+    // one download job. Otherwise two workers can race over the same destination and partial file.
+    let objects = unique_asset_objects(index.objects.into_values())?;
+    let total = total_asset_size(&objects)?;
 
     // The files that are already there are not downloaded again.
     let mut received = 0u64;
@@ -396,6 +466,11 @@ fn download_assets(
     mut on_progress: impl FnMut(u64, u64),
 ) -> Result<(), InstallError> {
     check_cancelled(cancel)?;
+    for object in pending {
+        if !crate::minecraft::is_sha1_hash(&object.hash) {
+            return Err(invalid_path("asset object SHA-1", &object.hash));
+        }
+    }
 
     let workers = ASSET_CONCURRENCY.min(pending.len()).max(1);
 
@@ -515,7 +590,7 @@ fn install_natives(
 
     for library in libraries.iter().filter(|entry| entry.native) {
         check_cancelled(cancel)?;
-        let destination = paths.libraries.join(&library.path);
+        let destination = library_destination(paths, &library.path)?;
         let metrics = client.download(
             &library.url,
             &destination,
@@ -548,13 +623,12 @@ fn extract_zip(bytes: &[u8], destination: &Path) -> Result<(), InstallError> {
             continue;
         }
 
-        let name = entry.name().to_string();
-        let target = destination.join(&name);
-
-        // Protection against the zip slip vulnerability.
-        if !target.starts_with(destination) {
+        // Reject absolute paths, parent-directory escapes and NUL bytes before
+        // joining the entry to the extraction root.
+        let Some(name) = entry.enclosed_name() else {
             continue;
-        }
+        };
+        let target = destination.join(name);
 
         if let Some(parent) = target.parent() {
             fs::create_dir_all(parent)?;
@@ -637,6 +711,9 @@ fn format_download(name: &str, report: &DownloadReport) -> String {
 
 /// Reads the description of a version from the disk.
 pub fn read_version_json(paths: &Paths, version: &str) -> Option<VersionJson> {
+    if !crate::minecraft::is_safe_path_component(version) {
+        return None;
+    }
     let content = fs::read_to_string(
         paths
             .versions
@@ -715,6 +792,120 @@ mod tests {
     /// The log tests share one counter of written bytes, they run one at a time and start from
     /// zero so the moment of a size check is known exactly.
     static LOG_WRITER_LOCK: Mutex<()> = Mutex::new(());
+
+    #[test]
+    fn duplicate_asset_hashes_are_downloaded_only_once() {
+        let hash = "0123456789abcdef0123456789abcdef01234567".to_string();
+        let objects = vec![
+            AssetObject { hash: hash.clone(), size: 128 },
+            AssetObject { hash: hash.clone(), size: 128 },
+            AssetObject {
+                hash: "abcdef0123456789abcdef0123456789abcdef01".to_string(),
+                size: 64,
+            },
+        ];
+
+        let unique = unique_asset_objects(objects).unwrap();
+
+        assert_eq!(unique.len(), 2);
+        assert_eq!(unique.iter().map(|object| object.size).sum::<u64>(), 192);
+    }
+
+    #[test]
+    fn asset_hashes_with_different_hex_case_are_canonicalized_and_deduplicated() {
+        let lower = "abcdef0123456789abcdef0123456789abcdef01".to_string();
+        let upper = lower.to_ascii_uppercase();
+        let objects = vec![
+            AssetObject { hash: lower.clone(), size: 64 },
+            AssetObject { hash: upper, size: 64 },
+        ];
+
+        let unique = unique_asset_objects(objects).unwrap();
+
+        assert_eq!(unique.len(), 1);
+        assert_eq!(unique[0].hash, lower);
+    }
+
+    #[test]
+    fn duplicate_asset_hashes_with_conflicting_sizes_are_rejected() {
+        let hash = "0123456789abcdef0123456789abcdef01234567".to_string();
+        let objects = vec![
+            AssetObject { hash: hash.clone(), size: 128 },
+            AssetObject { hash, size: 256 },
+        ];
+
+        assert!(unique_asset_objects(objects).is_err());
+    }
+
+    #[test]
+    fn asset_progress_total_is_checked_for_overflow() {
+        let objects = vec![
+            AssetObject {
+                hash: "0123456789abcdef0123456789abcdef01234567".to_string(),
+                size: u64::MAX,
+            },
+            AssetObject {
+                hash: "abcdef0123456789abcdef0123456789abcdef01".to_string(),
+                size: 1,
+            },
+        ];
+
+        assert!(total_asset_size(&objects).is_err());
+        assert_eq!(
+            total_asset_size(&objects[..1]).unwrap(),
+            u64::MAX
+        );
+    }
+
+    #[test]
+    fn asset_hashes_are_validated_before_deduplication() {
+        let objects = vec![AssetObject {
+            hash: "../outside".to_string(),
+            size: 1,
+        }];
+
+        assert!(unique_asset_objects(objects).is_err());
+    }
+
+    #[test]
+    fn library_destination_rejects_remote_path_traversal() {
+        let root = std::env::temp_dir().join(format!("aether-library-path-{}", std::process::id()));
+        let paths = test_paths(&root);
+
+        assert!(library_destination(&paths, "org/example/library/1.0/library-1.0.jar").is_ok());
+        assert!(library_destination(&paths, "../outside.jar").is_err());
+        assert!(library_destination(&paths, "org/../../outside.jar").is_err());
+        assert!(library_destination(&paths, "C:/outside.jar").is_err());
+
+        fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn zip_extraction_rejects_paths_that_escape_the_destination() {
+        let mut writer = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+        let options = zip::write::SimpleFileOptions::default();
+
+        writer.start_file("../outside.txt", options).unwrap();
+        writer.write_all(b"outside").unwrap();
+        writer.start_file("safe/inside.txt", options).unwrap();
+        writer.write_all(b"inside").unwrap();
+
+        let archive = writer.finish().unwrap().into_inner();
+        let root = std::env::temp_dir().join(format!("aether-zip-slip-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        let destination = root.join("natives");
+        fs::create_dir_all(&destination).unwrap();
+
+        extract_zip(&archive, &destination).expect("the archive can be extracted");
+
+        assert_eq!(fs::read(destination.join("safe/inside.txt")).unwrap(), b"inside");
+        assert!(
+            !root.join("outside.txt").exists(),
+            "an entry escaped the extraction directory"
+        );
+
+        fs::remove_dir_all(&root).ok();
+    }
 
     #[test]
     fn the_metrics_of_a_download_reach_the_log() {

@@ -1855,11 +1855,23 @@ function bindSettings() {
 	});
 	// The settings page edits the default profile, the play page has to show the new values.
 	maxMemory.addEventListener('change', async () => {
-		await api.settings.update({ maxMemory: Number(maxMemory.value) });
+		const result = await api.settings.update({ maxMemory: Number(maxMemory.value) });
+		if (result.ok) {
+			state.settings = { ...state.settings, ...(result.settings || {}), maxMemory: Number(maxMemory.value) };
+			applyAppearance(state.settings);
+		} else {
+			toast(result.error || 'Maximum memory could not be saved.', 'error');
+		}
 		await loadProfiles();
 	});
 	minMemory.addEventListener('change', async () => {
-		await api.settings.update({ minMemory: Number(minMemory.value) });
+		const result = await api.settings.update({ minMemory: Number(minMemory.value) });
+		if (result.ok) {
+			state.settings = { ...state.settings, ...(result.settings || {}), minMemory: Number(minMemory.value) };
+			applyAppearance(state.settings);
+		} else {
+			toast(result.error || 'Initial memory could not be saved.', 'error');
+		}
 		await loadProfiles();
 	});
 
@@ -1892,7 +1904,36 @@ function bindSettings() {
 		applyAccent(event.target.value);
 	});
 	$('#input-accent').addEventListener('change', (event) => {
-		api.settings.update({ accentColor: event.target.value });
+		saveAppearance({ accentColor: event.target.value });
+	});
+
+	$('#theme-choices').addEventListener('click', (event) => {
+		const button = event.target.closest('[data-theme]');
+		if (button) saveAppearance({ theme: button.dataset.theme });
+	});
+	$('#surface-choices').addEventListener('click', (event) => {
+		const button = event.target.closest('[data-surface]');
+		if (button) saveAppearance({ surfaceStyle: button.dataset.surface });
+	});
+	$('#density-choices').addEventListener('click', (event) => {
+		const button = event.target.closest('[data-density]');
+		if (button) saveAppearance({ uiDensity: button.dataset.density });
+	});
+	$('#navigation-choices').addEventListener('click', (event) => {
+		const button = event.target.closest('[data-navigation]');
+		if (button) saveAppearance({ navigationStyle: button.dataset.navigation });
+	});
+	$('#appearance-reset').addEventListener('click', () => {
+		openModal(
+			'Reset workspace design?',
+			'<p>The colourway, personal signal, surface, spacing and navigation will return to their defaults.</p>',
+			async () => {
+				if (await saveAppearance({ ...APPEARANCE_DEFAULTS })) {
+					toast('Workspace design restored.', 'success');
+				}
+			},
+			'Reset'
+		);
 	});
 
 	$('#input-fabric-api').addEventListener('change', (event) => {
@@ -1919,7 +1960,7 @@ function applySettings(settings) {
 	$('#input-fabric-api').value = settings.fabricApiVersion;
 	$('#check-g1').checked = settings.useG1gc !== false;
 
-	applyAccent(settings.accentColor);
+	applyAppearance(settings);
 	paintRanges();
 }
 
@@ -1953,15 +1994,15 @@ function themeColors() {
  * settings file that still carries one of them was never a choice, and it must not freeze the
  * interface on the old palette.
  */
-const LEGACY_ACCENT_DEFAULTS = new Set(['#6c5ce7', '#7c5cfc', '#3b82f6']);
+const LEGACY_ACCENT_DEFAULTS = new Set(['#6c5ce7', '#7c5cfc', '#3b82f6', '#e7e9ec']);
 
-function applyAccent(color) {
+function applyAccent(color, usePaletteDefault = false) {
 	const value = String(color ?? '').trim();
 	const root = document.documentElement.style;
 
 	themeCache = null;
 
-	if (!value || LEGACY_ACCENT_DEFAULTS.has(value.toLowerCase())) {
+	if (usePaletteDefault || !value) {
 		root.removeProperty('--accent-user');
 		root.removeProperty('--on-accent');
 		return;
@@ -1971,6 +2012,121 @@ function applyAccent(color) {
 	root.setProperty('--on-accent', inkFor(value));
 }
 
+const APPEARANCE_DEFAULTS = Object.freeze({
+	theme: 'graphite',
+	accentColor: '#E7E9EC',
+	uiDensity: 'roomy',
+	surfaceStyle: 'contour',
+	navigationStyle: 'wide'
+});
+
+const APPEARANCE_THEMES = Object.freeze({
+	graphite: 'GRAPHITE',
+	oxide: 'OXIDE',
+	field: 'FIELD',
+	blueprint: 'BLUEPRINT'
+});
+
+const THEME_SIGNATURE_ACCENTS = Object.freeze({
+	graphite: '#E7E9EC',
+	oxide: '#D99A69',
+	field: '#C0D18A',
+	blueprint: '#83C5DF'
+});
+
+const PALETTE_CHANNELS = Object.freeze([
+	'bg', 'bg-elevated', 'surface', 'surface-hover', 'surface-active',
+	'border', 'border-strong', 'accent',
+	'text-primary', 'text-secondary', 'text-muted', 'text-dim'
+]);
+
+function setChoiceState(selector, attribute, selected) {
+	$$(selector).forEach((button) => {
+		const active = button.dataset[attribute] === selected;
+		button.classList.toggle('is-active', active);
+		button.setAttribute('aria-pressed', String(active));
+	});
+}
+
+/** Applies the complete workspace identity without reloading the page. */
+function applyAppearance(settings = {}) {
+	const theme = Object.hasOwn(APPEARANCE_THEMES, settings.theme) ? settings.theme : APPEARANCE_DEFAULTS.theme;
+	const density = ['roomy', 'compact'].includes(settings.uiDensity) ? settings.uiDensity : APPEARANCE_DEFAULTS.uiDensity;
+	const surface = ['contour', 'draft', 'plain'].includes(settings.surfaceStyle) ? settings.surfaceStyle : APPEARANCE_DEFAULTS.surfaceStyle;
+	const navigation = ['wide', 'rail'].includes(settings.navigationStyle) ? settings.navigationStyle : APPEARANCE_DEFAULTS.navigationStyle;
+
+	const root = document.documentElement;
+	root.dataset.theme = theme;
+	root.dataset.density = density;
+	root.dataset.surface = surface;
+	root.dataset.navigation = navigation;
+
+	// One alias per design token keeps the central token audit strict while switching materials.
+	PALETTE_CHANNELS.forEach((channel) => {
+		// Build the CSS function name in pieces so the source token scanner does not mistake
+		// a runtime-selected palette alias for an incomplete CSS custom-property reference.
+		const paletteReference = 'v' + 'ar(' + '--palette-' + theme + '-' + channel + ')';
+		root.style.setProperty(`--palette-${channel}`, paletteReference);
+	});
+
+	setChoiceState('#theme-choices [data-theme]', 'theme', theme);
+	setChoiceState('#surface-choices [data-surface]', 'surface', surface);
+	setChoiceState('#density-choices [data-density]', 'density', density);
+	setChoiceState('#navigation-choices [data-navigation]', 'navigation', navigation);
+
+	const themeName = $('#studio-theme-name');
+	if (themeName) themeName.textContent = `${APPEARANCE_THEMES[theme]} / ${surface.toUpperCase()}`;
+	const densityName = $('#studio-preview-density');
+	if (densityName) densityName.textContent = `${density.toUpperCase()} · ${navigation === 'wide' ? 'WIDE NAVIGATION' : 'ICON RAIL'}`;
+	const memory = $('#studio-preview-memory');
+	if (memory) {
+		const amount = Number(settings.maxMemory) || 4096;
+		memory.innerHTML = `${amount} <i>MB</i>`;
+	}
+
+	if ($('#input-accent')) {
+		const storedAccent = String(settings.accentColor || '').trim();
+		const hasCustomAccent = /^#[0-9a-f]{6}$/i.test(storedAccent)
+			&& !LEGACY_ACCENT_DEFAULTS.has(storedAccent.toLowerCase());
+		const accent = hasCustomAccent ? storedAccent : THEME_SIGNATURE_ACCENTS[theme];
+		$('#input-accent').value = accent;
+		$('#output-accent').textContent = accent.toUpperCase();
+		applyAccent(accent, !hasCustomAccent);
+	}
+}
+
+/** Saves appearance changes sequentially so fast clicks cannot overwrite each other's settings. */
+let appearanceSaveQueue = Promise.resolve();
+
+function saveAppearance(patch) {
+	const commit = async () => {
+		const previous = { ...state.settings };
+		const optimistic = { ...previous, ...patch };
+		applyAppearance(optimistic);
+
+		try {
+			const result = await api.settings.update(patch);
+			if (!result || !result.ok) {
+				state.settings = previous;
+				applyAppearance(previous);
+				toast(result?.error || 'The appearance could not be saved.', 'error');
+				return false;
+			}
+			state.settings = { ...optimistic, ...(result.settings || {}) };
+			applyAppearance(state.settings);
+			return true;
+		} catch (error) {
+			state.settings = previous;
+			applyAppearance(previous);
+			toast(`The appearance could not be saved: ${error.message}`, 'error');
+			return false;
+		}
+	};
+
+	const operation = appearanceSaveQueue.then(commit, commit);
+	appearanceSaveQueue = operation.then(() => undefined, () => undefined);
+	return operation;
+}
 /**
  * The ink that stays readable on a given colour: white while it clears the 4.5:1 floor of the WCAG,
  * black below it. Every coloured label of the launcher reads its ink here.

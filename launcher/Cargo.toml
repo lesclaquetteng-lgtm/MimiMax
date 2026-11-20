@@ -21,6 +21,8 @@ serde_json = "1"
 # The time of the logs is the local time of the player, the standard library only knows UTC.
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 ureq = { version = "2", features = ["json"] }
+getrandom = "0.3"
+zeroize = "1"
 md-5 = "0.10"
 zip = "2"
 

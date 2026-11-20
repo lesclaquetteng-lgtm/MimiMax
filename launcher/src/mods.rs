@@ -33,8 +33,8 @@ impl ModEntry {
             return None;
         }
 
-        let metadata = fs::metadata(&path).ok()?;
-        if !metadata.is_file() {
+        let metadata = fs::symlink_metadata(&path).ok()?;
+        if !metadata.file_type().is_file() {
             return None;
         }
 
@@ -94,8 +94,10 @@ pub fn set_enabled(mods_dir: &Path, name: &str, enabled: bool) -> Result<ModEntr
     let name = checked_name(name)?;
     let current = mods_dir.join(name);
 
-    if !current.is_file() {
-        return Err(format!("the mod does not exist: {}", name));
+    let metadata = fs::symlink_metadata(&current)
+        .map_err(|_| format!("the mod does not exist: {}", name))?;
+    if !metadata.file_type().is_file() {
+        return Err(format!("the mod is not a regular file: {}", name));
     }
 
     // The file name is the state: the suffix is added to disable the mod and removed to enable it.
@@ -184,6 +186,24 @@ mod tests {
         assert!(again.enabled);
         assert!(root.join("sodium.jar").exists());
 
+        fs::remove_dir_all(&root).ok();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn symbolic_links_are_not_listed_or_toggled_as_mods() {
+        use std::os::unix::fs::symlink;
+
+        let root = temporary("symlink");
+        let outside = root.parent().unwrap().join(format!("aether-outside-mod-{}.jar", std::process::id()));
+        fs::write(&outside, b"external jar").unwrap();
+        symlink(&outside, root.join("linked.jar")).unwrap();
+
+        assert!(list(&root).is_empty());
+        assert!(set_enabled(&root, "linked.jar", false).is_err());
+        assert_eq!(fs::read(&outside).unwrap(), b"external jar");
+
+        fs::remove_file(&outside).ok();
         fs::remove_dir_all(&root).ok();
     }
 

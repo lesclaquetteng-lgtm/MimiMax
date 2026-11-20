@@ -105,6 +105,45 @@ Steve        5627dd98-e6be-3c21-b8a8-e92344183641
 Player123    3da1e349-17b0-38ed-a07b-1e78c8ebd956
 ```
 
+## Microsoft account security
+
+On Windows, Microsoft access and refresh tokens are **not stored in accounts.json** and are not
+returned to the interface through the account JSON contract. They are stored in accounts.credentials,
+protected with Windows DPAPI for the current Windows user. Copying that file to another Windows
+account does not grant access to the session tokens.
+
+Existing installations are migrated on first start: the launcher encrypts the legacy tokens first,
+then rewrites the public account catalogue without them. If the protected vault cannot be decrypted
+(for example, after moving it to another Windows user profile), account metadata is kept but the
+Microsoft account must be signed in again. The diagnostic command also redacts the access token from
+its displayed launch arguments.
+
+The protected Microsoft session vault is currently supported by the Windows launcher. Non-Windows
+builds refuse to persist new Microsoft session secrets rather than silently writing them in clear
+text; offline accounts remain available.
+
+## Launcher security and process integrity
+
+The launcher treats downloaded metadata and files as untrusted input:
+
+- Minecraft/Fabric identifiers, library-relative paths, asset hashes, hosted-server version names and
+  Modrinth JAR filenames are validated before they are used in local file paths.
+- ZIP extraction rejects archive entries that escape the destination; duplicate content-addressed
+  assets are deduplicated before parallel download workers start.
+- Mod and session-log operations reject symbolic links rather than following paths outside the
+  launcher's managed folders.
+- Atomic writes use unique temporary siblings. The native shell applies the same rule when extracting
+  its embedded core and client JAR, then replaces completed files atomically.
+- The Tauri WebView has an injected Content Security Policy that disables plugins/objects and
+  restricts scripts, base URLs and form submissions to the local application. JavaScript built-in
+  prototypes are frozen.
+- The shell refuses a second simultaneous installation or Minecraft launch, preserving the process
+  handle that the Stop/Cancel controls need.
+
+On Windows, the CI workflow builds the embedded Fabric JAR with Java 25 (required by the current
+Gradle/Loom runtime) while retaining the mod's Java 21 compilation target, then builds the Rust core
+and native Tauri shell.
+
 ## Offline servers
 
 The **Servers** page of the launcher answers one question before the game starts: *will this server
@@ -165,6 +204,9 @@ See [`docs/FEATURES.md`](docs/FEATURES.md) for the detailed list.
 - Premium-name guard: `account check` asks Mojang whether a name belongs to a Mojang account, and the
   interface warns before a cracked server can reject the connection.
 - Performance page: optimisation pack from Modrinth, options and JVM presets.
+- Identity Studio: four designed material colourways, live preview, custom accent, topographic/drafting
+  surfaces, compact or roomy spacing and expanded or icon-rail navigation. Preferences are local and
+  survive restarts.
 - Records the process of the game, so a game left behind by a closed launcher can still be stopped
   (`aether-launcher stop`, or the Stop button of the next session).
 - Stores settings/accounts/game data under an Aether-managed home (configurable).
@@ -293,9 +335,11 @@ cargo test --release
 cargo clippy --release --all-targets
 ```
 
-163 tests: 134 unit, 6 download, 20 integration and 3 SHA-1. The three newest cover the premium-name
-lookup (a `200` with a profile, a `204`/`404` free name, and an error that must never be read as "the
-name is free").
+The 163-test count above is the previously measured baseline (134 unit, 6 download, 20 integration
+and 3 SHA-1 tests). This hardening branch adds further regression coverage for DPAPI secret wiping,
+archive/path traversal, duplicate asset downloads, symlink rejection, concurrent embedded-resource
+writes and single-flight install/game process handling. CI is the source of truth for the current
+branch revision.
 
 ### Launcher shell (Rust)
 ```powershell

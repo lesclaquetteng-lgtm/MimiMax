@@ -28,7 +28,7 @@ const REFRESH_MARGIN_SECS: u64 = 300;
 const REFRESH_TOKEN_GRANT: &str = "refresh_token";
 
 /// An account of the player.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Account {
     /// `offline` or `microsoft`.
@@ -40,11 +40,12 @@ pub struct Account {
     pub username: String,
     /// The identifier of the player.
     pub uuid: String,
-    /// The token of the session, an offline account uses the placeholder `0`.
-    #[serde(default)]
+    /// The token of the session, held only in memory or in the DPAPI vault.
+    /// It is deliberately omitted from account JSON and renderer IPC responses.
+    #[serde(default, skip_serializing)]
     pub access_token: String,
-    /// The token that refreshes the session of a Microsoft account.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    /// The token that refreshes a Microsoft session, stored in the DPAPI vault.
+    #[serde(default, skip_serializing)]
     pub refresh_token: Option<String>,
     /// The identifier of the player on Xbox live.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -58,6 +59,27 @@ pub struct Account {
     /// The profile this account plays with, `None` follows the active profile.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub profile: Option<String>,
+}
+
+impl std::fmt::Debug for Account {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("Account")
+            .field("kind", &self.kind)
+            .field("id", &self.id)
+            .field("username", &self.username)
+            .field("uuid", &self.uuid)
+            .field("access_token", &if self.access_token.is_empty() { "" } else { "<redacted>" })
+            .field(
+                "refresh_token",
+                &self.refresh_token.as_ref().map(|_| "<redacted>"),
+            )
+            .field("xuid", &self.xuid)
+            .field("client_id", &self.client_id)
+            .field("expires_at", &self.expires_at)
+            .field("profile", &self.profile)
+            .finish()
+    }
 }
 
 impl Account {
@@ -151,7 +173,7 @@ impl AccountStore {
 }
 
 /// The session that is used to start the game.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct Session {
     pub username: String,
     pub uuid: String,
@@ -159,6 +181,20 @@ pub struct Session {
     pub offline: bool,
     pub xuid: String,
     pub client_id: String,
+}
+
+impl std::fmt::Debug for Session {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("Session")
+            .field("username", &self.username)
+            .field("uuid", &self.uuid)
+            .field("access_token", &if self.access_token == "0" { "0" } else { "<redacted>" })
+            .field("offline", &self.offline)
+            .field("xuid", &self.xuid)
+            .field("client_id", &self.client_id)
+            .finish()
+    }
 }
 
 impl From<&Account> for Session {
@@ -664,6 +700,25 @@ mod tests {
         assert_eq!(account.uuid, "b50ad385-829d-3141-a216-7e7d7539ba7f");
         assert!(account.is_offline());
         assert_eq!(store.selected.as_deref(), Some(account.id.as_str()));
+    }
+
+    #[test]
+    fn debug_output_never_exposes_microsoft_session_tokens() {
+        let mut store = AccountStore::default();
+        let mut account = store.add_offline("Notch").unwrap();
+        account.kind = "microsoft".to_string();
+        account.access_token = "secret-access-token".to_string();
+        account.refresh_token = Some("secret-refresh-token".to_string());
+
+        let account_debug = format!("{account:?}");
+        assert!(!account_debug.contains("secret-access-token"));
+        assert!(!account_debug.contains("secret-refresh-token"));
+        assert!(account_debug.contains("<redacted>"));
+
+        let session = Session::from(&account);
+        let session_debug = format!("{session:?}");
+        assert!(!session_debug.contains("secret-access-token"));
+        assert!(session_debug.contains("<redacted>"));
     }
 
     #[test]

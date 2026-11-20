@@ -204,6 +204,27 @@ pub struct ModProgress {
 /// as `../../aether/settings.json` would write outside of it, and the file would then be loaded by
 /// the game, so only a plain `.jar` name is accepted.
 fn jar_name(filename: &str) -> Result<String, String> {
+    // A filename from a remote catalogue is untrusted, even when it is joined only to the mods
+    // directory. Reject separators and Windows alternate data streams explicitly instead of
+    // depending on the host platform's Path parser.
+    if filename.is_empty()
+        || filename.contains('/')
+        || filename.contains('\\')
+        || filename.contains(':')
+        || filename.contains('\0')
+        || filename.chars().any(char::is_control)
+        || filename.contains('<')
+        || filename.contains('>')
+        || filename.contains('"')
+        || filename.contains('|')
+        || filename.contains('?')
+        || filename.contains('*')
+        || filename.ends_with(' ')
+        || filename.ends_with('.')
+    {
+        return Err(format!("{:?} is not a safe file name", filename));
+    }
+
     let name = Path::new(filename)
         .file_name()
         .and_then(|name| name.to_str())
@@ -211,6 +232,22 @@ fn jar_name(filename: &str) -> Result<String, String> {
 
     if name != filename {
         return Err(format!("{:?} contains a directory", filename));
+    }
+
+    // Windows reserves these device names even when an extension is present (for example,
+    // CON.jar). Such names do not behave like ordinary files on the supported target.
+    let device = name
+        .split('.')
+        .next()
+        .unwrap_or_default()
+        .trim_end_matches(' ')
+        .to_ascii_uppercase();
+    if matches!(device.as_str(), "CON" | "PRN" | "AUX" | "NUL")
+        || (device.len() == 4
+            && (device.starts_with("COM") || device.starts_with("LPT"))
+            && matches!(device.as_bytes()[3], b'1'..=b'9'))
+    {
+        return Err(format!("{:?} is a reserved file name", filename));
     }
 
     if !name.to_ascii_lowercase().ends_with(".jar") || name.starts_with('.') {
@@ -683,6 +720,14 @@ mod tests {
         assert!(jar_name("..\\..\\aether\\settings.json").is_err());
         assert!(jar_name("sub/dir/mod.jar").is_err());
         assert!(jar_name("./mod.jar").is_err());
+        assert!(jar_name("C:outside.jar").is_err());
+        assert!(jar_name("evil:stream.jar").is_err());
+        assert!(jar_name("bad\0name.jar").is_err());
+        assert!(jar_name("bad\nname.jar").is_err());
+        assert!(jar_name("bad?.jar").is_err());
+        assert!(jar_name("NUL.jar").is_err());
+        assert!(jar_name("COM1.jar").is_err());
+        assert!(jar_name("mod.jar.").is_err());
         assert!(jar_name("mod.zip").is_err());
         assert!(jar_name(".hidden.jar").is_err());
         assert!(jar_name("").is_err());

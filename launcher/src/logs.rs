@@ -175,10 +175,11 @@ pub fn sessions_in(directory: &Path, limit: usize) -> Vec<SessionEntry> {
                 return None;
             }
 
-            let metadata = entry.metadata().ok()?;
-            if !metadata.is_file() {
+            // Do not follow symlinks out of the managed logs directory.
+            if !entry.file_type().ok()?.is_file() {
                 return None;
             }
+            let metadata = entry.metadata().ok()?;
 
             Some(SessionEntry {
                 started: started_from(&name),
@@ -279,7 +280,14 @@ pub fn read_session_in(directory: &Path, name: &str, limit: usize) -> Result<Tai
         return Err(format!("invalid session name: {}", name));
     }
 
-    read_tail(&directory.join(name), limit).map_err(|error| error.to_string())
+    let file = directory.join(name);
+    let metadata = fs::symlink_metadata(&file)
+        .map_err(|error| format!("the session log could not be inspected: {}", error))?;
+    if !metadata.file_type().is_file() {
+        return Err("the session log is not a regular file".to_string());
+    }
+
+    read_tail(&file, limit).map_err(|error| error.to_string())
 }
 
 /// Only the files written for a run of the game are sessions.
@@ -563,6 +571,28 @@ mod tests {
         assert!(!trim(&file, MAX_INSTALL_LOG_BYTES, 1024).unwrap());
         assert_eq!(fs::read_to_string(&file).unwrap(), "download a\n");
 
+        fs::remove_dir_all(&root).ok();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn symbolic_session_logs_are_not_listed_or_read() {
+        use std::os::unix::fs::symlink;
+
+        let root = temporary("session-symlink");
+        let outside = root.parent().unwrap().join(format!(
+            "aether-external-session-{}.log",
+            std::process::id()
+        ));
+        fs::write(&outside, "external secret log\n").unwrap();
+        let name = "session-20261120-101010.log";
+        symlink(&outside, root.join(name)).unwrap();
+
+        assert!(sessions_in(&root, 10).is_empty());
+        assert!(read_session_in(&root, name, 10).is_err());
+        assert_eq!(fs::read_to_string(&outside).unwrap(), "external secret log\n");
+
+        fs::remove_file(&outside).ok();
         fs::remove_dir_all(&root).ok();
     }
 

@@ -7,7 +7,7 @@ use std::process::Command;
 use crate::paths::{home_directory, Paths};
 
 /// The accent colour that is used when nothing was configured.
-pub const DEFAULT_ACCENT: &str = "#3B82F6";
+pub const DEFAULT_ACCENT: &str = "#E7E9EC";
 
 /// The name of the profile that applies when nothing else does.
 pub const DEFAULT_PROFILE: &str = "Default";
@@ -69,10 +69,16 @@ pub struct Settings {
     pub loader_version: String,
     /// The version of the Fabric API.
     pub fabric_api_version: String,
-    /// The theme of the interface.
+    /// The colourway of the interface: graphite, oxide, field or blueprint.
     pub theme: String,
-    /// The accent colour of the interface.
+    /// The accent colour selected by the player, empty/default keeps the colourway accent.
     pub accent_color: String,
+    /// The spacing density of the launcher interface: roomy or compact.
+    pub ui_density: String,
+    /// The background linework: contour, draft or plain.
+    pub surface_style: String,
+    /// The navigation shape: wide or rail.
+    pub navigation_style: String,
     /// Whether the output of the game is shown.
     pub show_game_output: bool,
     /// Whether the G1 garbage collector is used.
@@ -102,8 +108,11 @@ impl Default for Settings {
             game_version: "1.21.11".to_string(),
             loader_version: "0.20.1".to_string(),
             fabric_api_version: "0.141.6+1.21.11".to_string(),
-            theme: "dark".to_string(),
+            theme: "graphite".to_string(),
             accent_color: DEFAULT_ACCENT.to_string(),
+            ui_density: "roomy".to_string(),
+            surface_style: "contour".to_string(),
+            navigation_style: "wide".to_string(),
             show_game_output: true,
             use_g1gc: true,
             jvm_preset: "balanced".to_string(),
@@ -125,6 +134,13 @@ impl Settings {
     /// profile once, so that a file written before the profiles existed keeps working.
     fn migrate(&mut self) -> bool {
         let mut changed = false;
+
+        // The former launcher only had one dark palette. Upgrade that value once to the
+        // new material-based default; custom colourways introduced by Identity Studio stay intact.
+        if self.theme.eq_ignore_ascii_case("dark") {
+            self.theme = "graphite".to_string();
+            changed = true;
+        }
 
         if self.active_profile.is_empty() {
             self.active_profile = DEFAULT_PROFILE.to_string();
@@ -288,26 +304,76 @@ impl Settings {
     }
 }
 
+/// A process-local sequence makes temporary names distinct even when different files share
+/// the same stem (for example, accounts.json and accounts.credentials).
+static NEXT_TEMP_FILE: std::sync::atomic::AtomicU64 =
+    std::sync::atomic::AtomicU64::new(0);
+
+fn temporary_path(path: &Path, sequence: u64) -> PathBuf {
+    let filename = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("aether-data");
+    path.with_file_name(format!(
+        ".{}.{}.{}.tmp",
+        filename,
+        std::process::id(),
+        sequence
+    ))
+}
+
 /// Writes a file in one step.
 ///
-/// The content is written next to the target and moved into place, a crash in the middle never
-/// leaves a truncated file behind. A truncated settings file would silently reset every setting and
-/// every account of the player.
+/// The content is written to a unique sibling file and moved into place. Different files with the
+/// same stem never share a temporary path, and concurrent writes cannot truncate each other's data.
 pub fn write_atomic(path: &Path, content: &str) -> std::io::Result<()> {
+    use std::fs::OpenOptions;
     use std::io::Write;
 
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
 
-    let temporary = path.with_extension("tmp");
-    {
-        let mut file = std::fs::File::create(&temporary)?;
-        file.write_all(content.as_bytes())?;
-        file.sync_all()?;
+    let mut temporary = None;
+    let mut file = None;
+    for _ in 0..32 {
+        let sequence = NEXT_TEMP_FILE.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let candidate = temporary_path(path, sequence);
+        match OpenOptions::new().write(true).create_new(true).open(&candidate) {
+            Ok(created) => {
+                temporary = Some(candidate);
+                file = Some(created);
+                break;
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(error) => return Err(error),
+        }
     }
 
-    std::fs::rename(&temporary, path)
+    let temporary = temporary.ok_or_else(|| {
+        std::io::Error::new(
+            std::io::ErrorKind::AlreadyExists,
+            "could not allocate a unique temporary file",
+        )
+    })?;
+
+    let write_result = (|| {
+        let mut file = file.expect("a temporary file was created");
+        file.write_all(content.as_bytes())?;
+        file.sync_all()
+    })();
+
+    if let Err(error) = write_result {
+        let _ = std::fs::remove_file(&temporary);
+        return Err(error);
+    }
+
+    if let Err(error) = std::fs::rename(&temporary, path) {
+        let _ = std::fs::remove_file(&temporary);
+        return Err(error);
+    }
+
+    Ok(())
 }
 
 /// Reads a value of the command line, a value that is valid JSON keeps its type.
@@ -459,6 +525,36 @@ mod tests {
         assert_eq!(settings.loader_version, "0.20.1");
         assert_eq!(settings.required_java_version, 21);
         assert_eq!(settings.max_memory, 4096);
+        assert_eq!(settings.theme, "graphite");
+        assert_eq!(settings.ui_density, "roomy");
+        assert_eq!(settings.surface_style, "contour");
+        assert_eq!(settings.navigation_style, "wide");
+    }
+
+    #[test]
+    fn a_legacy_dark_theme_is_migrated_to_graphite_and_saved() {
+        let directory = std::env::temp_dir().join(format!("aether-theme-migrate-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&directory);
+        std::fs::create_dir_all(&directory).unwrap();
+        let file = directory.join("settings.json");
+
+        std::fs::write(
+            &file,
+            r##"{"theme":"dark","accentColor":"#3B82F6","maxMemory":8192}"##,
+        )
+        .unwrap();
+
+        let settings = Settings::load(&file);
+        assert_eq!(settings.theme, "graphite");
+        assert_eq!(settings.max_memory, 8192);
+        assert_eq!(settings.accent_color, "#3B82F6");
+
+        let persisted: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
+        assert_eq!(persisted["theme"], "graphite");
+        assert_eq!(persisted["accentColor"], "#3B82F6");
+
+        std::fs::remove_dir_all(&directory).ok();
     }
 
     #[test]
@@ -479,6 +575,28 @@ mod tests {
         // The other settings are untouched.
         assert_eq!(patched.min_memory, settings.min_memory);
         assert_eq!(patched.game_version, settings.game_version);
+    }
+
+    #[test]
+    fn appearance_settings_are_patched_and_survive_serialization() {
+        let patched = Settings::default()
+            .patched(&[
+                ("theme".to_string(), "oxide".to_string()),
+                ("accentColor".to_string(), "#D58A54".to_string()),
+                ("uiDensity".to_string(), "compact".to_string()),
+                ("surfaceStyle".to_string(), "draft".to_string()),
+                ("navigationStyle".to_string(), "rail".to_string()),
+            ])
+            .expect("the appearance patch is valid");
+
+        let value = serde_json::to_value(&patched).unwrap();
+        let restored: Settings = serde_json::from_value(value).unwrap();
+
+        assert_eq!(restored.theme, "oxide");
+        assert_eq!(restored.accent_color, "#D58A54");
+        assert_eq!(restored.ui_density, "compact");
+        assert_eq!(restored.surface_style, "draft");
+        assert_eq!(restored.navigation_style, "rail");
     }
 
     #[test]
@@ -518,6 +636,68 @@ mod tests {
             !directory.join("accounts.tmp").exists(),
             "a temporary file was left behind"
         );
+
+        std::fs::remove_dir_all(&directory).ok();
+    }
+
+    #[test]
+    fn atomic_temporary_paths_are_unique_for_files_with_the_same_stem() {
+        let root = std::env::temp_dir().join(format!("aether-atomic-paths-{}", std::process::id()));
+        let accounts = root.join("accounts.json");
+        let credentials = root.join("accounts.credentials");
+
+        assert_ne!(
+            temporary_path(&accounts, 7),
+            temporary_path(&credentials, 7),
+            "different files must not share a temporary path"
+        );
+        assert_ne!(
+            temporary_path(&accounts, 7),
+            temporary_path(&accounts, 8),
+            "separate writes must not share a temporary path"
+        );
+    }
+
+    #[test]
+    fn atomic_writes_to_the_account_catalogue_and_vault_do_not_collide() {
+        let directory = std::env::temp_dir().join(format!("aether-atomic-pair-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&directory);
+        std::fs::create_dir_all(&directory).unwrap();
+
+        let accounts = directory.join("accounts.json");
+        let credentials = directory.join("accounts.credentials");
+        let barrier = std::sync::Arc::new(std::sync::Barrier::new(2));
+
+        let first = {
+            let barrier = barrier.clone();
+            let accounts = accounts.clone();
+            std::thread::spawn(move || {
+                barrier.wait();
+                for _ in 0..32 {
+                    write_atomic(&accounts, "{\"accounts\":[]}").unwrap();
+                }
+            })
+        };
+        let second = {
+            let barrier = barrier.clone();
+            let credentials = credentials.clone();
+            std::thread::spawn(move || {
+                barrier.wait();
+                for _ in 0..32 {
+                    write_atomic(&credentials, "AETHER-CREDENTIALS-V1\nprotected").unwrap();
+                }
+            })
+        };
+
+        first.join().unwrap();
+        second.join().unwrap();
+
+        assert_eq!(std::fs::read_to_string(&accounts).unwrap(), "{\"accounts\":[]}");
+        assert_eq!(
+            std::fs::read_to_string(&credentials).unwrap(),
+            "AETHER-CREDENTIALS-V1\nprotected"
+        );
+        assert_eq!(std::fs::read_dir(&directory).unwrap().count(), 2);
 
         std::fs::remove_dir_all(&directory).ok();
     }

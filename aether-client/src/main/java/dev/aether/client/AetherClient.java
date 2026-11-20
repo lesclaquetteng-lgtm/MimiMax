@@ -2,6 +2,7 @@ package dev.aether.client;
 
 import com.mojang.blaze3d.platform.InputConstants;
 import dev.aether.client.config.AetherConfig;
+import dev.aether.client.config.ClientRecoveryGuard;
 import dev.aether.client.gui.ClickGuiScreen;
 import dev.aether.client.gui.ConfigScreen;
 import dev.aether.client.hud.HudManager;
@@ -22,10 +23,14 @@ import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.screens.ConfirmScreen;
+import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
+import java.nio.file.Path;
 import java.util.Map;
 
 /**
@@ -48,6 +53,12 @@ public class AetherClient implements ClientModInitializer {
 	/** The configuration of the last session, applied on the first tick (see {@link #onTick}). */
 	private AetherConfig config;
 	private boolean configApplied;
+	private boolean recoveryNoticeShown;
+	private boolean recoverySafeMode;
+	private boolean recoveryDecisionMade;
+	private boolean recoveryMarkerInitialized;
+	private ClientRecoveryGuard.Startup recoveryStartup = new ClientRecoveryGuard.Startup(0, false);
+	private Path recoveryMarker;
 
 	private KeyMapping clickGuiKey;
 	private KeyMapping hudEditorKey;
@@ -56,6 +67,15 @@ public class AetherClient implements ClientModInitializer {
 	public void onInitializeClient() {
 		instance = this;
 
+		recoveryMarker = AetherConfig.getPath().resolveSibling("session.guard");
+		try {
+			recoveryStartup = ClientRecoveryGuard.begin(recoveryMarker);
+			recoveryMarkerInitialized = true;
+		} catch (IOException exception) {
+			LOGGER.warn("Could not initialize the Aether session recovery marker; crash history is unavailable.",
+					exception);
+		}
+		recoveryDecisionMade = !recoveryStartup.recoveryRecommended();
 		config = AetherConfig.load();
 		Aether aether = Aether.create(config, moduleManager);
 
@@ -128,11 +148,39 @@ public class AetherClient implements ClientModInitializer {
 		ClientLifecycleEvents.CLIENT_STARTED.register(client -> {
 			hudManager.applyDefaultPositions(RenderUtil.screenWidth(), RenderUtil.screenHeight());
 			hudManager.applySavedPositions(Aether.get().getConfig());
+			if (recoveryStartup.recoveryRecommended()) {
+				Screen previousScreen = client.screen;
+				client.setScreen(new ConfirmScreen(
+						useSafeMode -> {
+							recoveryDecisionMade = true;
+							if (useSafeMode) {
+								recoverySafeMode = true;
+								moduleManager.disableAll();
+							}
+						client.setScreen(previousScreen);
+						},
+						Component.literal("Aether recovery mode"),
+						Component.literal("Two consecutive sessions did not close normally. This is not proof that Aether caused a crash. Start this session with Aether modules disabled? Your saved preferences will be preserved."),
+						Component.literal("Start safe mode"),
+						Component.literal("Continue normally")));
+			}
 		});
 
 		ClientLifecycleEvents.CLIENT_STOPPING.register(client -> {
 			hudManager.capturePositions(Aether.get().getConfig());
-			Aether.get().save();
+			// A safe-mode session must never persist its temporary disabled module states.
+			if (recoverySafeMode) {
+				config.save();
+			} else {
+				Aether.get().save();
+			}
+			if (recoveryMarkerInitialized) {
+				try {
+					ClientRecoveryGuard.finish(recoveryMarker);
+				} catch (IOException exception) {
+					LOGGER.warn("Could not clear the Aether session marker after an orderly shutdown.", exception);
+				}
+			}
 		});
 
 		ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) -> {
@@ -141,7 +189,23 @@ public class AetherClient implements ClientModInitializer {
 						context.getSource().sendFeedback(Component.literal(
 								Aether.NAME + " " + Aether.VERSION + " - session: " + SessionUtil.getSessionLabel()));
 						return 1;
-					}));
+					})
+					.then(ClientCommandManager.literal("safe-mode").executes(context -> {
+						if (!configApplied) {
+							context.getSource().sendFeedback(Component.literal(
+									"Aether is still loading its configuration. Try /aether safe-mode again shortly."));
+							return 0;
+						}
+						if (recoverySafeMode) {
+							context.getSource().sendFeedback(Component.literal("Aether safe mode is already active."));
+							return 1;
+						}
+						recoverySafeMode = true;
+						moduleManager.disableAll();
+						context.getSource().sendFeedback(Component.literal(
+								"Aether safe mode is active for this session. Your saved module preferences will be preserved."));
+						return 1;
+					})));
 		});
 	}
 
@@ -163,23 +227,37 @@ public class AetherClient implements ClientModInitializer {
 	 * Runs the tick logic of the client.
 	 */
 	private void onTick(Minecraft minecraft) {
+		if (!recoveryNoticeShown && minecraft.player != null) {
+			String recoveryMessage = config.getRecoveryMessage();
+			if (recoveryMessage != null) {
+				minecraft.player.displayClientMessage(Component.literal(recoveryMessage), false);
+			}
+			recoveryNoticeShown = true;
+		}
+
+		// Do not restore or tick configured modules until the player has explicitly chosen safe
+		// recovery or normal startup on the title screen.
+		if (recoveryStartup.recoveryRecommended() && !recoveryDecisionMade) {
+			return;
+		}
+
 		// The modules write into the options of the game, which do not exist yet while the client is
 		// being created. The saved state is therefore restored on the first tick: applying it earlier
 		// crashed the game as soon as a module touching the options (Fullbright, FOV, No View Bobbing,
 		// Auto Jump) was enabled in the configuration.
 		if (!configApplied && minecraft.options != null) {
 			configApplied = true;
-			config.applyTo(moduleManager);
+			config.applyTo(moduleManager, !recoverySafeMode);
 		}
 
 		while (clickGuiKey.consumeClick()) {
-			if (minecraft.screen == null) {
+			if (minecraft.screen == null && !recoverySafeMode) {
 				minecraft.setScreen(new ClickGuiScreen(ModuleCategory.RENDER));
 			}
 		}
 
 		while (hudEditorKey.consumeClick()) {
-			if (minecraft.screen == null) {
+			if (minecraft.screen == null && !recoverySafeMode) {
 				minecraft.setScreen(new ConfigScreen());
 			}
 		}
@@ -188,7 +266,7 @@ public class AetherClient implements ClientModInitializer {
 		// nothing ever read them: pressing G left Kill Aura untouched. The press is consumed once
 		// here, and only outside a screen, so that typing in the click GUI cannot toggle a module
 		// behind it.
-		if (minecraft.screen == null) {
+		if (!recoverySafeMode && minecraft.screen == null) {
 			boolean toggled = false;
 			for (Module module : moduleManager.getAll()) {
 				KeyMapping mapping = module.getKeyBinding();

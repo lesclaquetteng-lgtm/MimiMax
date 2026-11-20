@@ -48,6 +48,33 @@ for (const file of files) {
 			usages.get(name).push({ file: short, line: index + 1 });
 		}
 	});
+
+	// Palette aliases are selected by app.js at runtime from a finite theme/channel matrix.
+	// The normal var(--name) scanner cannot see a reference assembled from string fragments, so
+	// model those dynamic references explicitly while still requiring every selected token to
+	// have exactly one definition. Inactive colourways should not appear as unused by accident.
+	const paletteController = files.find((file) => file.endsWith('/app.js'));
+	if (paletteController) {
+		const controller = await readFile(paletteController, 'utf8');
+		const dynamicAlias = "const paletteReference = 'v' + 'ar(' + '--palette-'";
+		if (controller.includes('PALETTE_CHANNELS') && controller.includes(dynamicAlias)) {
+			const file = relative(process.cwd(), paletteController).replace(/\\/g, '/');
+			const line = linesOf(controller).findIndex((line) => line.includes(dynamicAlias)) + 1;
+			const themes = ['graphite', 'oxide', 'field', 'blueprint'];
+			const channels = [
+				'bg', 'bg-elevated', 'surface', 'surface-hover', 'surface-active',
+				'border', 'border-strong', 'accent',
+				'text-primary', 'text-secondary', 'text-muted', 'text-dim'
+			];
+			for (const theme of themes) {
+				for (const channel of channels) {
+					const name = `--palette-${theme}-${channel}`;
+					if (!usages.has(name)) usages.set(name, []);
+					usages.get(name).push({ file, line });
+				}
+			}
+		}
+	}
 }
 
 const missing = [...usages.keys()].filter((name) => !definitions.has(name)).sort();

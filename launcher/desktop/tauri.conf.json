@@ -24,12 +24,15 @@
       }
     ],
     "security": {
-      "csp": null
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost; object-src 'none'; base-uri 'self'; form-action 'self'",
+      "freezePrototype": true
     }
   },
   "bundle": {
     "active": true,
-    "targets": ["nsis"],
+    "targets": [
+      "nsis"
+    ],
     "publisher": "Aether",
     "copyright": "Copyright (c) 2026 Aether",
     "category": "Game",
@@ -53,7 +56,9 @@
         "installerIcon": "icons/icon.ico",
         "headerImage": "installer/header.bmp",
         "sidebarImage": "installer/sidebar.bmp",
-        "languages": ["French"],
+        "languages": [
+          "French"
+        ],
         "displayLanguageSelector": false,
         "installMode": "currentUser",
         "startMenuFolder": "Aether",

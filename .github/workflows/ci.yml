@@ -1,13 +1,20 @@
 name: CI
 
 on:
+  # The PR event already tests every feature-branch update; keep push runs for main only
+  # to avoid running the same matrix twice for each pull-request commit.
   push:
-    branches: [main, "codex/**"]
+    branches: [main]
   pull_request:
   workflow_dispatch:
 
 permissions:
   contents: read
+
+# Keep only the newest run for a given PR/ref; stale commits must not occupy CI runners.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   rust:
@@ -37,7 +44,15 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install stable Rust
         run: rustup toolchain install stable --profile minimal && rustup default stable
-      # The shell embeds the core binary, so the core is built first.
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "25"
+          cache: gradle
+      # The shell embeds both build products, so generate each one before compiling Tauri.
+      - name: Build the Fabric client
+        working-directory: aether-client
+        run: .\gradlew.bat --no-daemon build
       - name: Build the launcher core
         working-directory: launcher
         run: cargo build --release --locked
@@ -59,13 +74,19 @@ jobs:
       # keeps an inherited value and nobody notices until a screen looks wrong.
       - name: Check every custom property of the interface
         run: node tools/check-theme-tokens.mjs
+      - name: Validate launcher interface scripts
+        run: |
+          node --check launcher/gui/src/ui/app.js
+          node --check launcher/gui/src/ui/bridge.js
+      - name: Verify Identity Studio contracts
+        run: node tools/check-identity-studio.mjs
 
   fabric-mod:
     name: Fabric client
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "25"

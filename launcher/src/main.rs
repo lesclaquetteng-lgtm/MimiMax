@@ -159,7 +159,7 @@ fn command_settings(arguments: &[String]) -> Result<(), String> {
         updated.window_height = updated.window_height.max(240);
         updated.max_memory = updated.max_memory.max(updated.min_memory);
         launcher.settings = updated;
-        launcher.save();
+        launcher.save()?;
     }
 
     emit(&serde_json::json!({ "ok": true, "settings": launcher.settings }));
@@ -192,7 +192,7 @@ fn command_account(arguments: &[String]) -> Result<(), String> {
                 .positional
                 .get(1)
                 .ok_or_else(|| "usage: account remove <id>".to_string())?;
-            launcher.remove_account(id);
+            launcher.remove_account(id)?;
             emit(&serde_json::json!({ "ok": true, "accounts": launcher.accounts }));
         }
         Some("select") => {
@@ -200,7 +200,7 @@ fn command_account(arguments: &[String]) -> Result<(), String> {
                 .positional
                 .get(1)
                 .ok_or_else(|| "usage: account select <id>".to_string())?;
-            launcher.select_account(id);
+            launcher.select_account(id)?;
             emit(&serde_json::json!({ "ok": true, "accounts": launcher.accounts }));
         }
         Some("check") => {
@@ -227,7 +227,7 @@ fn command_account(arguments: &[String]) -> Result<(), String> {
             let token = accounts::poll_device_code(&code).map_err(|error| error.to_string())?;
             let account = accounts::complete_microsoft_login(&token)
                 .map_err(|error| error.to_string())?;
-            launcher.add_account(account.clone());
+            launcher.add_account(account.clone())?;
 
             // The last document of a command is its result, the interface reads it for the account.
             emit(&serde_json::json!({ "ok": true, "account": account }));
@@ -310,7 +310,7 @@ fn command_profiles(arguments: &[String]) -> Result<(), String> {
             profile.window_width = number("width", profile.window_width);
             profile.window_height = number("height", profile.window_height);
 
-            launcher.add_profile(profile);
+            launcher.add_profile(profile)?;
         }
         "use" => {
             let name = argument(1, "profiles use needs a name")?;
@@ -319,7 +319,7 @@ fn command_profiles(arguments: &[String]) -> Result<(), String> {
                 .profile(&name)
                 .map(|profile| profile.name.clone())
                 .ok_or_else(|| format!("unknown profile: {}", name))?;
-            launcher.save();
+            launcher.save()?;
         }
         "assign" => {
             let account = argument(1, "profiles assign needs an account")?;
@@ -336,7 +336,7 @@ fn command_profiles(arguments: &[String]) -> Result<(), String> {
                 .accounts
                 .set_profile(&account, name)
                 .ok_or_else(|| format!("unknown account: {}", account))?;
-            launcher.save();
+            launcher.save()?;
         }
         "update" => {
             let name = argument(1, "profiles update needs a name")?;
@@ -359,7 +359,7 @@ fn command_profiles(arguments: &[String]) -> Result<(), String> {
             profile.window_width = number("width", profile.window_width);
             profile.window_height = number("height", profile.window_height);
 
-            launcher.add_profile(profile);
+            launcher.add_profile(profile)?;
         }
         "remove" => {
             let name = argument(1, "profiles remove needs a name")?;
@@ -554,6 +554,19 @@ fn command_logs(arguments: &[String]) -> Result<(), String> {
     }
 }
 
+/// Prevents a diagnostic launch command from exposing the current Microsoft access token.
+fn redact_access_token(arguments: &mut [String], access_token: &str) {
+    if access_token.is_empty() {
+        return;
+    }
+
+    for argument in arguments {
+        if argument.contains(access_token) {
+            *argument = argument.replace(access_token, "<redacted>");
+        }
+    }
+}
+
 fn command_command(arguments: &[String]) -> Result<(), String> {
     let mut launcher = Launcher::open();
     let flags = Flags::parse(arguments);
@@ -564,11 +577,13 @@ fn command_command(arguments: &[String]) -> Result<(), String> {
 
     let options = launcher.launch_options_for(account.as_deref(), version.as_deref(), server.as_deref())?;
     let built = game::build_command(&options);
+    let mut displayed_arguments = built.arguments.clone();
+    redact_access_token(&mut displayed_arguments, &options.access_token);
 
     emit(&serde_json::json!({
         "ok": true,
         "program": built.program.to_string_lossy(),
-        "arguments": built.arguments,
+        "arguments": displayed_arguments,
         "classpath": built.classpath.iter().map(|entry| entry.to_string_lossy().to_string()).collect::<Vec<String>>(),
     }));
     Ok(())
@@ -786,7 +801,7 @@ fn command_performance(arguments: &[String]) -> Result<(), String> {
             }
 
             launcher.settings.jvm_preset = preset;
-            launcher.save();
+            launcher.save()?;
             emit(&serde_json::json!({
                 "ok": true,
                 "state": performance_state(&launcher),
@@ -871,4 +886,35 @@ fn read_lines() -> Vec<String> {
 #[allow(dead_code)]
 pub fn default_version() -> String {
     minecraft::VERSION_MANIFEST_URL.to_string()
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::redact_access_token;
+
+    #[test]
+    fn command_preview_redacts_tokens_embedded_in_arguments() {
+        let secret = "live-microsoft-access-token";
+        let mut arguments = vec![
+            "--username".to_string(),
+            "AetherTester".to_string(),
+            format!("--accessToken={secret}"),
+        ];
+
+        redact_access_token(&mut arguments, secret);
+
+        assert_eq!(arguments[2], "--accessToken=<redacted>");
+        assert!(!arguments.join(" ").contains(secret));
+    }
+
+    #[test]
+    fn command_preview_leaves_arguments_unchanged_without_a_token() {
+        let mut arguments = vec!["--username".to_string(), "OfflinePlayer".to_string()];
+        let original = arguments.clone();
+
+        redact_access_token(&mut arguments, "");
+
+        assert_eq!(arguments, original);
+    }
 }

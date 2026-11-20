@@ -1,10 +1,11 @@
 # Verification
 
-How the current implementation of **Aether Client** and **Aether Launcher** is verified, and the
-results of the last full run (19 November 2026, Minecraft 1.21.11 / Fabric 0.20.1).
+How the implementation of **Aether Client** and **Aether Launcher** is verified, including the
+last recorded full local run (19 November 2026, Minecraft 1.21.11 / Fabric 0.20.1).
 
-> Everything below was measured on this machine, not estimated. The console excerpts come from the
-> logs written by the core, the game and the hosted server during the run.
+> The numeric results below are a measured baseline from that run, not a claim that every newer
+> hardening change has been exercised locally. The current branch is additionally checked by the
+> locked GitHub Actions tests, Clippy, Fabric build, native-shell build and theme-token workflow.
 
 ## 0. Results at a glance
 
@@ -65,6 +66,35 @@ Covered by the suite: settings and accounts, path resolution, metadata and rule 
 and argument resolution, download/checksum primitives, the installer pipeline, the server list, the
 login probe parsing, the hosting properties/RCON helpers, and the options presets.
 
+Microsoft credential handling is covered by the account serialization and credential-vault tests:
+
+- The public account catalogue does not serialize access or refresh tokens, so account-list JSON and
+  the renderer IPC response cannot expose those fields.
+- On Windows, the DPAPI round-trip test writes protected ciphertext, reloads it for the same user and
+  restores the session fields in memory.
+- Legacy plaintext account files are migrated by writing the protected vault before replacing the
+  public account catalogue. A failed migration scrubs the legacy fields from the catalogue and asks
+  the player to sign in again.
+- The diagnostic command masks the access token before printing launch arguments.
+
+- Remote version identifiers, Fabric versions, Maven artifact paths, asset index identifiers and
+  asset SHA-1 names are checked before they are used in local paths; reserved Windows device names
+  and trailing-dot components are rejected as well.
+- Asset SHA-1 values are canonicalized before deduplication, and an overflowing aggregate asset
+  progress size is rejected instead of wrapping.
+- Modrinth JAR filenames reject directory separators, NTFS alternate data streams, control
+  characters and reserved Windows device names.
+- Native ZIP extraction rejects entries that are not enclosed by the extraction root.
+- Asset-index entries are deduplicated by SHA-1 before parallel downloads; conflicting sizes for
+  the same content hash are rejected instead of racing over one destination and partial file.
+- Hosted-server Minecraft/Fabric version identifiers are validated before they become shared
+  artifact-directory names.
+- Mod and session-log discovery/reads refuse symbolic links rather than following them outside the
+  managed directories.
+- Atomic file writes use unique sibling temporary files; concurrent writes of accounts.json and
+  accounts.credentials are covered by a regression test.
+
+
 Two tests were added during this run because the code had a real defect:
 
 - `the_pack_lists_unique_slugs_and_carries_its_libraries` — the pack must ship Cloth Config,
@@ -106,8 +136,9 @@ cargo build --release --manifest-path desktop/Cargo.toml
 ```
 
 The shell tests cover the shape of the answers it builds, the JSON documents of the core and the
-timeouts of the network commands; the two newest check that the embedded mod is a real jar and that
-its extraction replaces an older archive without leaving a temporary file. **8 passed, 0 failed.**
+timeouts of the network commands. Regression coverage also checks that embedded-resource writes
+use unique temporary siblings and atomic replacement, concurrent extraction never leaves partial
+files, and only one installation/game launch can own the corresponding process slot at a time.
 The window itself is covered by the checks below.
 
 ### 4.0 What the shell guarantees
@@ -121,8 +152,14 @@ The window itself is covered by the checks below.
   core as `AETHER_MOD_JAR`. Without it, an installed launcher cannot answer "Install / repair": the
   core would look for `aether-client/build/libs/…` on a machine that never had the sources.
   `build.rs` refuses to build the shell when the jar is missing.
+- **No overlapping processes**: atomic operation guards prevent a second installation or game launch
+  from replacing the PID/stdio handle tracked by the shell while the first operation is still active.
 - **No orphan on close**: `RunEvent::ExitRequested` / `Exit` kill the installation and the game that
   the window started (`state::kill_active`).
+- **Atomic embedded resources**: the embedded core and JAR are written to unique temporary siblings,
+  synced, and replaced atomically; a locked old executable is preserved rather than truncated.
+- **WebView policy**: the Tauri configuration injects a restrictive CSP (`object-src 'none'`,
+  `base-uri 'self'`, `form-action 'self'`) and freezes JavaScript built-in prototypes.
 - **No orphan after a crash**: the core records the game in `<home>/aether/game.pid`, so `stop` (and
   the Stop button of the next session) still kills the tree of a launcher that was killed.
 
@@ -246,6 +283,38 @@ in both directions, and `node --test tools/e2e/click.test.mjs` keeps every press
 | `profiles.mjs` | named profiles: create, assign, switch, remove |
 | `sliders.mjs` | a real drag updates the value and the `--fill` of every slider |
 | `hit.mjs` | the click guard: a covered button is refused without any event, a child counts, off-screen/hidden/disabled/missing are named |
+
+### 4.3 Identity Studio (workspace appearance)
+
+The former generic appearance controls are now grouped into **Identity Studio**. It treats the
+launcher as a designed workspace rather than a collection of unrelated skin settings:
+
+- Four material colourways: graphite, oxide, field and blueprint.
+- A custom personal accent that overrides the material's signature accent.
+- Three surface treatments: contour (topographic linework), draft (technical grid) and plain.
+- Two real layout densities (roomy / compact) and two navigation layouts (wide / rail).
+- A live preview that reflects the active colourway, surface, density, navigation and memory setting.
+- Preferences are saved through the existing Rust settings command to the local settings.json.
+  Older settings files acquire the new values through the Settings serde defaults; the previous
+  generic dark theme is migrated to Graphite, and old built-in accent values follow the active
+  material while explicitly chosen custom colours remain untouched.
+
+The palette values live once in gui/src/ui/tokens.css. The interface switches twelve palette
+aliases at runtime; it does not redefine colour tokens in separate theme blocks. This keeps the
+same single-source-of-truth rule that tools/check-theme-tokens.mjs enforces.
+
+```powershell
+node --check launcher/gui/src/ui/app.js
+node --check launcher/gui/src/ui/bridge.js
+node tools/check-theme-tokens.mjs
+node tools/check-identity-studio.mjs
+```
+
+The Identity Studio contract check verifies unique control IDs, all 48 colourway channel definitions,
+the interaction bindings, actual CSS behaviour for each surface/density/navigation choice, and the
+persisted Rust settings fields plus their round-trip regression test. CI also runs the JavaScript
+syntax checks. These are source/contract checks, not a screenshot-based proof of final WebView2
+geometry; use the CDP visual probe in §4.1 to capture the rendered app at both supported window sizes.
 
 ## 5. Offline servers
 
@@ -383,3 +452,33 @@ and the entity distance.
   explains it before the launch; it cannot make the server accept the name, and it does not try.
 - The frame rates above depend on the machine, the window size and the render distance; the options
   preset and the mod list are the reproducible part.
+
+
+## 10. Aether 2.0 — Core Stability
+
+The Core Stability phase adds targeted regression coverage for:
+
+- Atomic configuration replacement, backup rotation, failed promotion and temporary-file cleanup.
+- Recovery from a corrupt primary when the last-known-good backup is valid, while preserving the
+  corrupt original; defaults are used without deleting either file when both copies are unreadable.
+- Schema version 1 migration for legacy unversioned configuration files.
+- Concurrent configuration writes to separate files.
+- Module tick/render callback isolation, continued execution of healthy modules, the three-failures-
+  within-ten-seconds circuit breaker, lifecycle rollback after a failed enable, and propagation of
+  JVM `Error` types.
+
+The Fabric Gradle `build` task includes the JUnit platform tests. The Windows native-shell workflow
+also invokes the Fabric build before embedding the client JAR. A CI green result is the authoritative
+build/test evidence; static source inspection is not a substitute for those jobs.
+
+Recovery limitation: Safe Recovery can restore the last valid Aether configuration and isolate
+exceptions thrown from Aether module callbacks. It does not infer which module caused an unrelated
+Minecraft process crash, nor does it disable modules based on an unverified crash attribution.
+
+
+### Non-destructive crash-loop recovery
+- A session marker is written at client initialization and cleared only from the normal client-stopping callback.
+- Two consecutive sessions that do not reach normal stopping trigger a title-screen confirmation before module state is restored.
+- Choosing `Start safe mode` disables every Aether module for the current session; choosing `Continue normally` restores saved enabled states.
+- Safe mode saves HUD positions without capturing the temporarily disabled modules, preserving their prior enabled/disabled preferences.
+- The marker detects abnormal termination only; it does not attribute a Minecraft crash to Aether or to any specific module.

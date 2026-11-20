@@ -76,6 +76,26 @@ class AetherConfigTest {
 	}
 
 	@Test
+	@DisplayName("safe mode applies module settings without restoring enabled flags")
+	void safeModeKeepsModulesDisabledButPreservesSavedSettings() {
+		ModuleManager manager = new ModuleManager();
+		TestModule module = new TestModule("Test", ModuleCategory.MISC, true);
+		manager.register(module);
+
+		AetherConfig config = new AetherConfig();
+		config.modules.put("test", true);
+		Map<String, Object> stored = new LinkedHashMap<>();
+		stored.put("Amount", 9);
+		config.settings.put("test", stored);
+
+		config.applyTo(manager, false);
+
+		assertFalse(module.isEnabled(), "safe mode must not restore the persisted enabled state");
+		assertEquals(9, ((IntegerSetting) module.getSetting("Amount")).get(),
+				"safe mode still loads user settings");
+	}
+
+	@Test
 	@DisplayName("the configuration survives a round trip through the disk")
 	void configurationRoundTrip(@TempDir Path directory) {
 		Path file = directory.resolve("config.json");

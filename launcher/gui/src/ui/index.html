@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 	<meta charset="utf-8" />
-	<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost" />
+	<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost; object-src 'none'; base-uri 'self'; form-action 'self'" />
 	<title>Aether Launcher</title>
 	<link rel="stylesheet" href="tokens.css" />
 	<link rel="stylesheet" href="styles.css" />
@@ -32,9 +32,11 @@
 
 			<div class="sidebar-brand-block">
 				<div class="brand-crest">
-					<svg viewBox="0 0 24 24" class="brand-crest-svg">
-						<polygon points="12 2 2 19 22 19 12 2" />
-						<polygon points="12 6 18 17 6 17 12 6" />
+					<svg viewBox="0 0 24 24" class="brand-crest-svg" aria-hidden="true">
+						<rect x="3" y="13" width="3" height="7" rx="0.5" />
+						<rect x="8" y="8" width="3" height="12" rx="0.5" />
+						<rect x="13" y="4" width="3" height="16" rx="0.5" />
+						<rect x="18" y="10" width="3" height="10" rx="0.5" />
 					</svg>
 				</div>
 				<div class="brand-info">
@@ -45,19 +47,19 @@
 
 			<div class="nav-section-title">Client</div>
 			<nav class="nav">
-				<button class="nav-item is-active" data-page="play">
+				<button class="nav-item is-active" data-page="play" title="Play" aria-label="Play">
 					<svg viewBox="0 0 24 24"><path d="M6 4l14 8-14 8z" /></svg>
 					<span>Play</span>
 				</button>
-				<button class="nav-item" data-page="accounts">
+				<button class="nav-item" data-page="accounts" title="Accounts" aria-label="Accounts">
 					<svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4" /><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7" /></svg>
 					<span>Accounts</span>
 				</button>
-				<button class="nav-item" data-page="versions">
+				<button class="nav-item" data-page="versions" title="Versions" aria-label="Versions">
 					<svg viewBox="0 0 24 24"><path d="M12 3l9 5-9 5-9-5z" /><path d="M3 13l9 5 9-5" /></svg>
 					<span>Versions</span>
 				</button>
-				<button class="nav-item" data-page="mods">
+				<button class="nav-item" data-page="mods" title="Mods" aria-label="Mods">
 					<svg viewBox="0 0 24 24"><path d="M10 4h4v2.6a2.2 2.2 0 002.6 2.4 2.2 2.2 0 010 4.4A2.2 2.2 0 0014 16v4h-4v-2.6a2.2 2.2 0 00-2.6-2.4 2.2 2.2 0 010-4.4A2.2 2.2 0 0010 8z" /></svg>
 					<span>Mods</span>
 				</button>
@@ -65,11 +67,11 @@
 
 			<div class="nav-section-title">Network</div>
 			<nav class="nav">
-				<button class="nav-item" data-page="servers">
+				<button class="nav-item" data-page="servers" title="Servers" aria-label="Servers">
 					<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3c2.8 2.6 4 5.7 4 9s-1.2 6.4-4 9c-2.8-2.6-4-5.7-4-9s1.2-6.4 4-9z" /></svg>
 					<span>Servers</span>
 				</button>
-				<button class="nav-item" data-page="performance">
+				<button class="nav-item" data-page="performance" title="Performance" aria-label="Performance">
 					<svg viewBox="0 0 24 24"><path d="M4 17a8 8 0 1116 0" /><path d="M12 17l4-5" /></svg>
 					<span>Performance</span>
 				</button>
@@ -77,11 +79,11 @@
 
 			<div class="nav-section-title">System</div>
 			<nav class="nav">
-				<button class="nav-item" data-page="logs">
+				<button class="nav-item" data-page="logs" title="Logs" aria-label="Logs">
 					<svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6z" /><path d="M9 8h3M9 12h7M9 16h7" /></svg>
 					<span>Logs</span>
 				</button>
-				<button class="nav-item" data-page="settings">
+				<button class="nav-item" data-page="settings" title="Identity Studio" aria-label="Identity Studio">
 					<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 00.3 1.9l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.9-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1A1.7 1.7 0 008 19.4a1.7 1.7 0 00-1.9.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.9 1.7 1.7 0 00-1.5-1H2a2 2 0 110-4h.1A1.7 1.7 0 003.6 8a1.7 1.7 0 00-.3-1.9l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.9.3H8a1.7 1.7 0 001-1.5V2a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.9-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.9V8a1.7 1.7 0 001.5 1H22a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z" /></svg>
 					<span>Settings</span>
 				</button>
@@ -464,63 +466,159 @@
 			</section>
 
 			<!-- ========================== SETTINGS ========================== -->
-			<section class="page" data-page="settings">
-				<header class="page-header">
+			<section class="page studio-page" data-page="settings">
+				<header class="page-header studio-header">
 					<div>
-						<h1>Settings</h1>
-						<p>The runtime, the memory and the appearance of the launcher.</p>
+						<p class="studio-kicker">AETHER / WORKSPACE DESIGN</p>
+						<h1>Identity Studio</h1>
+						<p>Shape the atmosphere, surface and rhythm of your launcher. Changes are previewed live and saved to this machine.</p>
+					</div>
+					<div class="studio-edition">
+						<span class="studio-live-dot"></span>
+						<span>LIVE COMPOSITION</span>
 					</div>
 				</header>
 
-				<div class="grid grid--two">
+				<div class="studio-layout">
+					<section class="studio-preview-column" aria-label="Live appearance preview">
+						<div class="studio-preview-meta">
+							<span>01 — YOUR WORKSPACE</span>
+							<span id="studio-theme-name">GRAPHITE / CONTOUR</span>
+						</div>
+						<div class="studio-preview-frame" id="studio-preview">
+							<div class="studio-preview-rail">
+								<div class="studio-preview-mark"><span></span><span></span><span></span></div>
+								<div class="studio-preview-rail-rule"></div>
+								<div class="studio-preview-rail-item is-active"><i>01</i><span>PLAY</span></div>
+								<div class="studio-preview-rail-item"><i>02</i><span>VAULT</span></div>
+								<div class="studio-preview-rail-item"><i>03</i><span>MODS</span></div>
+								<div class="studio-preview-rail-item"><i>04</i><span>NETWORK</span></div>
+								<div class="studio-preview-rail-bottom"><span class="studio-preview-status"></span><span>LOCAL</span></div>
+							</div>
+							<div class="studio-preview-content">
+								<div class="studio-preview-top">
+									<span>AETHER <b>/</b> CLIENT</span>
+									<span>FIELD NOTE 001</span>
+								</div>
+								<div class="studio-preview-main">
+									<div class="studio-preview-overline"><span></span> SESSION READY <small>01.21.11</small></div>
+									<h2>Build your<br /><em>own</em> atmosphere.</h2>
+									<p>A personal space for the way you play. Precise, quiet and entirely yours.</p>
+									<div class="studio-preview-metrics">
+										<div><small>MEMORY</small><strong id="studio-preview-memory">4096 <i>MB</i></strong></div>
+										<div><small>PROFILE</small><strong>DEFAULT</strong></div>
+										<div><small>CHANNEL</small><strong>STABLE</strong></div>
+									</div>
+									<div class="studio-preview-action"><span>ENTER WORLD</span><b>↗</b></div>
+								</div>
+								<div class="studio-preview-footer">
+									<span>DESIGNED TO DISAPPEAR INTO YOUR FLOW</span>
+									<span id="studio-preview-accent">SIGNAL / 01</span>
+								</div>
+							</div>
+							<div class="studio-preview-orbit" aria-hidden="true"><span></span><span></span><span></span></div>
+						</div>
+						<div class="studio-preview-caption">
+							<span>THE PREVIEW USES YOUR CURRENT SETTINGS</span>
+							<span id="studio-preview-density">ROOMY · WIDE NAVIGATION</span>
+						</div>
+					</section>
+
+					<div class="studio-controls">
+						<section class="studio-control-section">
+							<div class="studio-section-head">
+								<div><span class="studio-index">A</span><h2>Colourway</h2></div>
+								<span>CHOOSE A MATERIAL</span>
+							</div>
+							<div class="studio-theme-choices" id="theme-choices">
+								<button type="button" class="studio-theme-choice is-active" data-theme="graphite" aria-pressed="true">
+									<span class="studio-theme-swatch swatch-graphite"><i></i><i></i><i></i></span>
+									<span><strong>Graphite</strong><small>Quiet / neutral</small></span><b>01</b>
+								</button>
+								<button type="button" class="studio-theme-choice" data-theme="oxide" aria-pressed="false">
+									<span class="studio-theme-swatch swatch-oxide"><i></i><i></i><i></i></span>
+									<span><strong>Oxide</strong><small>Warm / industrial</small></span><b>02</b>
+								</button>
+								<button type="button" class="studio-theme-choice" data-theme="field" aria-pressed="false">
+									<span class="studio-theme-swatch swatch-field"><i></i><i></i><i></i></span>
+									<span><strong>Field</strong><small>Organic / technical</small></span><b>03</b>
+								</button>
+								<button type="button" class="studio-theme-choice" data-theme="blueprint" aria-pressed="false">
+									<span class="studio-theme-swatch swatch-blueprint"><i></i><i></i><i></i></span>
+									<span><strong>Blueprint</strong><small>Cool / precise</small></span><b>04</b>
+								</button>
+							</div>
+							<label class="studio-accent-field">
+								<span><strong>Personal signal</strong><small>Override the signature accent</small></span>
+								<span class="studio-accent-input"><input type="color" id="input-accent" value="#e7e9ec" aria-label="Custom accent colour" /><output id="output-accent">#E7E9EC</output></span>
+							</label>
+						</section>
+
+						<section class="studio-control-section">
+							<div class="studio-section-head">
+								<div><span class="studio-index">B</span><h2>Surface</h2></div>
+								<span>BACKGROUND LINEWORK</span>
+							</div>
+							<div class="studio-segmented" id="surface-choices">
+								<button type="button" data-surface="contour" class="is-active" aria-pressed="true"><span class="surface-glyph surface-contour"></span><strong>Contour</strong><small>Topographic</small></button>
+								<button type="button" data-surface="draft" aria-pressed="false"><span class="surface-glyph surface-draft"></span><strong>Draft</strong><small>Grid / technical</small></button>
+								<button type="button" data-surface="plain" aria-pressed="false"><span class="surface-glyph surface-plain"></span><strong>Quiet</strong><small>No linework</small></button>
+							</div>
+						</section>
+
+						<section class="studio-control-section">
+							<div class="studio-section-head">
+								<div><span class="studio-index">C</span><h2>Workspace rhythm</h2></div>
+								<span>LAYOUT / DENSITY</span>
+							</div>
+							<div class="studio-choice-row">
+								<div class="studio-choice-block"><span class="studio-choice-label">SPACING</span><div class="studio-pill-choices" id="density-choices">
+									<button type="button" data-density="roomy" class="is-active" aria-pressed="true">Roomy</button>
+									<button type="button" data-density="compact" aria-pressed="false">Compact</button>
+								</div></div>
+								<div class="studio-choice-block"><span class="studio-choice-label">NAVIGATION</span><div class="studio-pill-choices" id="navigation-choices">
+									<button type="button" data-navigation="wide" class="is-active" aria-pressed="true">Expanded</button>
+									<button type="button" data-navigation="rail" aria-pressed="false">Icon rail</button>
+								</div></div>
+							</div>
+						</section>
+
+						<div class="studio-reset-row">
+							<span>Every choice is stored locally. No account or cloud sync.</span>
+							<button type="button" class="btn btn--ghost btn--small" id="appearance-reset">Reset studio</button>
+						</div>
+					</div>
+				</div>
+
+				<div class="studio-secondary-grid">
 					<div class="block">
-						<div class="block-head"><h2 class="block-title">Runtime</h2></div>
+						<div class="block-head"><h2 class="block-title">Runtime</h2><span class="block-subtitle">JAVA / MEMORY</span></div>
 						<div class="block-body">
 							<label class="field">
 								<span class="field-label">Java path</span>
 								<input type="text" id="input-java" class="input" placeholder="Auto detected" />
 							</label>
-							<label class="field">
-								<span class="field-label">Maximum memory</span>
-								<div class="range-row">
-									<input type="range" id="range-max-memory" min="1024" max="16384" step="256" value="4096" aria-label="Maximum memory" />
-									<output id="output-max-memory">4096 MB</output>
-								</div>
-							</label>
-							<label class="field">
-								<span class="field-label">Initial memory</span>
-								<div class="range-row">
-									<input type="range" id="range-min-memory" min="256" max="8192" step="256" value="1024" aria-label="Initial memory" />
-									<output id="output-min-memory">1024 MB</output>
-								</div>
-							</label>
-							<label class="field--inline">
-								<input type="checkbox" id="check-g1" checked />
-								<span>Use the G1 garbage collector</span>
-							</label>
+							<div class="grid grid--two">
+								<label class="field"><span class="field-label">Maximum memory</span><div class="range-row"><input type="range" id="range-max-memory" min="1024" max="16384" step="256" value="4096" aria-label="Maximum memory" /><output id="output-max-memory">4096 MB</output></div></label>
+								<label class="field"><span class="field-label">Initial memory</span><div class="range-row"><input type="range" id="range-min-memory" min="256" max="8192" step="256" value="1024" aria-label="Initial memory" /><output id="output-min-memory">1024 MB</output></div></label>
+							</div>
+							<label class="field--inline"><input type="checkbox" id="check-g1" checked /><span>Use the G1 garbage collector</span></label>
 						</div>
 					</div>
-
 					<div class="block">
-						<div class="block-head"><h2 class="block-title">Appearance</h2></div>
+						<div class="block-head"><h2 class="block-title">Fabric</h2><span class="block-subtitle">CLIENT DEPENDENCY</span></div>
 						<div class="block-body">
-							<label class="field">
-								<span class="field-label">Accent colour</span>
-								<div class="range-row">
-									<input type="color" id="input-accent" class="input" value="#e7e9ec" />
-									<output id="output-accent">#E7E9EC</output>
-								</div>
-							</label>
 							<label class="field">
 								<span class="field-label">Fabric API version</span>
 								<input type="text" id="input-fabric-api" class="input" />
 							</label>
+							<p class="muted">The version used for the next repair or installation. Existing profiles keep their selected Minecraft and Fabric loader versions.</p>
 						</div>
 					</div>
 				</div>
 
 				<div class="block">
-					<div class="block-head"><h2 class="block-title">Paths</h2></div>
+					<div class="block-head"><h2 class="block-title">Installation paths</h2><span class="block-subtitle">LOCAL STORAGE</span></div>
 					<pre class="console console--static" id="paths-output"></pre>
 				</div>
 			</section>

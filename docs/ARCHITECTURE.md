@@ -37,8 +37,9 @@ JSON lines/events for the interface.
 | `main.rs` | CLI parsing/dispatch, JSON output, streaming wrappers for install/launch/auth flows. |
 | `lib.rs` | High-level `Launcher` API tying paths, settings, accounts, install, launch and the game record together. |
 | `paths.rs` | Resolution/creation of launcher and game directories (`AETHER_HOME`, `AETHER_SHARED_DIR`). |
-| `settings.rs` | Persistent settings, Java detection, mod jar discovery (`AETHER_MOD_JAR`). |
+| `settings.rs` | Persistent settings (including the Identity Studio colourway, custom accent, surface, density and navigation choices), Java detection, mod jar discovery (`AETHER_MOD_JAR`). |
 | `accounts.rs` | Account store, offline accounts, Microsoft device-code login flow, session mapping, and the Mojang name lookup that tells a premium name from a free one. |
+| `credentials.rs` | Separate Microsoft access/refresh token vault: Windows DPAPI protection, legacy account-file migration, and no token serialization into JSON/renderer IPC. |
 | `offline.rs` | Offline username validation and deterministic Minecraft-compatible offline UUID generation. |
 | `minecraft.rs` | Mojang/Fabric metadata retrieval, rule evaluation, argument templating, library resolution/merging. |
 | `http.rs` | HTTP helpers, JSON/text/bytes requests with status (`get_with_status`), file download with checksum verification, SHA-1 utilities. |
@@ -52,6 +53,12 @@ Key properties:
 - **Single source of truth for launch/install logic** in Rust; the interface does not duplicate it.
 - **JSON CLI contract** enables scripting and decouples the interface from the core.
 - **Checksum-verified downloads** (SHA-1 where provided/expected) to avoid corrupted/cached-bad files.
+- **Untrusted metadata stays inside its namespace**: version IDs, library-relative paths, asset hashes,
+  hosted-server version identifiers and remote JAR filenames are validated before local path joins.
+- **Content-addressed asset scheduling**: duplicate SHA-1 objects are collapsed before parallel
+  downloads, preventing workers from racing over a shared object destination or partial file.
+- **Managed file boundaries**: mod and session-log operations reject symbolic links instead of
+  following them outside their managed folders.
 
 ### Native shell (`launcher/desktop`)
 
@@ -63,12 +70,22 @@ are the same ones the previous Electron shell loaded.
 | --- | --- |
 | `src/main.rs` | Window creation (shown only once the first frame is ready), single-instance lock, command registration, kill of the running processes on exit. |
 | `src/commands.rs` | One `#[tauri::command]` per call of the interface: same names, same arguments and same answers as the old IPC handlers. |
-| `src/core.rs` | Finds, embeds and runs the core; turns its JSON lines into events (`install:progress`, `game:output`, …); enforces a per-command timeout; exposes `kill_tree`. |
-| `src/state.rs` | The processes the window can stop while they run (installation, game). |
-| `tauri.conf.json` | Window size/behaviour, CSP, NSIS packaging (French), icons and licence. |
+| `src/core.rs` | Finds, embeds and runs the core; turns its JSON lines into events (`install:progress`, `game:output`, …); enforces a per-command timeout; atomically extracts embedded binaries/JARs with unique temporary siblings; exposes `kill_tree`. |
+| `src/state.rs` | The processes the window can stop while they run (installation, game), with atomic single-operation guards so concurrent commands cannot overwrite the tracked PID. |
+| `tauri.conf.json` | Window size/behaviour, injected CSP and JavaScript prototype freeze, NSIS packaging (French), icons and licence. |
 
 The interface (`launcher/gui/src/ui/`) is plain HTML/CSS/JavaScript. `bridge.js` exposes
 `window.aether` over Tauri's `invoke`, so `app.js` never learned that the shell changed.
+
+The Settings page is **Identity Studio**: app.js applies persisted workspace choices to root-level
+palette aliases, surface, density and navigation attributes; tokens.css is the single source for
+all four material colourways; styles.css renders those choices across the actual shell and the
+live workspace preview. Appearance writes are serialized so rapid changes cannot overwrite one
+another with stale settings snapshots.
+
+The WebView policy is set in `tauri.conf.json`, not only in an HTML meta tag: scripts are self-hosted,
+objects are disabled, the base URL and form targets are restricted to the local origin, and
+`freezePrototype` prevents page scripts from modifying built-in JavaScript prototypes.
 
 **Why the shell is native and not Electron.** The Electron build shipped a whole Chromium for a
 launcher: ~150 MB installed against one ~8.75 MB executable, and it added a Node runtime next to the
@@ -161,7 +178,7 @@ feature registries.
 | --- | --- |
 | `AetherClient` / `Aether` | Entrypoint/bootstrap, singleton/state access, lifecycle wiring. |
 | `config/` | Persistent configuration load/save and module/HUD state serialization. |
-| `module/` | Module framework, categories, registry, lifecycle callbacks. |
+| `module/` | Module framework, categories, registry, lifecycle callbacks and per-callback fault isolation. |
 | `module/modules/` | Concrete modules (HUD/render/combat/movement/misc). |
 | `setting/` | Typed module settings and UI-editable values. |
 | `hud/` | HUD element management, layout/position persistence, rendering integration. |
@@ -186,9 +203,27 @@ consistency against the target game classes where applicable.
 - **Performance**: the record of the installed mods is `aether/performance.json`; the first tuning
   writes `options.txt.aether-backup` next to the game options.
 
-The client configuration tolerates a UTF-8 byte order mark: an editor such as Notepad adds one, and
-Gson refuses a document that starts with it — without that tolerance the whole configuration would
-silently fall back to the defaults.
+The client configuration tolerates a UTF-8 byte order mark and uses schema version 1 (unversioned files
+are migrated in place). Writes are staged in unique sibling files, flushed and promoted with an atomic
+replace when the file system supports it. Before replacing a valid primary, the previous bytes are
+atomically written to `config.json.bak`; a corrupt primary is preserved under a unique
+`.corrupt-*.json` name before a successful replacement. Startup tries the primary, then the backup,
+and otherwise uses defaults while preserving both files. A recovery notice is shown in-game when a
+backup is restored or defaults are required.
+
+A small session guard records whether Fabric reached the normal client-stopping lifecycle event.
+Two consecutive unclean starts produce a title-screen confirmation with separate `Start safe mode`
+and `Continue normally` choices. The optional `/aether safe-mode` command remains available in-game. The marker says only that the previous sessions did not close normally; it is not treated
+as proof that Aether caused a Minecraft crash. Safe mode disables Aether modules for that session,
+keeps the saved module preferences unchanged, and suppresses GUI/keybind toggles until the next
+normal launch.
+
+Module `onTick` and `onRender` callbacks run behind a narrow `RuntimeException` boundary. Three
+failures from the same callback within ten seconds trip that module's circuit breaker; successful
+calls reset that callback's failure window. Lifecycle callback failures are logged and an unsuccessful
+enable is rolled back with a best-effort disable cleanup. JVM `Error` types are deliberately not caught.
+This can attribute failures thrown by Aether callbacks, but does not claim to diagnose arbitrary
+Minecraft or JVM crashes.
 
 ## Build/test components
 
