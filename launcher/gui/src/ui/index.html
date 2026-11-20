@@ -174,6 +174,26 @@
 							</div>
 						</div>
 
+						<div class="runtime-summary" id="java-runtime-summary">
+							<div class="runtime-summary-icon" aria-hidden="true">J</div>
+							<div class="runtime-summary-copy">
+								<strong id="java-runtime-label">Checking Java runtime…</strong>
+								<small id="java-runtime-detail">The Rust core is checking which Java version Minecraft needs.</small>
+							</div>
+							<button class="btn btn--ghost btn--small" id="java-runtime-settings" type="button">Settings</button>
+						</div>
+
+						<div class="block quick-connect-block">
+							<div class="block-head">
+								<div>
+									<h2 class="block-title">Quick connect</h2>
+									<span class="block-subtitle">Your saved servers, ready to join</span>
+								</div>
+								<button class="btn btn--ghost btn--small" id="quick-servers-open" type="button">Manage servers</button>
+							</div>
+							<div id="quick-servers" class="quick-servers"></div>
+						</div>
+
 						<details class="drawer">
 							<summary>Game output</summary>
 							<pre class="console" id="console" aria-live="polite" data-empty="The output of the game appears here when you launch it."></pre>
@@ -242,6 +262,20 @@
 						<h2 class="block-title">Available versions</h2>
 						<span class="block-subtitle">Published by Mojang</span>
 					</div>
+					<div class="library-toolbar">
+						<label class="library-search">
+							<span class="sr-only">Search Minecraft versions</span>
+							<input type="search" id="versions-search" class="input" placeholder="Search version…" autocomplete="off" />
+						</label>
+						<select id="versions-filter" class="input library-filter" aria-label="Filter version type">
+							<option value="all">All types</option>
+							<option value="release">Releases</option>
+							<option value="snapshot">Snapshots</option>
+							<option value="old_beta">Old beta</option>
+							<option value="old_alpha">Old alpha</option>
+						</select>
+					</div>
+					<p class="library-summary" id="versions-summary" aria-live="polite"></p>
 					<div id="version-table" class="version-table"></div>
 				</div>
 			</section>
@@ -263,6 +297,18 @@
 						<h2 class="block-title">Installed mods</h2>
 						<span class="badge" id="mods-count">0 mods</span>
 					</div>
+					<div class="library-toolbar">
+						<label class="library-search">
+							<span class="sr-only">Search installed mods</span>
+							<input type="search" id="mods-search" class="input" placeholder="Search installed mods…" autocomplete="off" />
+						</label>
+						<select id="mods-filter" class="input library-filter" aria-label="Filter mod status">
+							<option value="all">All mods</option>
+							<option value="enabled">Enabled</option>
+							<option value="disabled">Disabled</option>
+						</select>
+					</div>
+					<p class="library-summary" id="mods-summary" aria-live="polite"></p>
 					<div id="mods-table" class="mod-table"></div>
 					<p class="log-path" id="mods-path"></p>
 				</div>
@@ -402,13 +448,25 @@
 					</div>
 				</div>
 
-				<div class="block">
+				<div class="block performance-overview">
 					<div class="block-head">
-						<h2 class="block-title">Live FPS curve</h2>
-						<span class="badge" id="fps-spline-status">880+ FPS peak target</span>
+						<div>
+							<h2 class="block-title">Optimization status</h2>
+							<span class="block-subtitle">Based on files and settings read by the Rust core</span>
+						</div>
+						<span class="badge" id="perf-health-count">Checking…</span>
 					</div>
 					<div class="block-body">
-						<canvas id="fps-spline-canvas" class="fps-spline-canvas" width="600" height="120"></canvas>
+						<div class="health-progress">
+							<div class="health-progress-track"><span id="perf-health-progress"></span></div>
+							<strong id="perf-health-percent">—</strong>
+						</div>
+						<div class="health-summary-grid">
+							<div class="health-summary-item"><span>Optimization pack</span><strong id="perf-health-message">Not checked yet</strong></div>
+							<div class="health-summary-item"><span>JVM preset</span><strong id="perf-jvm-summary">Not loaded</strong></div>
+							<div class="health-summary-item"><span>Game options</span><strong id="perf-options-summary">Not loaded</strong></div>
+						</div>
+						<p class="muted performance-footnote">This is an installation/configuration check, not a live FPS benchmark. Actual FPS is shown in the in-game HUD.</p>
 					</div>
 				</div>
 
@@ -478,7 +536,8 @@
 						<div class="block-body">
 							<label class="field">
 								<span class="field-label">Java path</span>
-								<input type="text" id="input-java" class="input" placeholder="Auto detected" />
+								<input type="text" id="input-java" class="input" placeholder="Auto-detected — leave blank to use PATH and common install folders" />
+								<small class="runtime-help" id="java-runtime-status">Checking for a compatible Java runtime…</small>
 							</label>
 							<label class="field">
 								<span class="field-label">Maximum memory</span>
