@@ -204,6 +204,9 @@ See [`docs/FEATURES.md`](docs/FEATURES.md) for the detailed list.
 - Premium-name guard: `account check` asks Mojang whether a name belongs to a Mojang account, and the
   interface warns before a cracked server can reject the connection.
 - Performance page: optimisation pack from Modrinth, options and JVM presets.
+- Identity Studio: four designed material colourways, live preview, custom accent, topographic/drafting
+  surfaces, compact or roomy spacing and expanded or icon-rail navigation. Preferences are local and
+  survive restarts.
 - Records the process of the game, so a game left behind by a closed launcher can still be stopped
   (`aether-launcher stop`, or the Stop button of the next session).
 - Stores settings/accounts/game data under an Aether-managed home (configurable).
