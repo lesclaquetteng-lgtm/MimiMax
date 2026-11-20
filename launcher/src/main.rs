@@ -159,7 +159,7 @@ fn command_settings(arguments: &[String]) -> Result<(), String> {
         updated.window_height = updated.window_height.max(240);
         updated.max_memory = updated.max_memory.max(updated.min_memory);
         launcher.settings = updated;
-        launcher.save();
+        launcher.save()?;
     }
 
     emit(&serde_json::json!({ "ok": true, "settings": launcher.settings }));
@@ -192,7 +192,7 @@ fn command_account(arguments: &[String]) -> Result<(), String> {
                 .positional
                 .get(1)
                 .ok_or_else(|| "usage: account remove <id>".to_string())?;
-            launcher.remove_account(id);
+            launcher.remove_account(id)?;
             emit(&serde_json::json!({ "ok": true, "accounts": launcher.accounts }));
         }
         Some("select") => {
@@ -200,7 +200,7 @@ fn command_account(arguments: &[String]) -> Result<(), String> {
                 .positional
                 .get(1)
                 .ok_or_else(|| "usage: account select <id>".to_string())?;
-            launcher.select_account(id);
+            launcher.select_account(id)?;
             emit(&serde_json::json!({ "ok": true, "accounts": launcher.accounts }));
         }
         Some("check") => {
@@ -227,7 +227,7 @@ fn command_account(arguments: &[String]) -> Result<(), String> {
             let token = accounts::poll_device_code(&code).map_err(|error| error.to_string())?;
             let account = accounts::complete_microsoft_login(&token)
                 .map_err(|error| error.to_string())?;
-            launcher.add_account(account.clone());
+            launcher.add_account(account.clone())?;
 
             // The last document of a command is its result, the interface reads it for the account.
             emit(&serde_json::json!({ "ok": true, "account": account }));
@@ -310,7 +310,7 @@ fn command_profiles(arguments: &[String]) -> Result<(), String> {
             profile.window_width = number("width", profile.window_width);
             profile.window_height = number("height", profile.window_height);
 
-            launcher.add_profile(profile);
+            launcher.add_profile(profile)?;
         }
         "use" => {
             let name = argument(1, "profiles use needs a name")?;
