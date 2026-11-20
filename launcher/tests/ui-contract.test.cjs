@@ -96,7 +96,7 @@ test('the launcher never simulates FPS in its desktop UI', () => {
 	assert.doesNotMatch(app, /initFpsSplineGraph|fpsHistory|fps-spline-canvas/);
 	assert.doesNotMatch(html, /fps-spline-canvas|Live FPS curve|880\+ FPS peak target/i);
 	assert.match(html, /This is an installation\/configuration check, not a live FPS benchmark/);
-	assert.match(app, /installed\/total/);
+	assert.ok(app.includes('(installed / total) * 100'));
 });
 
 test('quick connect and command palette follow reduced-motion preferences', () => {
