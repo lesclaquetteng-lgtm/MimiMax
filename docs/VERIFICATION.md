@@ -452,3 +452,25 @@ and the entity distance.
   explains it before the launch; it cannot make the server accept the name, and it does not try.
 - The frame rates above depend on the machine, the window size and the render distance; the options
   preset and the mod list are the reproducible part.
+
+
+## 10. Aether 2.0 — Core Stability
+
+The Core Stability phase adds targeted regression coverage for:
+
+- Atomic configuration replacement, backup rotation, failed promotion and temporary-file cleanup.
+- Recovery from a corrupt primary when the last-known-good backup is valid, while preserving the
+  corrupt original; defaults are used without deleting either file when both copies are unreadable.
+- Schema version 1 migration for legacy unversioned configuration files.
+- Concurrent configuration writes to separate files.
+- Module tick/render callback isolation, continued execution of healthy modules, the three-failures-
+  within-ten-seconds circuit breaker, lifecycle rollback after a failed enable, and propagation of
+  JVM `Error` types.
+
+The Fabric Gradle `build` task includes the JUnit platform tests. The Windows native-shell workflow
+also invokes the Fabric build before embedding the client JAR. A CI green result is the authoritative
+build/test evidence; static source inspection is not a substitute for those jobs.
+
+Recovery limitation: Safe Recovery can restore the last valid Aether configuration and isolate
+exceptions thrown from Aether module callbacks. It does not infer which module caused an unrelated
+Minecraft process crash, nor does it disable modules based on an unverified crash attribution.

@@ -178,7 +178,7 @@ feature registries.
 | --- | --- |
 | `AetherClient` / `Aether` | Entrypoint/bootstrap, singleton/state access, lifecycle wiring. |
 | `config/` | Persistent configuration load/save and module/HUD state serialization. |
-| `module/` | Module framework, categories, registry, lifecycle callbacks. |
+| `module/` | Module framework, categories, registry, lifecycle callbacks and per-callback fault isolation. |
 | `module/modules/` | Concrete modules (HUD/render/combat/movement/misc). |
 | `setting/` | Typed module settings and UI-editable values. |
 | `hud/` | HUD element management, layout/position persistence, rendering integration. |
@@ -203,9 +203,20 @@ consistency against the target game classes where applicable.
 - **Performance**: the record of the installed mods is `aether/performance.json`; the first tuning
   writes `options.txt.aether-backup` next to the game options.
 
-The client configuration tolerates a UTF-8 byte order mark: an editor such as Notepad adds one, and
-Gson refuses a document that starts with it — without that tolerance the whole configuration would
-silently fall back to the defaults.
+The client configuration tolerates a UTF-8 byte order mark and uses schema version 1 (unversioned files
+are migrated in place). Writes are staged in unique sibling files, flushed and promoted with an atomic
+replace when the file system supports it. Before replacing a valid primary, the previous bytes are
+atomically written to `config.json.bak`; a corrupt primary is preserved under a unique
+`.corrupt-*.json` name before a successful replacement. Startup tries the primary, then the backup,
+and otherwise uses defaults while preserving both files. A recovery notice is shown in-game when a
+backup is restored or defaults are required.
+
+Module `onTick` and `onRender` callbacks run behind a narrow `RuntimeException` boundary. Three
+failures from the same callback within ten seconds trip that module's circuit breaker; successful
+calls reset that callback's failure window. Lifecycle callback failures are logged and an unsuccessful
+enable is rolled back with a best-effort disable cleanup. JVM `Error` types are deliberately not caught.
+This can attribute failures thrown by Aether callbacks, but does not claim to diagnose arbitrary
+Minecraft or JVM crashes.
 
 ## Build/test components
 

@@ -1,6 +1,7 @@
 package dev.aether.client.module;
 
 import com.mojang.blaze3d.platform.InputConstants;
+import dev.aether.client.config.AetherClientLogger;
 import dev.aether.client.setting.Setting;
 import dev.aether.client.util.Animation;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
@@ -10,7 +11,9 @@ import net.minecraft.resources.Identifier;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * The base class of every feature of the client.
@@ -27,6 +30,18 @@ public abstract class Module {
 	private final ModuleCategory category;
 	private final List<Setting> settings = new ArrayList<>();
 	private final Animation toggleAnimation = new Animation(0.0f, 16.0f);
+	private static final int CALLBACK_FAILURE_LIMIT = 3;
+	private static final long CALLBACK_FAILURE_WINDOW_NANOS = 10_000_000_000L;
+	private final Map<String, CallbackFailure> callbackFailures = new HashMap<>();
+
+	private static final class CallbackFailure {
+		private long windowStartedAt;
+		private int count;
+
+		private CallbackFailure(long now) {
+			windowStartedAt = now;
+		}
+	}
 
 	private boolean enabled;
 	private boolean defaultEnabled;
@@ -95,12 +110,67 @@ public abstract class Module {
 		if (this.enabled == value) {
 			return;
 		}
+		if (value) {
+			callbackFailures.clear();
+		}
 		this.enabled = value;
 		toggleAnimation.setTarget(value ? 1.0f : 0.0f);
 		if (value) {
-			onEnable();
+			try {
+				onEnable();
+			} catch (RuntimeException exception) {
+				this.enabled = false;
+				toggleAnimation.setTarget(0.0f);
+				AetherClientLogger.error("Module '" + name + "' failed in onEnable and was rolled back.", exception);
+				try {
+					onDisable();
+				} catch (RuntimeException cleanupException) {
+					exception.addSuppressed(cleanupException);
+					AetherClientLogger.error("Cleanup after failed onEnable also failed for module '" + name + "'.",
+							cleanupException);
+				}
+			}
 		} else {
-			onDisable();
+			try {
+				onDisable();
+			} catch (RuntimeException exception) {
+				AetherClientLogger.error("Module '" + name + "' failed in onDisable; it remains disabled.", exception);
+			}
+		}
+	}
+
+	/**
+	 * Runs a module callback behind a narrow RuntimeException boundary. Three failures in ten
+	 * seconds trip the callback's circuit breaker and disable this module. JVM Errors are not caught.
+	 *
+	 * @return true when the callback completed successfully
+	 */
+	public final boolean invokeSafely(String callbackName, Runnable callback) {
+		if (!enabled) {
+			return false;
+		}
+		try {
+			callback.run();
+			callbackFailures.remove(callbackName);
+			return true;
+		} catch (RuntimeException exception) {
+			long now = System.nanoTime();
+			CallbackFailure failure = callbackFailures.computeIfAbsent(callbackName,
+					ignored -> new CallbackFailure(now));
+			if (now - failure.windowStartedAt > CALLBACK_FAILURE_WINDOW_NANOS) {
+				failure.windowStartedAt = now;
+				failure.count = 0;
+			}
+			failure.count++;
+			AetherClientLogger.error("Module '" + name + "' failed in " + callbackName
+					+ " (" + failure.count + "/" + CALLBACK_FAILURE_LIMIT + ").", exception);
+			if (failure.count >= CALLBACK_FAILURE_LIMIT) {
+				callbackFailures.remove(callbackName);
+				AetherClientLogger.warn("Circuit breaker disabled module '" + name
+						+ "' after repeated " + callbackName + " failures.");
+				setEnabled(false);
+			}
+			return false;
 		}
 	}
 

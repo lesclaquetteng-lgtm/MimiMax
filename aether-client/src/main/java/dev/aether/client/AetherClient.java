@@ -48,6 +48,7 @@ public class AetherClient implements ClientModInitializer {
 	/** The configuration of the last session, applied on the first tick (see {@link #onTick}). */
 	private AetherConfig config;
 	private boolean configApplied;
+	private boolean recoveryNoticeShown;
 
 	private KeyMapping clickGuiKey;
 	private KeyMapping hudEditorKey;
@@ -163,6 +164,14 @@ public class AetherClient implements ClientModInitializer {
 	 * Runs the tick logic of the client.
 	 */
 	private void onTick(Minecraft minecraft) {
+		if (!recoveryNoticeShown && minecraft.player != null) {
+			String recoveryMessage = config.getRecoveryMessage();
+			if (recoveryMessage != null) {
+				minecraft.player.displayClientMessage(Component.literal(recoveryMessage), false);
+			}
+			recoveryNoticeShown = true;
+		}
+
 		// The modules write into the options of the game, which do not exist yet while the client is
 		// being created. The saved state is therefore restored on the first tick: applying it earlier
 		// crashed the game as soon as a module touching the options (Fullbright, FOV, No View Bobbing,

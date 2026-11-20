@@ -80,7 +80,7 @@ public final class ModuleManager {
 	public void tick() {
 		for (Module module : modules.values()) {
 			if (module.isEnabled()) {
-				module.onTick();
+				module.invokeSafely("onTick", module::onTick);
 			}
 		}
 	}
@@ -96,7 +96,7 @@ public final class ModuleManager {
 	public void render(GuiGraphics graphics, float partialTick) {
 		for (Module module : modules.values()) {
 			if (module.isEnabled() && !(module instanceof HudElement)) {
-				module.onRender(graphics, partialTick);
+				module.invokeSafely("onRender", () -> module.onRender(graphics, partialTick));
 			}
 		}
 	}
