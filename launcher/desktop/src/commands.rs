@@ -286,7 +286,7 @@ pub async fn mods_install(
 	let Some(_operation) = state.acquire_install() else {
 		return failure("Mods cannot be installed while Minecraft is starting, running or another install is active.");
 	};
-	core::run_core(
+	blocking_stream(
 		app,
 		vec![
 			"mods".to_string(),
@@ -295,6 +295,7 @@ pub async fn mods_install(
 			"--game-version".to_string(),
 			game_version,
 		],
+		StreamKind::Modrinth,
 	)
 	.await
 }
