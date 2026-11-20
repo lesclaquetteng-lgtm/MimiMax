@@ -428,12 +428,10 @@ fn install_version_tree(
         let fallback = dependency
             .project_id
             .as_deref()
-            .or_else(|| {
-                if dependency_version.project_id.is_empty() {
-                    None
-                } else {
-                    Some(dependency_version.project_id.as_str())
-                }
+            .or(if dependency_version.project_id.is_empty() {
+                None
+            } else {
+                Some(dependency_version.project_id.as_str())
             })
             .unwrap_or(&project_id)
             .to_string();
