@@ -39,10 +39,10 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install stable Rust
         run: rustup toolchain install stable --profile minimal && rustup default stable
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: "21"
+          java-version: "25"
           cache: gradle
       # The shell embeds both build products, so generate each one before compiling Tauri.
       - name: Build the Fabric client
@@ -75,7 +75,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "25"
