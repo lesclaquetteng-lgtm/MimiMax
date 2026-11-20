@@ -1996,13 +1996,13 @@ function themeColors() {
  */
 const LEGACY_ACCENT_DEFAULTS = new Set(['#6c5ce7', '#7c5cfc', '#3b82f6', '#e7e9ec']);
 
-function applyAccent(color) {
+function applyAccent(color, usePaletteDefault = false) {
 	const value = String(color ?? '').trim();
 	const root = document.documentElement.style;
 
 	themeCache = null;
 
-	if (!value || LEGACY_ACCENT_DEFAULTS.has(value.toLowerCase())) {
+	if (usePaletteDefault || !value || LEGACY_ACCENT_DEFAULTS.has(value.toLowerCase())) {
 		root.removeProperty('--accent-user');
 		root.removeProperty('--on-accent');
 		return;
@@ -2025,6 +2025,13 @@ const APPEARANCE_THEMES = Object.freeze({
 	oxide: 'OXIDE',
 	field: 'FIELD',
 	blueprint: 'BLUEPRINT'
+});
+
+const THEME_SIGNATURE_ACCENTS = Object.freeze({
+	graphite: '#E7E9EC',
+	oxide: '#D99A69',
+	field: '#C0D18A',
+	blueprint: '#83C5DF'
 });
 
 const PALETTE_CHANNELS = Object.freeze([
@@ -2078,12 +2085,13 @@ function applyAppearance(settings = {}) {
 	}
 
 	if ($('#input-accent')) {
-		const accent = /^#[0-9a-f]{6}$/i.test(String(settings.accentColor || ''))
-			? settings.accentColor
-			: APPEARANCE_DEFAULTS.accentColor;
+		const storedAccent = String(settings.accentColor || '').trim();
+		const hasCustomAccent = /^#[0-9a-f]{6}$/i.test(storedAccent)
+			&& !LEGACY_ACCENT_DEFAULTS.has(storedAccent.toLowerCase());
+		const accent = hasCustomAccent ? storedAccent : THEME_SIGNATURE_ACCENTS[theme];
 		$('#input-accent').value = accent;
 		$('#output-accent').textContent = accent.toUpperCase();
-		applyAccent(accent);
+		applyAccent(accent, !hasCustomAccent);
 	}
 }
 
