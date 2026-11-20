@@ -40,8 +40,26 @@ function toast(message, kind = '') {
 
 function setStatus(text, kind = '') {
 	const pill = $('#status-pill');
-	pill.className = `status-pill${kind ? ` is-${kind}` : ''}`;
-	$('#status-text').textContent = text;
+	if (pill) pill.className = `gate-status${kind ? ` is-${kind}` : ''}`;
+	const label = $('#status-text');
+	if (label) label.textContent = text;
+
+	const gateState = $('#gate-state-line');
+	if (gateState) {
+		const message = String(text).toLowerCase();
+		let summary = 'READY WHEN YOU ARE';
+		if (kind === 'error' || message.includes('error') || message.includes('crash')) {
+			summary = 'THE GATE NEEDS ATTENTION';
+		} else if (message.includes('playing')) {
+			summary = 'AETHER IS RUNNING';
+		} else if (kind === 'busy' && (message.includes('launch') || message.includes('join') || message.includes('stop'))) {
+			summary = 'THE GATE IS IN MOTION';
+		} else if (kind === 'busy' || message.includes('install') || message.includes('prepar') || message.includes('download')) {
+			summary = 'PREPARING YOUR WORLD';
+		}
+		gateState.textContent = summary;
+	}
+	if (pill) pill.setAttribute('data-state', kind || 'ready');
 }
 
 /** Parses Minecraft MOTD formatting codes (§0-f, §l,m,n,o,r) into styled sanitized HTML spans. */
@@ -396,6 +414,12 @@ function renderAccounts() {
 	$('#session-badge').textContent = selected
 		? (selected.type === 'offline' ? 'offline session' : 'microsoft session')
 		: 'no account selected';
+	const gateAccountSummary = $('#gate-account-summary');
+	if (gateAccountSummary) {
+		gateAccountSummary.textContent = selected
+			? `${selected.username} / ${selected.type === 'offline' ? 'OFFLINE' : 'MICROSOFT'}`
+			: 'NO ACCOUNT SELECTED';
+	}
 
 	renderDock();
 }
@@ -2334,26 +2358,43 @@ async function loadProfiles() {
  * The reports use it to bring the player to the logs instead of only telling them where the
  * files are.
  */
+function setGateMenuOpen(open, restoreFocus = false) {
+	const menu = $('#gate-menu');
+	const backdrop = $('#gate-menu-backdrop');
+	const trigger = $('#btn-gate-menu');
+	if (!menu || !backdrop || !trigger) return;
+
+	menu.hidden = !open;
+	backdrop.hidden = !open;
+	trigger.setAttribute('aria-expanded', String(open));
+	if (open) {
+		menu.querySelector('.nav-item')?.focus();
+	} else if (restoreFocus) {
+		trigger.focus({ preventScroll: true });
+	}
+}
+
+function closeGateMenu() {
+	setGateMenuOpen(false);
+}
+
 function showPage(name) {
-	let activeBtn = null;
-	$$('.nav-item').forEach((other) => {
+	const target = $(`.page[data-page="${name}"]`);
+	if (!target) return;
+
+	state.page = name;
+	$('.nav-item').forEach((other) => {
 		const match = other.dataset.page === name;
 		other.classList.toggle('is-active', match);
-		if (match) activeBtn = other;
+		if (match) other.setAttribute('aria-current', 'page');
+		else other.removeAttribute('aria-current');
 	});
 
-	// Smooth sliding nav indicator with GPU transform
-	const indicator = $('#nav-indicator');
-	if (indicator && activeBtn) {
-		const sidebarTop = $('.sidebar').getBoundingClientRect().top;
-		const btnRect = activeBtn.getBoundingClientRect();
-		const targetY = btnRect.top - sidebarTop + (btnRect.height - 28) / 2;
-		indicator.style.transform = `translateY(${Math.round(targetY)}px)`;
-		indicator.classList.add('is-visible');
-	}
+	$('.page').forEach((page) => page.classList.remove('is-active'));
+	target.classList.add('is-active');
 
-	$$('.page').forEach((page) => page.classList.remove('is-active'));
-	$(`.page[data-page="${name}"]`).classList.add('is-active');
+	// Destinations live in a compact overlay, never in a permanent sidebar.
+	closeGateMenu();
 
 	// A page opens at its top, a scroll of the previous one is not kept.
 	$('.content').scrollTop = 0;
@@ -2377,8 +2418,13 @@ async function init() {
 		button.addEventListener('click', () => api.window(button.dataset.window));
 	});
 
-	// Navigation.
-	$$('.nav-item').forEach((item) => {
+	// The Gate navigation is intentionally hidden until requested.
+	$('#btn-gate-menu').addEventListener('click', () => {
+		setGateMenuOpen($('#gate-menu').hidden, true);
+	});
+	$('#btn-gate-menu-close').addEventListener('click', () => setGateMenuOpen(false, true));
+	$('#gate-menu-backdrop').addEventListener('click', closeGateMenu);
+	$('.nav-item').forEach((item) => {
 		item.addEventListener('click', () => showPage(item.dataset.page));
 	});
 
@@ -2389,7 +2435,12 @@ async function init() {
 
 	// Escape closes the dialog, Tab stays inside it while it is open.
 	document.addEventListener('keydown', (event) => {
-		if ($('#modal').hidden) return;
+		if ($('#modal').hidden) {
+			if (event.key === 'Escape' && !$('#gate-menu').hidden) {
+				setGateMenuOpen(false, true);
+			}
+			return;
+		}
 
 		if (event.key === 'Escape') {
 			event.preventDefault();
