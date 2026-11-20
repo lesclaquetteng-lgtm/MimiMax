@@ -7,7 +7,7 @@
   "license": "MIT",
   "scripts": {
     "start": "npm run core && cargo run --manifest-path desktop/Cargo.toml",
-    "build:exe": "rustc -O -C opt-level=z -C lto=yes -C strip=symbols ../tools/launcher-runner.rs -o ../MimiMax.exe && copy ..\\MimiMax.exe ..\\Aether-Launcher.exe",
+    "build:exe": "npm run build:desktop && node ../tools/copy-desktop-launcher.mjs",
     "core": "cargo build --release",
     "core:debug": "cargo build",
     "test": "cargo test --release",
