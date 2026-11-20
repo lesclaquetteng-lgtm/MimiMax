@@ -48,61 +48,52 @@ jobs:
         working-directory: launcher
         run: npm run test:security
 
-  electron-e2e:
-    name: Electron account and profile flows (Windows)
+  tauri-e2e:
+    name: Tauri native desktop flows (Windows)
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: launcher/package-lock.json
-      - name: Install Electron
-        working-directory: launcher
-        run: npm ci
-      - name: Ensure the Electron runtime is present
-        shell: pwsh
-        working-directory: launcher
-        run: |
-          Remove-Item Env:ELECTRON_SKIP_BINARY_DOWNLOAD -ErrorAction SilentlyContinue
-          node .\node_modules\electron\install.js
-          $electronPath = (node -p "require('electron')").Trim()
-          if (-not (Test-Path $electronPath)) { throw "Electron runtime is missing at $electronPath" }
-          Write-Host "Electron runtime: $electronPath"
       - name: Install stable Rust
         run: rustup toolchain install stable --profile minimal && rustup default stable
       - name: Build launcher core
         working-directory: launcher
         run: cargo build --release --locked
+      - name: Test native desktop commands
+        working-directory: launcher
+        run: cargo test --locked --manifest-path desktop/Cargo.toml
+      - name: Build Tauri desktop shell
+        working-directory: launcher
+        run: cargo build --release --locked --manifest-path desktop/Cargo.toml
       - name: Prepare isolated profile store
         shell: pwsh
         working-directory: launcher
         run: |
-          $env:AETHER_HOME = Join-Path $env:RUNNER_TEMP "aether-e2e-home"
-          $env:AETHER_SHARED_DIR = Join-Path $env:RUNNER_TEMP "minecraft-e2e"
+          $env:AETHER_HOME = Join-Path $env:RUNNER_TEMP "aether-tauri-e2e-home"
+          $env:AETHER_SHARED_DIR = Join-Path $env:RUNNER_TEMP "minecraft-tauri-e2e"
           $env:AETHER_ANCHOR = $env:GITHUB_WORKSPACE
           New-Item -ItemType Directory -Force -Path $env:AETHER_HOME, $env:AETHER_SHARED_DIR | Out-Null
           & ".\target\release\aether-launcher.exe" profiles add Hardcore --version 1.20.1 --loader 0.20.1 --memory 8192 --min-memory 2048 --width 1280 --height 720
           if ($LASTEXITCODE -ne 0) { throw "Could not seed the Hardcore test profile" }
-      - name: Run real Electron account and profile flows
+      - name: Run native desktop account, profile and workspace flows
         shell: pwsh
         working-directory: launcher
+        env:
+          WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: "--remote-debugging-port=9222 --disable-gpu"
         run: |
-          $env:AETHER_HOME = Join-Path $env:RUNNER_TEMP "aether-e2e-home"
-          $env:AETHER_SHARED_DIR = Join-Path $env:RUNNER_TEMP "minecraft-e2e"
+          $env:AETHER_HOME = Join-Path $env:RUNNER_TEMP "aether-tauri-e2e-home"
+          $env:AETHER_SHARED_DIR = Join-Path $env:RUNNER_TEMP "minecraft-tauri-e2e"
           $env:AETHER_ANCHOR = $env:GITHUB_WORKSPACE
-          $electronPath = (node -p "require('electron')").Trim()
-          if (-not (Test-Path $electronPath)) { throw "Electron runtime is missing at $electronPath" }
-          $electron = Start-Process -FilePath $electronPath -ArgumentList @(".", "--remote-debugging-port=9222", "--disable-gpu") -WorkingDirectory $PWD -PassThru -WindowStyle Hidden
+          $desktopPath = Join-Path $PWD "desktop\target\release\aether-desktop.exe"
+          if (-not (Test-Path $desktopPath)) { throw "Tauri desktop executable is missing at $desktopPath" }
+          $desktop = Start-Process -FilePath $desktopPath -WorkingDirectory $PWD -PassThru -WindowStyle Hidden
           try {
             node ..\tools\e2e\profiles.mjs 9222
-            if ($LASTEXITCODE -ne 0) { throw "Electron account/profile E2E failed" }
+            if ($LASTEXITCODE -ne 0) { throw "Tauri account/profile E2E failed" }
             node ..\tools\e2e\a11y.mjs 9222
-            if ($LASTEXITCODE -ne 0) { throw "Electron accessibility/workspace E2E failed" }
+            if ($LASTEXITCODE -ne 0) { throw "Tauri accessibility/workspace E2E failed" }
           } finally {
-            if ($electron -and -not $electron.HasExited) {
-              Stop-Process -Id $electron.Id -Force -ErrorAction SilentlyContinue
+            if ($desktop -and -not $desktop.HasExited) {
+              Stop-Process -Id $desktop.Id -Force -ErrorAction SilentlyContinue
             }
           }
 
