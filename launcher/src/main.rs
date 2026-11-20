@@ -298,7 +298,7 @@ fn command_loaders(arguments: &[String]) -> Result<(), String> {
 
 /// The named profiles: the command lists them and changes them.
 ///
-/// `add NAME [--version] [--loader] [--memory] [--min-memory] [--width] [--height]`,
+/// `add NAME [--description] [--version] [--loader] [--memory] [--min-memory] [--width] [--height]`,
 /// `use NAME`, `assign ACCOUNT [NAME]` and `remove NAME`.
 fn command_profiles(arguments: &[String]) -> Result<(), String> {
     let mut launcher = Launcher::open();
@@ -332,6 +332,9 @@ fn command_profiles(arguments: &[String]) -> Result<(), String> {
             }
             if let Some(value) = flags.get("loader") {
                 profile.loader_version = value.to_string();
+            }
+            if let Some(value) = flags.get("description") {
+                profile.description = value.to_string();
             }
 
             profile.max_memory = number("memory", profile.max_memory);
