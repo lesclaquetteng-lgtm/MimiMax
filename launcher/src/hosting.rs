@@ -784,16 +784,6 @@ mod tests {
     }
 
     #[test]
-    fn rcon_passwords_are_hex_encoded_and_have_192_bits() {
-        let first = random_password().expect("the OS random source is available");
-        let second = random_password().expect("the OS random source is available");
-
-        assert_eq!(first.len(), 48);
-        assert!(first.bytes().all(|byte| byte.is_ascii_hexdigit()));
-        assert_ne!(first, second);
-    }
-
-    #[test]
     fn a_properties_file_disables_the_authentication() {
         let content = properties("Test", 25565, 25575, "secret", 20);
 
@@ -931,10 +921,10 @@ mod tests {
 
     #[test]
     fn the_password_is_random_and_long_enough() {
-        let first = random_password();
-        let second = random_password();
+        let first = random_password().expect("the OS random source is available");
+        let second = random_password().expect("the OS random source is available");
 
-        assert_eq!(first.len(), 24);
+        assert_eq!(first.len(), 48);
         assert_ne!(first, second);
         assert!(first.chars().all(|character| character.is_ascii_hexdigit()));
     }
