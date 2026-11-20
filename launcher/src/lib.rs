@@ -29,6 +29,7 @@ use minecraft::{
 };
 use paths::Paths;
 use settings::{detect_java, find_client_jar};
+use zeroize::Zeroize;
 
 pub use settings::Settings;
 
@@ -46,7 +47,10 @@ fn login_error(error: accounts::LoginError) -> String {
 /// Clears in-memory session values after a vault cannot be loaded or migrated.
 fn clear_session_secrets(accounts: &mut AccountStore) {
     for account in &mut accounts.accounts {
-        account.access_token.clear();
+        account.access_token.zeroize();
+        if let Some(token) = &mut account.refresh_token {
+            token.zeroize();
+        }
         account.refresh_token = None;
     }
 }
@@ -83,7 +87,13 @@ impl Launcher {
         }
 
         let mut accounts = match std::fs::read_to_string(&paths.accounts_file) {
-            Ok(content) => serde_json::from_str(&content).unwrap_or_default(),
+            Ok(mut content) => {
+                let parsed = serde_json::from_str::<AccountStore>(&content).unwrap_or_default();
+                // Legacy account catalogues may contain plaintext tokens; erase the input buffer
+                // after deserializing so a second plaintext copy is not left to normal deallocation.
+                content.zeroize();
+                parsed
+            }
             Err(_) => AccountStore::default(),
         };
 
