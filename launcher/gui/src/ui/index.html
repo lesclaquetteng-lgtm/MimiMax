@@ -314,6 +314,10 @@
 						<button class="btn btn--primary" id="mods-catalog-search-button" type="button">Search</button>
 					</div>
 					<p class="library-summary" id="mods-catalog-status" aria-live="polite">Search the Modrinth catalog for Fabric mods compatible with your selected profile.</p>
+					<div class="catalog-progress" id="mods-catalog-progress" hidden aria-live="polite">
+						<div class="catalog-progress-heading"><span id="mods-catalog-progress-label">Preparing mod…</span><strong id="mods-catalog-progress-percent">0%</strong></div>
+						<div class="catalog-progress-track"><span id="mods-catalog-progress-fill"></span></div>
+					</div>
 					<div id="mods-catalog-results" class="mods-catalog-results"></div>
 					<p class="catalog-safety-note">Mods are third-party code loaded by Minecraft. Check the project and its permissions before installing. Downloads are verified by SHA-1 in the Rust core.</p>
 				</div>
