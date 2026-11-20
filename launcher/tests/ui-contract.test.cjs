@@ -45,7 +45,7 @@ test('the workspace components have unique DOM anchors', () => {
 test('the profile wizard exposes the core profile configuration fields', () => {
 	for (const id of ['profile-name', 'profile-version', 'profile-loader', 'profile-memory',
 		'profile-min-memory', 'profile-width', 'profile-height']) {
-		assert.match(app, new RegExp('\\\\\\\\bid="' + id + '"'));
+		assert.match(app, new RegExp('\\bid="' + id + '"'));
 	}
 	assert.match(app, /function newProfileModal\(\)/);
 	assert.match(app, /api\.profiles\.add\(name, values\)/);
