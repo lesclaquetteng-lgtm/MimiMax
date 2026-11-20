@@ -441,19 +441,26 @@ fn choose_version(
     versions: Vec<ProjectVersion>,
     game_version: &str,
 ) -> Result<ProjectVersion, String> {
-    versions
+    let mut compatible: Vec<ProjectVersion> = versions
         .into_iter()
-        .find(|version| {
-            version.version_type == "release"
-                && version.game_versions.iter().any(|value| value == game_version)
+        .filter(|version| {
+            version.game_versions.iter().any(|value| value == game_version)
                 && version.loaders.iter().any(|value| value == "fabric")
         })
-        .or_else(|| {
-            // Some useful libraries publish only beta builds. Use the newest compatible build
-            // only when there is no stable release.
-            None
-        })
-        .ok_or_else(|| format!("No stable Fabric build was found for Minecraft {game_version}."))
+        .collect();
+
+    if compatible.is_empty() {
+        return Err(format!(
+            "No Fabric build was found for Minecraft {game_version}."
+        ));
+    }
+
+    // Prefer stable releases, but don't hide useful projects that publish only beta/alpha builds.
+    let selected = compatible
+        .iter()
+        .position(|version| version.version_type == "release")
+        .unwrap_or(0);
+    Ok(compatible.swap_remove(selected))
 }
 
 #[allow(clippy::too_many_arguments)]
