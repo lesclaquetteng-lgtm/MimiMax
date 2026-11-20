@@ -117,26 +117,63 @@ pub fn load(accounts_file: &Path, accounts: &mut AccountStore) -> Result<bool, S
         .map_err(|error| format!("could not decode protected credentials: {error}"));
     plaintext.zeroize();
     let document = parsed?;
+    apply_document(document, accounts)?;
+    Ok(true)
+}
 
+/// Applies a decrypted vault while wiping stale, duplicate, and unreferenced token copies.
+fn apply_document(
+    mut document: CredentialsDocument,
+    accounts: &mut AccountStore,
+) -> Result<(), String> {
     if document.version != 1 {
+        for saved in &mut document.accounts {
+            saved.access_token.zeroize();
+            if let Some(token) = &mut saved.refresh_token {
+                token.zeroize();
+            }
+        }
         return Err(format!(
             "the protected credentials version {} is not supported",
             document.version
         ));
     }
 
-    for saved in document.accounts {
+    // The public catalogue may still contain legacy plaintext tokens after an interrupted
+    // migration. Erase those copies before restoring the authenticated vault entries.
+    for account in &mut accounts.accounts {
+        if !account.is_offline() {
+            account.access_token.zeroize();
+            if let Some(token) = &mut account.refresh_token {
+                token.zeroize();
+            }
+            account.refresh_token = None;
+        }
+    }
+
+    for mut saved in document.accounts {
         if let Some(account) = accounts
             .accounts
             .iter_mut()
             .find(|account| account.id == saved.account_id && !account.is_offline())
         {
-            account.access_token = saved.access_token;
-            account.refresh_token = saved.refresh_token;
+            // A duplicate account entry must not leave the previous token allocation behind.
+            account.access_token.zeroize();
+            if let Some(token) = &mut account.refresh_token {
+                token.zeroize();
+            }
+            account.access_token = std::mem::take(&mut saved.access_token);
+            account.refresh_token = saved.refresh_token.take();
+        }
+
+        // Entries whose accounts were deleted (or are now offline) must not linger in memory.
+        saved.access_token.zeroize();
+        if let Some(token) = &mut saved.refresh_token {
+            token.zeroize();
         }
     }
 
-    Ok(true)
+    Ok(())
 }
 
 fn hex_encode(bytes: &[u8]) -> String {
@@ -398,6 +435,56 @@ mod tests {
         assert!(!file_path(&accounts_file).exists());
 
         std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn vault_load_clears_legacy_and_unmatched_account_tokens() {
+        let mut store = microsoft_store();
+        let mut removed_account = store.accounts[0].clone();
+        removed_account.id = "removed-account".to_string();
+        removed_account.access_token = "legacy-stale-access".to_string();
+        removed_account.refresh_token = Some("legacy-stale-refresh".to_string());
+        store.accounts.push(removed_account);
+
+        let document = CredentialsDocument {
+            version: 1,
+            accounts: vec![
+                AccountCredentials {
+                    account_id: "account-1".to_string(),
+                    access_token: "vault-access".to_string(),
+                    refresh_token: Some("vault-refresh".to_string()),
+                },
+                AccountCredentials {
+                    account_id: "deleted-in-catalogue".to_string(),
+                    access_token: "unmatched-access".to_string(),
+                    refresh_token: Some("unmatched-refresh".to_string()),
+                },
+            ],
+        };
+
+        apply_document(document, &mut store).unwrap();
+
+        assert_eq!(store.accounts[0].access_token, "vault-access");
+        assert_eq!(store.accounts[0].refresh_token.as_deref(), Some("vault-refresh"));
+        assert!(store.accounts[1].access_token.is_empty());
+        assert!(store.accounts[1].refresh_token.is_none());
+    }
+
+    #[test]
+    fn unsupported_vault_versions_are_rejected() {
+        let mut store = microsoft_store();
+        let document = CredentialsDocument {
+            version: 99,
+            accounts: vec![AccountCredentials {
+                account_id: "account-1".to_string(),
+                access_token: "unsupported-version-secret".to_string(),
+                refresh_token: Some("unsupported-version-refresh".to_string()),
+            }],
+        };
+
+        let error = apply_document(document, &mut store).unwrap_err();
+
+        assert!(error.contains("version 99"));
     }
 
     #[test]
