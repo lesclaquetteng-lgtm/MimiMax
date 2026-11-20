@@ -29,6 +29,15 @@ struct AccountCredentials {
     refresh_token: Option<String>,
 }
 
+impl Drop for AccountCredentials {
+    fn drop(&mut self) {
+        self.access_token.zeroize();
+        if let Some(token) = &mut self.refresh_token {
+            token.zeroize();
+        }
+    }
+}
+
 /// The companion file for accounts.json.
 pub fn file_path(accounts_file: &Path) -> PathBuf {
     accounts_file.with_extension("credentials")
