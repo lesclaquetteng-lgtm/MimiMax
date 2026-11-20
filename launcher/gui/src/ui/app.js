@@ -4,13 +4,14 @@ const state = {
 	page: 'play',
 	accounts: { accounts: [], selected: null },
 	settings: {},
+	javaRuntime: null,
 	versions: [],
 	loaders: [],
 	mods: [],
 	profiles: { profiles: [], activeFor: null },
 	servers: { servers: [], pings: {} },
 	hosts: [],
-	performance: { mods: [], state: {}, installing: false },
+	performance: { mods: [], state: {}, installing: false, checked: false },
 	sessionLines: 0,
 	installing: false,
 	launching: false
@@ -117,138 +118,6 @@ function parseMinecraftMotd(raw) {
 }
 
 /* -------------------------------------------------------- 3D Skin Renderer */
-
-/* ------------------------------------------------ Catmull-Rom Live FPS Spline */
-
-let fpsCanvasAnimId = null;
-const fpsHistory = [680, 710, 740, 725, 780, 830, 810, 860, 890, 875, 910, 940, 920, 895, 930];
-
-function initFpsSplineGraph() {
-	const canvas = $('#fps-spline-canvas');
-	if (!canvas) return;
-	const ctx = canvas.getContext('2d');
-	if (!ctx) return;
-
-	// The backing store follows the CSS box and the screen density: the fixed 600 px canvas was
-	// stretched by the layout and read as a blurry line.
-	const fit = () => {
-		const ratio = window.devicePixelRatio || 1;
-		const box = canvas.getBoundingClientRect();
-		canvas.width = Math.max(1, Math.round(box.width * ratio));
-		canvas.height = Math.max(1, Math.round(box.height * ratio));
-	};
-	fit();
-	window.addEventListener('resize', fit);
-
-	function catmullRom(p0, p1, p2, p3, t) {
-		const t2 = t * t;
-		const t3 = t2 * t;
-		return 0.5 * (
-			(2 * p1) +
-			(-p0 + p2) * t +
-			(2 * p0 - 5 * p1 + 4 * p2 - p3) * t2 +
-			(-p0 + 3 * p1 - 3 * p2 + p3) * t3
-		);
-	}
-
-	let tickCounter = 0;
-	function renderGraph() {
-		tickCounter++;
-		if (tickCounter % 30 === 0) {
-			const jitter = Math.floor((Math.random() - 0.45) * 40);
-			const last = fpsHistory[fpsHistory.length - 1];
-			const next = Math.max(550, Math.min(1050, last + jitter));
-			fpsHistory.push(next);
-			if (fpsHistory.length > 24) fpsHistory.shift();
-
-			const badge = $('#fps-spline-status');
-			if (badge) badge.textContent = `${next} FPS · sample`;
-		}
-
-		ctx.clearRect(0, 0, canvas.width, canvas.height);
-		const w = canvas.width;
-		const h = canvas.height;
-
-		// Background grid lines
-		ctx.strokeStyle = 'rgba(255, 255, 255, 0.04)';
-		ctx.lineWidth = 1;
-		for (let y = 20; y < h; y += 25) {
-			ctx.beginPath();
-			ctx.moveTo(0, y);
-			ctx.lineTo(w, y);
-			ctx.stroke();
-		}
-
-		// Calculate point coordinates
-		const minVal = 500;
-		const maxVal = 1100;
-		const step = w / (fpsHistory.length - 1);
-		const points = fpsHistory.map((val, i) => ({
-			x: i * step,
-			y: h - ((val - minVal) / (maxVal - minVal)) * (h - 24) - 12
-		}));
-
-		if (points.length < 2) return;
-
-		// Gradient Fill under spline
-		const grad = ctx.createLinearGradient(0, 0, 0, h);
-		grad.addColorStop(0, 'rgba(231, 233, 236, 0.10)');
-		grad.addColorStop(0.6, 'rgba(231, 233, 236, 0.04)');
-		grad.addColorStop(1, 'rgba(231, 233, 236, 0)');
-
-		ctx.beginPath();
-		ctx.moveTo(points[0].x, points[0].y);
-
-		for (let i = 0; i < points.length - 1; i++) {
-			const p0 = points[Math.max(0, i - 1)];
-			const p1 = points[i];
-			const p2 = points[i + 1];
-			const p3 = points[Math.min(points.length - 1, i + 2)];
-
-			for (let t = 0; t < 1; t += 0.1) {
-				const x = catmullRom(p0.x, p1.x, p2.x, p3.x, t);
-				const y = catmullRom(p0.y, p1.y, p2.y, p3.y, t);
-				ctx.lineTo(x, y);
-			}
-		}
-
-		const lastPoint = points[points.length - 1];
-		ctx.lineTo(lastPoint.x, lastPoint.y);
-
-		// Fill area
-		ctx.save();
-		ctx.lineTo(w, h);
-		ctx.lineTo(0, h);
-		ctx.closePath();
-		ctx.fillStyle = grad;
-		ctx.fill();
-		ctx.restore();
-
-		// Spline stroke line
-		ctx.beginPath();
-		ctx.moveTo(points[0].x, points[0].y);
-		for (let i = 0; i < points.length - 1; i++) {
-			const p0 = points[Math.max(0, i - 1)];
-			const p1 = points[i];
-			const p2 = points[i + 1];
-			const p3 = points[Math.min(points.length - 1, i + 2)];
-
-			for (let t = 0; t <= 1; t += 0.1) {
-				const x = catmullRom(p0.x, p1.x, p2.x, p3.x, t);
-				const y = catmullRom(p0.y, p1.y, p2.y, p3.y, t);
-				ctx.lineTo(x, y);
-			}
-		}
-		ctx.strokeStyle = themeColors().graph;
-		ctx.lineWidth = 1.5;
-		ctx.stroke();
-
-		fpsCanvasAnimId = requestAnimationFrame(renderGraph);
-	}
-
-	if (fpsCanvasAnimId) cancelAnimationFrame(fpsCanvasAnimId);
-	fpsCanvasAnimId = requestAnimationFrame(renderGraph);
-}
 
 /**
  * Runs an action of the interface.
@@ -398,6 +267,7 @@ function renderAccounts() {
 		: 'no account selected';
 
 	renderDock();
+	renderQuickServers();
 }
 
 function renderAccountTable() {
@@ -468,28 +338,56 @@ function renderAccountTable() {
 
 function renderVersions() {
 	const table = $('#version-table');
-	table.innerHTML = '';
+	table.replaceChildren();
+
+	const query = ($('#versions-search')?.value || '').trim().toLocaleLowerCase();
+	const type = $('#versions-filter')?.value || 'all';
+	const filtered = state.versions.filter((version) => {
+		const matchesQuery = String(version.id || '').toLocaleLowerCase().includes(query);
+		const matchesType = type === 'all' || version.type === type;
+		return matchesQuery && matchesType;
+	});
+
+	const summary = $('#versions-summary');
+	if (summary) {
+		summary.textContent = state.versions.length
+			? 'Showing ' + filtered.length + ' of ' + state.versions.length + ' Minecraft versions'
+			: 'The Mojang version list is not available yet.';
+	}
 
 	if (state.versions.length === 0) {
 		table.appendChild(emptyState(
 			ICON_STACK,
-			'Reading the version list…',
-			'The versions are published by Mojang, the list fills itself as soon as the answer arrives.'
+			'Version list unavailable',
+			'Refresh the list when your connection is available. Your current profile remains unchanged.'
 		));
 		return;
 	}
 
-	for (const version of state.versions) {
+	if (filtered.length === 0) {
+		table.appendChild(emptyState(
+			ICON_STACK,
+			'No matching versions',
+			'Try another version name or change the version type filter.'
+		));
+		return;
+	}
+
+	for (const version of filtered) {
 		const row = document.createElement('div');
 		row.className = 'version-row';
 
 		const left = document.createElement('div');
+		left.className = 'version-meta';
 		const id = document.createElement('div');
 		id.className = 'version-id';
 		id.textContent = version.id;
 		const date = document.createElement('div');
 		date.className = 'version-date';
-		date.textContent = new Date(version.releaseTime).toLocaleDateString();
+		const releaseDate = version.releaseTime
+			? new Date(version.releaseTime).toLocaleDateString()
+			: 'Release date unavailable';
+		date.textContent = releaseDate + (version.type ? ' · ' + version.type.replace('_', ' ') : '');
 		left.append(id, date);
 
 		const action = document.createElement('button');
@@ -497,8 +395,8 @@ function renderVersions() {
 		action.textContent = 'Use';
 		action.addEventListener('click', async () => {
 			await updateProfile({ version: version.id });
-			toast(`Selected Minecraft ${version.id}`, 'success');
-			loadLoaders(version.id);
+			toast('Selected Minecraft ' + version.id, 'success');
+			await loadLoaders(version.id);
 		});
 
 		row.append(left, action);
@@ -583,18 +481,35 @@ function clearSession() {
 
 function renderMods() {
 	const table = $('#mods-table');
-	table.innerHTML = '';
+	table.replaceChildren();
 
 	const enabled = state.mods.filter((entry) => entry.enabled).length;
+	const query = ($('#mods-search')?.value || '').trim().toLocaleLowerCase();
+	const filter = $('#mods-filter')?.value || 'all';
+	const filtered = state.mods.filter((entry) => {
+		const label = String(entry.modId || entry.name || '').toLocaleLowerCase();
+		const matchesQuery = label.includes(query);
+		const matchesFilter = filter === 'all'
+			|| (filter === 'enabled' && entry.enabled)
+			|| (filter === 'disabled' && !entry.enabled);
+		return matchesQuery && matchesFilter;
+	});
+
 	$('#mods-count').textContent = state.mods.length === 0
-		? 'no mod'
-		: `${enabled}/${state.mods.length} on`;
+		? 'no mods'
+		: enabled + '/' + state.mods.length + ' enabled';
+	const summary = $('#mods-summary');
+	if (summary) {
+		summary.textContent = query || filter !== 'all'
+			? 'Showing ' + filtered.length + ' of ' + state.mods.length + ' installed mods'
+			: state.mods.length + ' installed · ' + enabled + ' enabled · ' + (state.mods.length - enabled) + ' disabled';
+	}
 
 	if (state.mods.length === 0) {
 		const empty = emptyState(
 			ICON_MOD,
-			'No mod in the folder',
-			'Drop a jar in the mods folder, or run “Install / repair” to download the Aether client.',
+			'No mods in this folder',
+			'Drop a Fabric mod jar into the mods folder, or install the Aether optimization pack.',
 			'Open the folder'
 		);
 		empty.querySelector('[data-empty-action]').addEventListener('click', openModsFolder);
@@ -602,9 +517,18 @@ function renderMods() {
 		return;
 	}
 
-	for (const entry of state.mods) {
+	if (filtered.length === 0) {
+		table.appendChild(emptyState(
+			ICON_MOD,
+			'No matching mods',
+			'Change the search text or select another enabled/disabled filter.'
+		));
+		return;
+	}
+
+	for (const entry of filtered) {
 		const row = document.createElement('div');
-		row.className = `mod-row${entry.enabled ? '' : ' is-disabled'}`;
+		row.className = 'mod-row' + (entry.enabled ? '' : ' is-disabled');
 		row.title = entry.path;
 
 		const icon = document.createElement('span');
@@ -615,17 +539,17 @@ function renderMods() {
 		meta.className = 'mod-meta';
 		const name = document.createElement('div');
 		name.className = 'mod-name';
-		name.textContent = entry.modId;
+		name.textContent = entry.modId || entry.name;
 		const sub = document.createElement('div');
 		sub.className = 'mod-sub';
-		sub.textContent = `${formatBytes(entry.size)} · ${entry.enabled ? 'enabled' : 'disabled'}`;
+		sub.textContent = formatBytes(entry.size) + ' · ' + (entry.enabled ? 'enabled' : 'disabled');
 		meta.append(name, sub);
 
 		const toggle = document.createElement('button');
 		toggle.className = 'switch';
 		toggle.setAttribute('role', 'switch');
 		toggle.setAttribute('aria-checked', String(entry.enabled));
-		toggle.setAttribute('aria-label', `${entry.enabled ? 'Disable' : 'Enable'} ${entry.modId}`);
+		toggle.setAttribute('aria-label', (entry.enabled ? 'Disable ' : 'Enable ') + (entry.modId || entry.name));
 		toggle.addEventListener('click', async () => {
 			toggle.disabled = true;
 			const result = await api.mods.toggle(entry.name, !entry.enabled);
@@ -636,9 +560,9 @@ function renderMods() {
 				return;
 			}
 
-			state.mods = result.mods;
+			state.mods = result.mods || [];
 			renderMods();
-			toast(`${entry.modId} ${entry.enabled ? 'disabled' : 'enabled'}`, 'success');
+			toast((entry.modId || entry.name) + (entry.enabled ? ' disabled' : ' enabled'), 'success');
 		});
 
 		row.append(icon, meta, toggle);
@@ -694,7 +618,71 @@ function pingSummary(ping) {
 	return parts.join(' · ');
 }
 
+
+function renderQuickServers() {
+	const container = $('#quick-servers');
+	if (!container) return;
+	container.replaceChildren();
+
+	const servers = (state.servers.servers || []).slice(0, 4);
+	if (servers.length === 0) {
+		const empty = emptyState(
+			ICON_SERVER,
+			'No saved servers yet',
+			'Add a server once and it will stay available here for one-click joining.',
+			'Open servers'
+		);
+		empty.querySelector('[data-empty-action]')?.addEventListener('click', () => showPage('servers'));
+		container.appendChild(empty);
+		return;
+	}
+
+	for (const server of servers) {
+		const ping = state.servers.pings[server.address];
+		const row = document.createElement('div');
+		row.className = 'quick-server-row';
+
+		const identity = document.createElement('div');
+		identity.className = 'quick-server-identity';
+		const dot = document.createElement('span');
+		dot.className = 'quick-server-indicator' + (ping?.online ? ' is-online' : '');
+		const copy = document.createElement('div');
+		copy.className = 'quick-server-copy';
+		const name = document.createElement('strong');
+		name.textContent = server.name;
+		const address = document.createElement('small');
+		address.textContent = server.address;
+		copy.append(name, address);
+		identity.append(dot, copy);
+
+		const status = document.createElement('small');
+		status.className = 'quick-server-status';
+		status.textContent = pingSummary(ping) || 'Not checked yet';
+
+		const join = document.createElement('button');
+		join.type = 'button';
+		join.className = 'btn btn--primary btn--small';
+		join.textContent = 'Join';
+		join.disabled = !state.accounts.selected || state.launching || state.installing;
+		join.title = state.accounts.selected ? 'Join ' + server.name : 'Select an account before joining';
+		join.addEventListener('click', () => launch(server.address));
+
+		row.append(identity, status, join);
+		container.appendChild(row);
+	}
+
+	if ((state.servers.servers || []).length > servers.length) {
+		const more = document.createElement('button');
+		more.type = 'button';
+		more.className = 'quick-server-more';
+		more.textContent = 'View all ' + state.servers.servers.length + ' saved servers';
+		more.addEventListener('click', () => showPage('servers'));
+		container.appendChild(more);
+	}
+}
+
 function renderServers() {
+	renderQuickServers();
 	const table = $('#server-list');
 	table.innerHTML = '';
 
@@ -1080,8 +1068,18 @@ function renderPerformance() {
 
 	const mods = state.performance.mods || [];
 	const installed = mods.filter((mod) => mod.installed).length;
-	$('#perf-count').textContent = `${installed}/${mods.length}`;
+	const total = mods.length;
+	const percentage = total ? Math.round((installed / total) * 100) : 0;
+	$('#perf-count').textContent = `${installed}/${total}`;
 	$('#perf-path').textContent = state.performance.state?.modsFolder || '';
+	$('#perf-health-count').textContent = total ? installed + '/' + total + ' installed' : 'No pack data';
+	$('#perf-health-percent').textContent = total ? percentage + '%' : '—';
+	$('#perf-health-progress').style.width = percentage + '%';
+	$('#perf-health-message').textContent = !state.performance.checked
+		? 'Not checked yet'
+		: total === 0 ? 'No optimization pack found'
+			: installed === total ? 'All optimization mods are installed'
+				: (total - installed) + ' mod(s) missing';
 
 	if (mods.length === 0) {
 		table.appendChild(emptyState(
@@ -1118,6 +1116,7 @@ function renderPerformance() {
 
 function renderPerformanceState() {
 	const settings = state.performance.state || {};
+	$('#perf-jvm-summary').textContent = settings.jvmPreset || 'Default';
 
 	if (settings.jvmPreset) {
 		selectOption($('#select-jvm'), settings.jvmPreset);
@@ -1131,12 +1130,17 @@ function renderPerformanceState() {
 
 	const preset = settings.optionsPreset;
 	if (preset && preset !== 'vanilla') {
+		$('#perf-options-summary').textContent = preset === 'max' ? 'Maximum FPS' : preset;
 		$('#options-current').textContent = preset === 'restore'
 			? 'The original options.txt is in place.'
 			: `Last applied preset: ${preset}.`;
 	} else {
+		$('#perf-options-summary').textContent = 'Default options';
 		$('#options-current').textContent = 'The original options.txt is in place.';
 	}
+	$('#perf-health-message').textContent = state.performance.checked
+		? $('#perf-health-message').textContent
+		: 'Not checked yet';
 }
 
 async function loadPerformance() {
@@ -1148,6 +1152,7 @@ async function loadPerformance() {
 
 	state.performance.mods = result.mods || [];
 	state.performance.state = result.state || {};
+	state.performance.checked = true;
 	renderPerformance();
 	renderPerformanceState();
 }
@@ -1176,6 +1181,7 @@ async function installPack() {
 
 	state.performance.mods = result.mods;
 	state.performance.state = result.state || state.performance.state;
+	state.performance.checked = true;
 	renderPerformance();
 	renderPerformanceState();
 
@@ -1883,8 +1889,13 @@ function bindSettings() {
 		updateProfile({ height: Number(event.target.value) });
 	});
 
-	$('#input-java').addEventListener('change', (event) => {
-		api.settings.update({ javaPath: event.target.value.trim() });
+	$('#input-java').addEventListener('change', async (event) => {
+		const result = await api.settings.update({ javaPath: event.target.value.trim() });
+		if (!result?.ok) {
+			toast(result?.error || 'The Java path could not be saved.', 'error');
+			return;
+		}
+		await refreshJavaRuntime();
 	});
 
 	$('#input-accent').addEventListener('input', (event) => {
@@ -1898,6 +1909,54 @@ function bindSettings() {
 	$('#input-fabric-api').addEventListener('change', (event) => {
 		api.settings.update({ fabricApiVersion: event.target.value.trim() });
 	});
+}
+
+
+function renderJavaRuntime() {
+	const runtime = state.javaRuntime;
+	const required = Number(runtime?.requiredMajor || state.settings.requiredJavaVersion) || 21;
+	const label = $('#java-runtime-label');
+	const detail = $('#java-runtime-detail');
+	const settingsDetail = $('#java-runtime-status');
+	const summary = $('#java-runtime-summary');
+
+	let headline = 'Java not found';
+	let explanation = 'Install Java ' + required + ' or choose the java.exe executable in Settings.';
+	let tone = 'is-missing';
+
+	if (runtime?.compatible) {
+		headline = 'Java ' + runtime.majorVersion + ' · Ready';
+		explanation = (runtime.source === 'custom' ? 'Custom runtime' : 'Automatically detected')
+			+ ' · ' + runtime.path;
+		tone = 'is-ready';
+	} else if (runtime?.available) {
+		headline = 'Java ' + runtime.majorVersion + ' is too old';
+		explanation = 'Minecraft needs Java ' + required + ' or newer. Select a compatible runtime in Settings.';
+		tone = 'is-warning';
+	} else if (runtime?.source === 'custom-invalid') {
+		headline = 'Custom Java path is invalid';
+		explanation = 'Check the path to java.exe, or clear it to use automatic detection.';
+		tone = 'is-warning';
+	}
+
+	if (label) label.textContent = headline;
+	if (detail) detail.textContent = explanation;
+	if (settingsDetail) settingsDetail.textContent = explanation;
+	if (summary) {
+		summary.classList.remove('is-ready', 'is-warning', 'is-missing');
+		summary.classList.add(tone);
+	}
+}
+
+async function refreshJavaRuntime() {
+	const info = await api.info();
+	if (!info?.ok) {
+		toast(info?.error || 'Java runtime information could not be refreshed.', 'error');
+		return;
+	}
+	state.javaRuntime = info.javaRuntime || null;
+	state.settings = info.settings || state.settings;
+	renderJavaRuntime();
 }
 
 function applySettings(settings) {
@@ -1921,6 +1980,7 @@ function applySettings(settings) {
 
 	applyAccent(settings.accentColor);
 	paintRanges();
+	renderJavaRuntime();
 }
 
 /**
@@ -2179,6 +2239,7 @@ async function loadProfiles() {
  * files are.
  */
 function showPage(name) {
+	state.page = name;
 	let activeBtn = null;
 	$$('.nav-item').forEach((other) => {
 		const match = other.dataset.page === name;
@@ -2209,10 +2270,7 @@ function showPage(name) {
 		loadServers();
 		loadHosts();
 	}
-	if (name === 'performance') {
-		loadPerformance();
-		setTimeout(initFpsSplineGraph, 50);
-	}
+	if (name === 'performance') loadPerformance();
 }
 
 async function init() {
@@ -2271,6 +2329,14 @@ async function init() {
 	$('#btn-mods-refresh').addEventListener('click', loadMods);
 	$('#btn-mods-folder').addEventListener('click', openModsFolder);
 	$('#btn-logs-refresh').addEventListener('click', loadLogs);
+
+	// Search and filters in the local Minecraft libraries.
+	$('#versions-search').addEventListener('input', renderVersions);
+	$('#versions-filter').addEventListener('change', renderVersions);
+	$('#mods-search').addEventListener('input', renderMods);
+	$('#mods-filter').addEventListener('change', renderMods);
+	$('#quick-servers-open').addEventListener('click', () => showPage('servers'));
+	$('#java-runtime-settings').addEventListener('click', () => showPage('settings'));
 
 	// The servers and the performance pages.
 	$('#btn-server-add').addEventListener('click', addServer);
@@ -2396,7 +2462,9 @@ async function init() {
 		return;
 	}
 
+	state.javaRuntime = info.javaRuntime || null;
 	applySettings(info.settings);
+	renderJavaRuntime();
 	$('#paths-output').textContent = [
 		`game   ${info.paths.game}`,
 		`mods   ${info.paths.mods}`,
