@@ -131,6 +131,7 @@
 
 		onInstallProgress: (callback) => listen('install:progress', callback),
 		onOptimisationProgress: (callback) => listen('optimisation:progress', callback),
+		onModrinthProgress: (callback) => listen('mods:progress', callback),
 		onGameOutput: (callback) => listen('game:output', callback),
 		onMicrosoftDeviceCode: (callback) => listen('microsoft:deviceCode', callback)
 	};
