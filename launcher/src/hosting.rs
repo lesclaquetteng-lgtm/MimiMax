@@ -230,7 +230,8 @@ pub fn create(
     let rcon_port = free_port(existing.as_ref().map(|server| server.rcon_port).unwrap_or(0));
     let properties_file = directory.join("server.properties");
     let stored_password = server_password(&directory);
-    let password = if stored_password.is_empty() {
+    let needs_password = stored_password.is_empty();
+    let password = if needs_password {
         random_password()?
     } else {
         stored_password
@@ -247,7 +248,7 @@ pub fn create(
             set_property(&properties_file, "online-mode", "true")?;
         }
         // Migrate an old or incomplete configuration without replacing an existing secret.
-        if stored_password.is_empty() {
+        if needs_password {
             set_property(&properties_file, "rcon.password", &password)?;
         }
     }
