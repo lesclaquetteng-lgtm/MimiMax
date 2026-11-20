@@ -154,6 +154,14 @@
 					</div>
 				</div>
 
+				<div class="card card--quick-connect">
+					<div class="card-head">
+						<div><h2 class="card-title">Quick connect</h2><p class="setup-intro">Jump back into a saved server.</p></div>
+					<button class="text-button" id="quick-servers-open" type="button">Manage servers →</button>
+					</div>
+					<div id="quick-servers" class="quick-servers"></div>
+				</div>
+
 				<div class="grid grid--two">
 					<div class="card card--account">
 						<div class="card-head">
@@ -254,6 +262,20 @@
 						<h2 class="card-title">Available versions</h2>
 						<button class="btn btn--ghost" id="btn-refresh-versions">Refresh</button>
 					</div>
+					<div class="versions-toolbar">
+						<label class="versions-search-wrap">
+							<span class="sr-only">Search Minecraft versions</span>
+							<input type="search" id="versions-search" class="input" placeholder="Search versions…" autocomplete="off" />
+						</label>
+						<select id="versions-filter" class="input versions-filter" aria-label="Filter versions">
+							<option value="all">All types</option>
+							<option value="release">Releases</option>
+							<option value="snapshot">Snapshots</option>
+							<option value="old_beta">Old beta</option>
+							<option value="old_alpha">Old alpha</option>
+						</select>
+					</div>
+					<p class="list-summary" id="versions-summary" aria-live="polite"></p>
 					<div id="version-table" class="version-table"></div>
 				</div>
 			</section>
@@ -274,6 +296,18 @@
 							<button class="btn btn--ghost" id="btn-mods-folder">Open folder</button>
 						</div>
 					</div>
+					<div class="mods-toolbar">
+						<label class="mods-search-wrap">
+							<span class="sr-only">Search installed mods</span>
+							<input type="search" id="mods-search" class="input" placeholder="Search your mods…" autocomplete="off" />
+						</label>
+						<select id="mods-filter" class="input mods-filter" aria-label="Filter mods">
+							<option value="all">All mods</option>
+							<option value="enabled">Enabled</option>
+							<option value="disabled">Disabled</option>
+						</select>
+					</div>
+					<p class="list-summary" id="mods-summary" aria-live="polite"></p>
 					<div id="mods-table" class="mod-table"></div>
 					<p class="log-path" id="mods-path"></p>
 				</div>
@@ -490,7 +524,8 @@
 						<h2 class="card-title">Runtime</h2>
 						<label class="field">
 							<span class="field-label">Java path</span>
-							<input type="text" id="input-java" class="input" placeholder="Auto detected" />
+							<input type="text" id="input-java" class="input" placeholder="Auto detected — leave empty to use detection" />
+							<p class="muted runtime-help" id="java-runtime-status">Checking for a compatible Java runtime…</p>
 						</label>
 						<label class="field">
 							<span class="field-label">Maximum memory</span>
