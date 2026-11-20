@@ -205,6 +205,8 @@ fn write_embedded_mod(directory: &std::path::Path, bytes: &[u8]) -> Result<PathB
 fn timeout_for(args: &[String]) -> u64 {
 	match args.first().map(String::as_str) {
 		Some("versions") | Some("loaders") => 45,
+		Some("mods") if args.get(1).map(String::as_str) == Some("search") => 45,
+		Some("mods") if args.get(1).map(String::as_str) == Some("install") => 300,
 		Some("servers") => 30,
 		// The first start of a hosted server installs Fabric and the vanilla server.
 		Some("hosts") if args.get(1).map(String::as_str) == Some("start") => 900,
