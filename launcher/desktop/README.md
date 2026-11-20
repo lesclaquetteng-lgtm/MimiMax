@@ -17,9 +17,9 @@ desktop/
 └── icons/              application icons (including the .ico of the installer)
 ```
 
-The interface itself lives in `../gui/src/ui/` and is shared, unchanged, with the old Electron
-build: `bridge.js` exposes `window.aether` over Tauri's `invoke`, so `app.js` never learned that the
-shell changed.
+The interface lives in `../gui/src/ui/` and is served by WebView2. The `bridge.js` module
+exposes `window.aether` through Tauri's `invoke`; account, profile, installation and game-process
+operations remain inside the Rust core.
 
 ## Prerequisites
 
@@ -33,38 +33,21 @@ shell changed.
 
 The core and the client mod are embedded with `include_bytes!`
 (`../../target/release/aether-launcher.exe` and
-`../../../aether-client/build/libs/aether-client-1.0.0.jar`), and `build.rs` panics when either file
-is missing. Build both first, always:
+`../../../aether-client/build/libs/aether-client-1.0.0.jar`). The build script refuses to compile
+when either file is missing. Build the mod, then the core, then the shell:
 
 ```powershell
-cd launcher
-cargo build --release                                  # 1. core  -> target/release/aether-launcher.exe
-cargo build --release --manifest-path desktop/Cargo.toml  # 2. shell -> desktop/target/release/aether-desktop.exe
+# From the repository root
+cd aether-client
+.\gradlew.bat --no-daemon build                    # 1. Fabric client JAR
+cd ..\launcher
+cargo build --release                                # 2. Rust core executable
+cargo build --release --manifest-path desktop/Cargo.toml  # 3. native shell
 ```
 
-or, from `launcher/`:
+Or run `build.bat` from the repository root to build the client, core, shell and portable launch
+entries in that order.
 
-```powershell
-npm run core     # cargo build --release
-npm run shell    # cargo build --release --manifest-path desktop/Cargo.toml
-npm start        # runs the shell from its build directory
-```
-
-The shell finds the core in this order: `AETHER_LAUNCHER_BIN`, next to the shell, the build
-directory during development, the bundled resources, then the embedded copy. At start it writes the
-embedded core to `%LOCALAPPDATA%\dev.aether.launcher\bin\aether-launcher.exe`, compares the bytes on
-the next start, and only rewrites the file when it differs.
-
-The mod follows the same path: it is written to
-`%LOCALAPPDATA%\dev.aether.launcher\mods\aether-client.jar` and handed to the core as
-`AETHER_MOD_JAR`. Without that archive an installed launcher cannot run "Install / repair": the core
-only looks for the jar next to itself and in the folders of the project, and a machine that received
-the installer has neither. `tools/clean-install-check.ps1` proves both halves, from an empty folder
-and an empty home: the bare core reports `the Aether client jar was not found`, while the shell
-extracts the archive and the installation starts.
-
-> A running `aether-desktop.exe` (or the core it started) locks the target executable: close the
-> window before rebuilding, or the link step fails with "access denied".
 
 ## Installer
 
