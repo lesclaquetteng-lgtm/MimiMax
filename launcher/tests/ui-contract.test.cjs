@@ -42,6 +42,16 @@ test('the workspace components have unique DOM anchors', () => {
 	}
 });
 
+test('the profile wizard exposes the core profile configuration fields', () => {
+	for (const id of ['profile-name', 'profile-version', 'profile-loader', 'profile-memory',
+		'profile-min-memory', 'profile-width', 'profile-height']) {
+		assert.match(app, new RegExp('\\\\\\\\bid="' + id + '"'));
+	}
+	assert.match(app, /function newProfileModal\(\)/);
+	assert.match(app, /api\.profiles\.add\(name, values\)/);
+	assert.match(app, /Minimum memory cannot exceed maximum memory/);
+});
+
 test('the account, profile and launch entry points remain present', () => {
 	for (const id of ['btn-add-offline', 'btn-add-microsoft', 'select-profile',
 		'btn-profile-new', 'btn-profile-delete', 'btn-install', 'btn-launch', 'btn-stop']) {
