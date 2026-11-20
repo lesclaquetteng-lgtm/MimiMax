@@ -1123,7 +1123,7 @@ html[data-surface="draft"] body::before {
 html[data-surface="plain"] body::before { display: none; }
 
 .titlebar { position: relative; z-index: 100; }
-.shell { position: relative; z-index: auto; }
+.shell { position: relative; z-index: 1; }
 .content { background: transparent; }
 
 /* Compact mode changes the actual workspace rhythm, not just a label in the settings page. */
