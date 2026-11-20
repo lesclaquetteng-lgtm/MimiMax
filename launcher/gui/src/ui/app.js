@@ -2410,40 +2410,126 @@ async function loadLoaders(gameVersion) {
 
 /** Creates a profile from the one the selected account plays with right now. */
 function newProfileModal() {
-	openModal('New profile', `
-		<p class="muted">The new profile copies the one this account plays with right now: version,
-		loader, memory and window size.</p>
+	const source = currentProfile();
+	openModal('Create a profile', \`
+		<p class="muted">Start from your current setup, then give this profile its own Minecraft version, loader and launch settings.</p>
 		<label class="field">
 			<span class="field-label">Profile name</span>
-			<input type="text" id="profile-name" class="input" maxlength="32" placeholder="Cinematic" />
+			<input type="text" id="profile-name" class="input" maxlength="32" placeholder="PvP, Survival, Modded…" autocomplete="off" />
 		</label>
-	`, async () => {
+		<div class="profile-wizard-grid">
+			<label class="field">
+				<span class="field-label">Minecraft version</span>
+				<select id="profile-version" class="input" aria-label="Minecraft version for new profile"></select>
+			</label>
+			<label class="field">
+				<span class="field-label">Fabric loader</span>
+				<select id="profile-loader" class="input" aria-label="Fabric loader for new profile"></select>
+			</label>
+		</div>
+		<details class="profile-wizard-advanced">
+			<summary>Memory and window settings</summary>
+			<div class="profile-wizard-grid">
+				<label class="field">
+					<span class="field-label">Maximum memory (MB)</span>
+					<input type="number" id="profile-memory" class="input" min="1024" max="65536" step="256" />
+				</label>
+				<label class="field">
+					<span class="field-label">Minimum memory (MB)</span>
+					<input type="number" id="profile-min-memory" class="input" min="512" max="65536" step="256" />
+				</label>
+				<label class="field">
+					<span class="field-label">Window width</span>
+					<input type="number" id="profile-width" class="input" min="640" max="7680" step="8" />
+				</label>
+				<label class="field">
+					<span class="field-label">Window height</span>
+					<input type="number" id="profile-height" class="input" min="480" max="4320" step="8" />
+				</label>
+			</div>
+		</details>
+	\`, async () => {
 		const name = $('#profile-name').value.trim();
 		if (!name) {
-			toast('Name the profile first.', 'error');
+			toast('Give your profile a name first.', 'error');
+			$('#profile-name').focus();
 			return;
 		}
 
-		const source = state.profiles.activeFor;
-		const result = await api.profiles.add(name, {
-			version: source.gameVersion,
-			loader: source.loaderVersion,
-			memory: source.maxMemory,
-			minMemory: source.minMemory,
-			width: source.windowWidth,
-			height: source.windowHeight
-		});
+		const values = {
+			version: $('#profile-version').value.trim(),
+			loader: $('#profile-loader').value.trim(),
+			memory: Number($('#profile-memory').value),
+			minMemory: Number($('#profile-min-memory').value),
+			width: Number($('#profile-width').value),
+			height: Number($('#profile-height').value)
+		};
+		if (!values.version || !values.loader) {
+			toast('Choose a Minecraft version and Fabric loader.', 'error');
+			return;
+		}
+		if (!Number.isInteger(values.memory) || !Number.isInteger(values.minMemory)
+			|| values.memory < 1024 || values.memory > 65536
+			|| values.minMemory < 512 || values.minMemory > values.memory) {
+			toast('Check the memory values. Minimum memory cannot exceed maximum memory.', 'error');
+			return;
+		}
+		if (!Number.isInteger(values.width) || values.width < 640 || values.width > 7680
+			|| !Number.isInteger(values.height) || values.height < 480 || values.height > 4320) {
+			toast('Check the window resolution values.', 'error');
+			return;
+		}
 
+		const result = await api.profiles.add(name, values);
 		if (!result.ok) {
 			toast(result.error, 'error');
 			return;
 		}
 
 		await loadProfiles();
-		toast(`Profile ${name} created.`, 'success');
-	}, 'Create');
-}
+		toast('Profile ' + name + ' created.', 'success');
+	}, 'Create profile');
 
+	const versionSelect = $('#profile-version');
+	for (const option of Array.from($('#select-version').options)) {
+		versionSelect.appendChild(option.cloneNode(true));
+	}
+	selectOption(versionSelect, source.gameVersion);
+
+	const loaderSelect = $('#profile-loader');
+	for (const option of Array.from($('#select-loader').options)) {
+		loaderSelect.appendChild(option.cloneNode(true));
+	}
+	selectOption(loaderSelect, source.loaderVersion);
+
+	$('#profile-memory').value = source.maxMemory;
+	$('#profile-min-memory').value = source.minMemory;
+	$('#profile-width').value = source.windowWidth;
+	$('#profile-height').value = source.windowHeight;
+
+	versionSelect.addEventListener('change', async () => {
+		const selectedVersion = versionSelect.value;
+		const result = await api.versions.loaders(selectedVersion);
+		if (!result?.ok) {
+			toast(result?.error || 'Fabric versions could not be loaded.', 'error');
+			return;
+		}
+		loaderSelect.replaceChildren();
+		for (const loader of result.loaders || []) {
+			const option = document.createElement('option');
+			option.value = loader;
+			option.textContent = loader;
+			loaderSelect.appendChild(option);
+		}
+		if (loaderSelect.options.length === 0) {
+			const option = document.createElement('option');
+			option.value = source.loaderVersion;
+			option.textContent = source.loaderVersion + ' (saved profile)';
+			loaderSelect.appendChild(option);
+		}
+		loaderSelect.value = loaderSelect.options[0].value;
+	});
+}
 /** Deletes the profile shown in the selector, once the player confirmed it. */
 function deleteProfile() {
 	const name = $('#select-profile').value;
