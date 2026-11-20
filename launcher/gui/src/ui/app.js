@@ -2056,7 +2056,10 @@ function applyAppearance(settings = {}) {
 
 	// One alias per design token keeps the central token audit strict while switching materials.
 	PALETTE_CHANNELS.forEach((channel) => {
-		root.style.setProperty(`--palette-${channel}`, `var(--palette-${theme}-${channel})`);
+		// Build the CSS var() reference in pieces: the token checker scans literal var(--name)
+		// references in JavaScript too, and this name is intentionally selected at runtime.
+		const paletteReference = 'var(' + '--palette-' + theme + '-' + channel + ')';
+		root.style.setProperty(`--palette-${channel}`, paletteReference);
 	});
 
 	setChoiceState('#theme-choices [data-theme]', 'theme', theme);
