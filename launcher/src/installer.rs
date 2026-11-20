@@ -326,6 +326,15 @@ fn unique_asset_objects(
     Ok(unique)
 }
 
+/// Adds remote asset sizes without allowing a malformed index to wrap the progress total.
+fn total_asset_size(objects: &[AssetObject]) -> Result<u64, InstallError> {
+    objects.iter().try_fold(0u64, |total, object| {
+        total.checked_add(object.size).ok_or_else(|| {
+            invalid_path("asset index total size", "the sum exceeds the u64 range")
+        })
+    })
+}
+
 /// Stops the installation when the player asked for it.
 fn check_cancelled(cancel: &AtomicBool) -> Result<(), InstallError> {
     if cancel.load(Ordering::Relaxed) {
@@ -383,7 +392,7 @@ fn install_assets(
     // The object path is derived from its hash, so duplicated names in the index must become
     // one download job. Otherwise two workers can race over the same destination and partial file.
     let objects = unique_asset_objects(index.objects.into_values())?;
-    let total: u64 = objects.iter().map(|object| object.size).sum();
+    let total = total_asset_size(&objects)?;
 
     // The files that are already there are not downloaded again.
     let mut received = 0u64;
@@ -826,6 +835,26 @@ mod tests {
         ];
 
         assert!(unique_asset_objects(objects).is_err());
+    }
+
+    #[test]
+    fn asset_progress_total_is_checked_for_overflow() {
+        let objects = vec![
+            AssetObject {
+                hash: "0123456789abcdef0123456789abcdef01234567".to_string(),
+                size: u64::MAX,
+            },
+            AssetObject {
+                hash: "abcdef0123456789abcdef0123456789abcdef01".to_string(),
+                size: 1,
+            },
+        ];
+
+        assert!(total_asset_size(&objects).is_err());
+        assert_eq!(
+            total_asset_size(&objects[..1]).unwrap(),
+            u64::MAX
+        );
     }
 
     #[test]
