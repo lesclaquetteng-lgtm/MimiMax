@@ -91,11 +91,20 @@ impl Launcher {
         let mut secrets_unavailable = false;
 
         if credentials_exist {
-            if let Err(error) = credentials::load(&paths.accounts_file, &mut accounts) {
-                eprintln!("Aether: {error}. Sign in to the Microsoft account again to restore it.");
-                secrets_unavailable = true;
-                clear_session_secrets(&mut accounts);
-                write_account_catalogue(&paths.accounts_file, &accounts).ok();
+            match credentials::load(&paths.accounts_file, &mut accounts) {
+                Ok(_) => {
+                    // A previous interrupted migration may have written the vault but not yet
+                    // removed legacy plaintext token fields from accounts.json.
+                    if let Err(error) = write_account_catalogue(&paths.accounts_file, &accounts) {
+                        eprintln!("Aether: could not scrub legacy account tokens from disk: {error}");
+                    }
+                }
+                Err(error) => {
+                    eprintln!("Aether: {error}. Sign in to the Microsoft account again to restore it.");
+                    secrets_unavailable = true;
+                    clear_session_secrets(&mut accounts);
+                    write_account_catalogue(&paths.accounts_file, &accounts).ok();
+                }
             }
         }
 
