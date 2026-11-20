@@ -78,6 +78,7 @@ jobs:
         run: |
           node --check launcher/gui/src/ui/app.js
           node --check launcher/gui/src/ui/bridge.js
+          node tools/check-the-fold.mjs
       - name: Verify Identity Studio contracts
         run: node tools/check-identity-studio.mjs
       - name: Verify in-game design-system parity
