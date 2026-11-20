@@ -326,11 +326,28 @@ pub fn parse_maven_coordinate(coordinate: &str) -> MavenCoordinate {
     }
 }
 
+/// Windows treats these names as devices even when an extension is appended.
+fn is_reserved_windows_device_name(value: &str) -> bool {
+    let stem = value
+        .split('.')
+        .next()
+        .unwrap_or_default()
+        .trim_end_matches(' ')
+        .to_ascii_uppercase();
+
+    matches!(stem.as_str(), "CON" | "PRN" | "AUX" | "NUL")
+        || (stem.len() == 4
+            && (stem.starts_with("COM") || stem.starts_with("LPT"))
+            && matches!(stem.as_bytes()[3], b'1'..=b'9'))
+}
+
 /// Accepts a single path component that is safe to use as a local directory/file name.
 pub fn is_safe_path_component(value: &str) -> bool {
     !value.is_empty()
         && value != "."
         && value != ".."
+        && !value.ends_with('.')
+        && !is_reserved_windows_device_name(value)
         && value.len() <= 128
         && value
             .bytes()
@@ -767,7 +784,10 @@ mod tests {
 
     #[test]
     fn rejects_path_components_that_could_escape_launcher_directories() {
-        for invalid in ["", ".", "..", "../outside", "C:\\outside", "/outside", "folder\\file", "a:b"] {
+        for invalid in [
+            "", ".", "..", "../outside", "C:\\outside", "/outside", "folder\\file", "a:b",
+            "CON", "con.txt", "NUL.json", "COM1", "LPT9.jar", "trailing.",
+        ] {
             assert!(!is_safe_path_component(invalid), "accepted component: {invalid}");
         }
         assert!(is_safe_path_component("1.21.11"));
