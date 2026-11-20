@@ -219,6 +219,17 @@ pub struct CatalogInstallEntry {
     pub already_installed: bool,
 }
 
+/// Progress of a Modrinth project or one of its required dependencies.
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CatalogProgress {
+    pub project_id: String,
+    pub state: String,
+    pub version: String,
+    pub received: u64,
+    pub total: u64,
+}
+
 /// Searches the public Modrinth catalog for Fabric mods compatible with a Minecraft version.
 pub fn search_catalog(query: &str, game_version: &str) -> Result<Vec<CatalogProject>, String> {
     validate_game_version(game_version)?;
@@ -269,6 +280,16 @@ pub fn install_catalog_project(
     project_id: &str,
     game_version: &str,
 ) -> Result<Vec<CatalogInstallEntry>, String> {
+    install_catalog_project_with_progress(mods_dir, project_id, game_version, |_| {})
+}
+
+/// Installs a project while reporting each required dependency and each downloaded byte.
+pub fn install_catalog_project_with_progress(
+    mods_dir: &Path,
+    project_id: &str,
+    game_version: &str,
+    mut on_progress: impl FnMut(&CatalogProgress),
+) -> Result<Vec<CatalogInstallEntry>, String> {
     validate_project_id(project_id)?;
     validate_game_version(game_version)?;
     fs::create_dir_all(mods_dir).map_err(|error| {
@@ -289,6 +310,7 @@ pub fn install_catalog_project(
         0,
         &mut visited,
         &mut installed,
+        &mut on_progress,
     )?;
 
     Ok(installed)
@@ -357,6 +379,7 @@ fn install_version_tree(
     depth: usize,
     visited: &mut std::collections::HashSet<String>,
     installed: &mut Vec<CatalogInstallEntry>,
+    on_progress: &mut impl FnMut(&CatalogProgress),
 ) -> Result<(), String> {
     if depth > MAX_DEPENDENCY_DEPTH {
         return Err("The required mod dependency chain is too deep to install safely.".to_string());
@@ -377,6 +400,14 @@ fn install_version_tree(
     if !visited.insert(identity) {
         return Ok(());
     }
+
+    on_progress(&CatalogProgress {
+        project_id: project_id.clone(),
+        state: "resolving".to_string(),
+        version: version.version_number.clone(),
+        received: 0,
+        total: 0,
+    });
 
     // Install required dependencies before the project that relies on them.
     for dependency in &version.dependencies {
@@ -416,6 +447,7 @@ fn install_version_tree(
             depth + 1,
             visited,
             installed,
+            on_progress,
         )?;
     }
 
@@ -449,10 +481,17 @@ fn install_version_tree(
     // Reuse an identical installed file regardless of its current name or enabled state.
     if let Some(existing) = find_installed_hash(mods_dir, &checksum) {
         installed.push(CatalogInstallEntry {
-            project_id,
-            version: version.version_number,
+            project_id: project_id.clone(),
+            version: version.version_number.clone(),
             filename: existing,
             already_installed: true,
+        });
+        on_progress(&CatalogProgress {
+            project_id,
+            state: "skipped".to_string(),
+            version: version.version_number,
+            received: 0,
+            total: 0,
         });
         return Ok(());
     }
@@ -475,18 +514,40 @@ fn install_version_tree(
         ));
     }
 
-    http::download(&file.url, &destination, Some(&checksum), |_, _| {})
-        .map_err(|error| format!("Could not install {project_id}: {error}"))?;
+    on_progress(&CatalogProgress {
+        project_id: project_id.clone(),
+        state: "downloading".to_string(),
+        version: version.version_number.clone(),
+        received: 0,
+        total: 0,
+    });
+    let download = http::download(&file.url, &destination, Some(&checksum), |received, total| {
+        on_progress(&CatalogProgress {
+            project_id: project_id.clone(),
+            state: "downloading".to_string(),
+            version: version.version_number.clone(),
+            received,
+            total,
+        });
+    })
+    .map_err(|error| format!("Could not install {project_id}: {error}"))?;
 
     installed.push(CatalogInstallEntry {
-        project_id,
-        version: version.version_number,
+        project_id: project_id.clone(),
+        version: version.version_number.clone(),
         filename: destination
             .file_name()
             .and_then(|value| value.to_str())
             .unwrap_or_default()
             .to_string(),
         already_installed: false,
+    });
+    on_progress(&CatalogProgress {
+        project_id,
+        state: "installed".to_string(),
+        version: version.version_number,
+        received: download.bytes,
+        total: download.bytes,
     });
 
     Ok(())
