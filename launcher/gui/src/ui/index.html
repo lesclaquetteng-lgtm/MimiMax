@@ -35,6 +35,22 @@
 		</div>
 	</div>
 
+	<div class="voxel-atmosphere" aria-hidden="true"><canvas id="voxel-backdrop" class="voxel-backdrop"></canvas><div class="voxel-atmosphere-vignette"></div></div>
+	<aside class="voxel-dock" aria-label="Aether navigation">
+		<button type="button" class="voxel-dock-brand nav-item" data-page="play" aria-label="Aether home" title="Aether home"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 3 4 28h6l6-14 6 14h6L16 3Z" fill="currentColor" stroke="none"/></svg></button>
+		<div class="voxel-dock-divider"></div>
+		<nav class="voxel-dock-nav" aria-label="Pages">
+			<button type="button" class="voxel-dock-item nav-item is-active" data-page="play" aria-label="Play"><svg viewBox="0 0 24 24"><path d="m8 5 11 7-11 7z" fill="currentColor" stroke="none"/></svg><span class="voxel-tooltip">Play</span></button>
+			<button type="button" class="voxel-dock-item nav-item" data-page="accounts" aria-label="Accounts"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.5"/><path d="M4.5 20c.7-3.7 3.2-5.5 7.5-5.5s6.8 1.8 7.5 5.5"/></svg><span class="voxel-tooltip">Accounts</span></button>
+			<button type="button" class="voxel-dock-item nav-item" data-page="versions" aria-label="Versions"><svg viewBox="0 0 24 24"><path d="m12 3 8 4.5v9L12 21l-8-4.5v-9L12 3Z"/><path d="m4.5 7.8 7.5 4.4 7.5-4.4M12 12.2V21"/></svg><span class="voxel-tooltip">Versions</span></button>
+			<button type="button" class="voxel-dock-item nav-item" data-page="mods" aria-label="Mods"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><rect x="14" y="14" width="6" height="6" rx="1"/></svg><span class="voxel-tooltip">Mods</span></button>
+			<button type="button" class="voxel-dock-item nav-item" data-page="servers" aria-label="Servers"><svg viewBox="0 0 24 24"><rect x="4" y="3.5" width="16" height="7" rx="1.5"/><rect x="4" y="13.5" width="16" height="7" rx="1.5"/><path d="M8 7h.01M8 17h.01M12 7h4M12 17h4"/></svg><span class="voxel-tooltip">Servers</span></button>
+			<button type="button" class="voxel-dock-item nav-item" data-page="performance" aria-label="Performance"><svg viewBox="0 0 24 24"><path d="M4.5 18a9 9 0 1 1 15 0"/><path d="m12 13 4-5M7 18h10"/></svg><span class="voxel-tooltip">Performance</span></button>
+			<button type="button" class="voxel-dock-item nav-item" data-page="logs" aria-label="Diagnostics"><svg viewBox="0 0 24 24"><path d="M3 12h4l2.2-6 4.2 12 2.2-6H21"/></svg><span class="voxel-tooltip">Diagnostics</span></button>
+		</nav>
+		<div class="voxel-dock-bottom"><button type="button" class="voxel-dock-item nav-item" data-page="settings" aria-label="Settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="m19.3 13.5 1.2.8-1.5 2.5-1.4-.5a7.4 7.4 0 0 1-1.5.9l-.3 1.5h-3l-.3-1.5a7.4 7.4 0 0 1-1.5-.9l-1.4.5-1.5-2.5 1.2-.8a7 7 0 0 1 0-3L8.1 9.7l1.5-2.5 1.4.5a7.4 7.4 0 0 1 1.5-.9l.3-1.5h3l.3 1.5a7.4 7.4 0 0 1 1.5.9l1.4-.5 1.5 2.5-1.2.8a7 7 0 0 1 0 3Z"/></svg><span class="voxel-tooltip">Settings</span></button></div>
+	</aside>
+
 	<div class="gate-menu-backdrop" id="gate-menu-backdrop" hidden></div>
 	<nav class="gate-menu" id="gate-menu" aria-label="Aether destinations" hidden>
 		<div class="gate-menu-head">
@@ -79,6 +95,11 @@
 						</div>
 					</header>
 
+					<div class="voxel-hero-copy">
+						<span class="voxel-hero-kicker">AETHER / YOUR MINECRAFT SPACE</span>
+						<h1>YOUR NEXT WORLD<br><span>STARTS HERE.</span></h1>
+						<p>Choose your profile, make it yours, and jump straight into the game.</p>
+					</div>
 					<div class="gate-stage">
 						<div class="gate-art" aria-label="The Fold, Aether's identity mark">
 							<svg class="gate-emblem" viewBox="0 0 360 360" role="img" aria-labelledby="gate-emblem-title">
