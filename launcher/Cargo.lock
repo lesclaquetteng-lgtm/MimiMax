@@ -24,6 +24,7 @@ name = "aether-launcher"
 version = "1.0.0"
 dependencies = [
  "chrono",
+ "getrandom 0.3.4",
  "md-5",
  "serde",
  "serde_json",
