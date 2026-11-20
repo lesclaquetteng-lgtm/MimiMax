@@ -135,6 +135,13 @@ impl Settings {
     fn migrate(&mut self) -> bool {
         let mut changed = false;
 
+        // The former launcher only had one dark palette. Upgrade that value once to the
+        // new material-based default; custom colourways introduced by Identity Studio stay intact.
+        if self.theme.eq_ignore_ascii_case("dark") {
+            self.theme = "graphite".to_string();
+            changed = true;
+        }
+
         if self.active_profile.is_empty() {
             self.active_profile = DEFAULT_PROFILE.to_string();
             changed = true;
@@ -522,6 +529,32 @@ mod tests {
         assert_eq!(settings.ui_density, "roomy");
         assert_eq!(settings.surface_style, "contour");
         assert_eq!(settings.navigation_style, "wide");
+    }
+
+    #[test]
+    fn a_legacy_dark_theme_is_migrated_to_graphite_and_saved() {
+        let directory = std::env::temp_dir().join(format!("aether-theme-migrate-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&directory);
+        std::fs::create_dir_all(&directory).unwrap();
+        let file = directory.join("settings.json");
+
+        std::fs::write(
+            &file,
+            r##"{"theme":"dark","accentColor":"#3B82F6","maxMemory":8192}"##,
+        )
+        .unwrap();
+
+        let settings = Settings::load(&file);
+        assert_eq!(settings.theme, "graphite");
+        assert_eq!(settings.max_memory, 8192);
+        assert_eq!(settings.accent_color, "#3B82F6");
+
+        let persisted: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
+        assert_eq!(persisted["theme"], "graphite");
+        assert_eq!(persisted["accentColor"], "#3B82F6");
+
+        std::fs::remove_dir_all(&directory).ok();
     }
 
     #[test]
