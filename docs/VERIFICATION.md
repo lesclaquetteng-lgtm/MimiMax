@@ -474,3 +474,11 @@ build/test evidence; static source inspection is not a substitute for those jobs
 Recovery limitation: Safe Recovery can restore the last valid Aether configuration and isolate
 exceptions thrown from Aether module callbacks. It does not infer which module caused an unrelated
 Minecraft process crash, nor does it disable modules based on an unverified crash attribution.
+
+
+### Non-destructive crash-loop recovery
+- A session marker is written at client initialization and cleared only from the normal client-stopping callback.
+- Two consecutive sessions that do not reach normal stopping trigger a non-blocking in-game suggestion.
+- `/aether safe-mode` disables all Aether modules for the current session and blocks their GUI/keybind reactivation.
+- Safe mode saves HUD positions without capturing the temporarily disabled modules, preserving their prior enabled/disabled preferences.
+- The marker detects abnormal termination only; it does not attribute a Minecraft crash to Aether or to any specific module.

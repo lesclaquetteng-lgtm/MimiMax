@@ -111,6 +111,16 @@ public final class ModuleManager {
 	}
 
 	/**
+	 * Disables every module for the current runtime. Safe-mode callers deliberately avoid capturing
+	 * this temporary state back into persisted preferences.
+	 */
+	public void disableAll() {
+		for (Module module : modules.values()) {
+			module.setEnabled(false);
+		}
+	}
+
+	/**
 	 * Restores every module to its default state.
 	 */
 	public void reset() {

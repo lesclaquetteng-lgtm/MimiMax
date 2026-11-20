@@ -208,6 +208,21 @@ class ModuleIsolationTest {
 	}
 
 	@Test
+	@DisplayName("safe-mode disable turns off every runtime module")
+	void disableAllTurnsOffEveryModule() {
+		ModuleManager manager = new ModuleManager();
+		FaultyTickModule first = new FaultyTickModule();
+		HealthyTickModule second = new HealthyTickModule();
+		manager.register(first);
+		manager.register(second);
+
+		manager.disableAll();
+
+		assertFalse(first.isEnabled());
+		assertFalse(second.isEnabled());
+	}
+
+	@Test
 	@DisplayName("fatal errors are not swallowed by the callback isolation boundary")
 	void fatalErrorsAreNotCaught() {
 		HealthyTickModule module = new HealthyTickModule();

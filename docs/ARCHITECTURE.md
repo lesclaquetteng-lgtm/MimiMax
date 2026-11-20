@@ -211,6 +211,13 @@ atomically written to `config.json.bak`; a corrupt primary is preserved under a 
 and otherwise uses defaults while preserving both files. A recovery notice is shown in-game when a
 backup is restored or defaults are required.
 
+A small session guard records whether Fabric reached the normal client-stopping lifecycle event.
+Two consecutive unclean starts produce a notice that offers the player the `/aether safe-mode`
+command. The marker says only that the previous sessions did not close normally; it is not treated
+as proof that Aether caused a Minecraft crash. Safe mode disables Aether modules for that session,
+keeps the saved module preferences unchanged, and suppresses GUI/keybind toggles until the next
+normal launch.
+
 Module `onTick` and `onRender` callbacks run behind a narrow `RuntimeException` boundary. Three
 failures from the same callback within ten seconds trip that module's circuit breaker; successful
 calls reset that callback's failure window. Lifecycle callback failures are logged and an unsuccessful
