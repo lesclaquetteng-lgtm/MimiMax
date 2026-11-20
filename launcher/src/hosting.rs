@@ -220,6 +220,12 @@ pub fn create(
     game_version: &str,
     loader_version: &str,
 ) -> Result<HostedServer, String> {
+    if !crate::minecraft::is_safe_path_component(game_version)
+        || !crate::minecraft::is_safe_path_component(loader_version)
+    {
+        return Err("invalid Minecraft or Fabric version identifier for the hosted server".to_string());
+    }
+
     let directory = directory(paths, name);
     fs::create_dir_all(&directory).map_err(|error| format!("could not create the folder: {}", error))?;
 
@@ -336,6 +342,24 @@ fn recorded_digest(file: &Path) -> Option<String> {
         .filter(|text| text.len() == 40 && text.bytes().all(|byte| byte.is_ascii_hexdigit()))
 }
 
+/// Resolves the shared Fabric server directory after validating metadata components.
+fn server_artifact_directory(
+    paths: &Paths,
+    game_version: &str,
+    loader_version: &str,
+) -> Result<PathBuf, String> {
+    if !crate::minecraft::is_safe_path_component(game_version)
+        || !crate::minecraft::is_safe_path_component(loader_version)
+    {
+        return Err("the hosted server contains an unsafe Minecraft or Fabric version identifier".to_string());
+    }
+
+    Ok(root(paths).join(format!(
+        "fabric-server-{}-{}",
+        game_version, loader_version
+    )))
+}
+
 /// The jar of the Fabric server, installed once and shared by every hosted server.
 ///
 /// Fabric no longer serves a prebuilt server jar: the official installer downloads the vanilla
@@ -346,10 +370,7 @@ fn ensure_server_jar(
     game_version: &str,
     loader_version: &str,
 ) -> Result<(PathBuf, PathBuf), String> {
-    let folder = root(paths).join(format!(
-        "fabric-server-{}-{}",
-        game_version, loader_version
-    ));
+    let folder = server_artifact_directory(paths, game_version, loader_version)?;
     let launch = folder.join("fabric-server-launch.jar");
     let server = folder.join("server.jar");
 
@@ -775,6 +796,18 @@ mod tests {
         assert_eq!(folder_name("C:\\Windows"), "cwindows");
         assert_eq!(folder_name("  "), "server");
         assert_eq!(folder_name("Aether"), "aether");
+    }
+
+    #[test]
+    fn server_artifact_paths_reject_untrusted_version_components() {
+        let root = std::env::temp_dir().join(format!("aether-server-version-path-{}", std::process::id()));
+        let paths = test_paths(&root);
+
+        let valid = server_artifact_directory(&paths, "1.21.11", "0.20.1").unwrap();
+        assert!(valid.ends_with("fabric-server-1.21.11-0.20.1"));
+        assert!(server_artifact_directory(&paths, "../outside", "0.20.1").is_err());
+        assert!(server_artifact_directory(&paths, "1.21.11", "../../outside").is_err());
+        assert!(server_artifact_directory(&paths, "C:\\Windows", "0.20.1").is_err());
     }
 
     #[test]
