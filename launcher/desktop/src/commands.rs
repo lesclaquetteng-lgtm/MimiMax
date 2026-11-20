@@ -553,10 +553,11 @@ pub async fn install_start(app: AppHandle, profile: Option<Value>) -> Value {
 	let stopped = Arc::new(AtomicBool::new(false));
 	let flag = cancelled.clone();
 	let application = app.clone();
+	let slot_for_spawn = slot.clone();
 
 	let result = core::blocking(move || {
 		core::run_core_streaming(&application, &args, StreamKind::Install, move |pid, stdin| {
-			if let Ok(mut guard) = slot.lock() {
+			if let Ok(mut guard) = slot_for_spawn.lock() {
 				*guard = Some(Active {
 					pid,
 					stdin,
@@ -665,10 +666,11 @@ pub async fn game_launch(app: AppHandle, options: Option<Value>) -> Value {
 	let stopped = Arc::new(AtomicBool::new(false));
 	let flag = stopped.clone();
 	let application = app.clone();
+	let slot_for_spawn = slot.clone();
 
 	let result = core::blocking(move || {
 		core::run_core_streaming(&application, &args, StreamKind::Game, move |pid, stdin| {
-			if let Ok(mut guard) = slot.lock() {
+			if let Ok(mut guard) = slot_for_spawn.lock() {
 				*guard = Some(Active {
 					pid,
 					stdin,
