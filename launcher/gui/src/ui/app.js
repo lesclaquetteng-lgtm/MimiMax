@@ -602,7 +602,9 @@ function renderModCatalog() {
 
 		const icon = document.createElement('div');
 		icon.className = 'catalog-project-icon';
-		icon.textContent = (project.title || '?').trim().charAt(0).toUpperCase();
+		const fallback = document.createElement('span');
+		fallback.textContent = (project.title || '?').trim().charAt(0).toUpperCase();
+		icon.appendChild(fallback);
 		if (typeof project.iconUrl === 'string' && project.iconUrl.startsWith('https://cdn.modrinth.com/')) {
 			const image = document.createElement('img');
 			image.src = project.iconUrl;
@@ -610,7 +612,7 @@ function renderModCatalog() {
 			image.loading = 'lazy';
 			image.referrerPolicy = 'no-referrer';
 			image.addEventListener('load', () => {
-				icon.textContent = '';
+				fallback.remove();
 				icon.classList.add('has-image');
 			}, { once: true });
 			image.addEventListener('error', () => image.remove(), { once: true });
