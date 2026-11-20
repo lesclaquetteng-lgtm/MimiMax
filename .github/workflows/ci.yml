@@ -1,8 +1,10 @@
 name: CI
 
 on:
+  # The PR event already tests every feature-branch update; keep push runs for main only
+  # to avoid running the same matrix twice for each pull-request commit.
   push:
-    branches: [main, "codex/**"]
+    branches: [main]
   pull_request:
   workflow_dispatch:
 
