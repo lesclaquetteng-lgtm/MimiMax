@@ -12,7 +12,7 @@ use aether_launcher::game;
 use aether_launcher::logs;
 use aether_launcher::installer::{InstallError, InstallProgress};
 use aether_launcher::minecraft;
-use aether_launcher::settings::Profile;
+use aether_launcher::settings::{self, Profile};
 use aether_launcher::Launcher;
 
 fn main() {
@@ -106,6 +106,32 @@ impl Flags {
 fn command_info() -> Result<(), String> {
     let launcher = Launcher::open();
 
+    // Resolve Java in Rust so the dashboard shows the executable that the launcher can actually
+    // use, rather than assuming that an empty custom path means Java is missing.
+    let required_java = launcher.settings.required_java_version;
+    let custom_java = !launcher.settings.java_path.trim().is_empty();
+    let java_runtime = match settings::detect_java(&launcher.settings.java_path, required_java) {
+        Some(path) => {
+            let major = settings::read_java_major_version(&path);
+            serde_json::json!({
+                "available": true,
+                "compatible": major.map(|value| value >= required_java).unwrap_or(false),
+                "path": path.to_string_lossy(),
+                "majorVersion": major,
+                "requiredMajor": required_java,
+                "source": if custom_java { "custom" } else { "detected" },
+            })
+        }
+        None => serde_json::json!({
+            "available": false,
+            "compatible": false,
+            "path": null,
+            "majorVersion": null,
+            "requiredMajor": required_java,
+            "source": if custom_java { "custom-invalid" } else { "not-found" },
+        }),
+    };
+
     let paths = serde_json::json!({
         "home": launcher.paths.home.to_string_lossy(),
         "data": launcher.paths.data.to_string_lossy(),
@@ -125,6 +151,7 @@ fn command_info() -> Result<(), String> {
         "version": env!("CARGO_PKG_VERSION"),
         "paths": paths,
         "settings": launcher.settings,
+        "javaRuntime": java_runtime,
         // The profile that applies to the selected account, the one a launch would use.
         "profile": launcher.active_profile(),
     }));
