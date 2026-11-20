@@ -119,6 +119,11 @@ pub fn install_version(
     // A cancelled installation does not touch the network at all.
     check_cancelled(cancel)?;
 
+    // This value becomes both a local JAR filename and part of the Fabric Maven URL.
+    if !crate::minecraft::is_safe_path_component(fabric_api_version) {
+        return Err(invalid_path("Fabric API version", fabric_api_version));
+    }
+
     let total_tasks = 5;
     let mut completed = 0usize;
 
@@ -180,7 +185,7 @@ pub fn install_version(
     for library in &libraries {
         check_cancelled(cancel)?;
 
-        let destination = paths.libraries.join(&library.path);
+        let destination = library_destination(paths, &library.path)?;
         let metrics = client.download(
             &library.url,
             &destination,
@@ -270,6 +275,21 @@ pub fn install_version(
     })
 }
 
+/// Builds a local destination only from validated metadata paths.
+fn library_destination(paths: &Paths, relative: &str) -> Result<PathBuf, InstallError> {
+    if !crate::minecraft::is_safe_relative_path(relative) {
+        return Err(invalid_path("library path", relative));
+    }
+    Ok(paths.libraries.join(relative))
+}
+
+fn invalid_path(kind: &str, value: &str) -> InstallError {
+    InstallError::Io(io::Error::new(
+        io::ErrorKind::InvalidInput,
+        format!("unsafe {kind} from remote metadata: {value}"),
+    ))
+}
+
 /// Stops the installation when the player asked for it.
 fn check_cancelled(cancel: &AtomicBool) -> Result<(), InstallError> {
     if cancel.load(Ordering::Relaxed) {
@@ -294,6 +314,9 @@ fn install_assets(
         None => return Ok(()),
     };
 
+    if !crate::minecraft::is_safe_path_component(&index_id) {
+        return Err(invalid_path("asset index identifier", &index_id));
+    }
     let index_file = paths.asset_indexes.join(format!("{}.json", index_id));
     let index = match read_asset_index(&index_file) {
         Some(index) => index,
@@ -328,6 +351,9 @@ fn install_assets(
     let mut received = 0u64;
     let mut pending: Vec<AssetObject> = Vec::new();
     for object in objects {
+        if !crate::minecraft::is_sha1_hash(&object.hash) {
+            return Err(invalid_path("asset object SHA-1", &object.hash));
+        }
         let destination = paths.assets.join(asset_path(&object.hash));
         let present = fs::metadata(&destination)
             .map(|metadata| metadata.len() == object.size)
@@ -396,6 +422,11 @@ fn download_assets(
     mut on_progress: impl FnMut(u64, u64),
 ) -> Result<(), InstallError> {
     check_cancelled(cancel)?;
+    for object in pending {
+        if !crate::minecraft::is_sha1_hash(&object.hash) {
+            return Err(invalid_path("asset object SHA-1", &object.hash));
+        }
+    }
 
     let workers = ASSET_CONCURRENCY.min(pending.len()).max(1);
 
@@ -515,7 +546,7 @@ fn install_natives(
 
     for library in libraries.iter().filter(|entry| entry.native) {
         check_cancelled(cancel)?;
-        let destination = paths.libraries.join(&library.path);
+        let destination = library_destination(paths, &library.path)?;
         let metrics = client.download(
             &library.url,
             &destination,
@@ -636,6 +667,9 @@ fn format_download(name: &str, report: &DownloadReport) -> String {
 
 /// Reads the description of a version from the disk.
 pub fn read_version_json(paths: &Paths, version: &str) -> Option<VersionJson> {
+    if !crate::minecraft::is_safe_path_component(version) {
+        return None;
+    }
     let content = fs::read_to_string(
         paths
             .versions
@@ -714,6 +748,19 @@ mod tests {
     /// The log tests share one counter of written bytes, they run one at a time and start from
     /// zero so the moment of a size check is known exactly.
     static LOG_WRITER_LOCK: Mutex<()> = Mutex::new(());
+
+    #[test]
+    fn library_destination_rejects_remote_path_traversal() {
+        let root = std::env::temp_dir().join(format!("aether-library-path-{}", std::process::id()));
+        let paths = test_paths(&root);
+
+        assert!(library_destination(&paths, "org/example/library/1.0/library-1.0.jar").is_ok());
+        assert!(library_destination(&paths, "../outside.jar").is_err());
+        assert!(library_destination(&paths, "org/../../outside.jar").is_err());
+        assert!(library_destination(&paths, "C:/outside.jar").is_err());
+
+        fs::remove_dir_all(&root).ok();
+    }
 
     #[test]
     fn zip_extraction_rejects_paths_that_escape_the_destination() {
