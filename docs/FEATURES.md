@@ -144,7 +144,8 @@ applied last.
 
 ### Safe recovery after repeated abnormal shutdowns
 
-After two consecutive sessions that do not reach Fabric's normal stopping callback, Aether shows a
-message explaining that the previous exits were abnormal (not proof that Aether caused a crash).
-Run `/aether safe-mode` to turn off Aether modules for the current session. The saved module
-preferences are preserved and return on the next normal launch.
+After two consecutive sessions that do not reach Fabric's normal stopping callback, Aether offers
+a title-screen choice: start with Aether modules disabled for this session, or continue normally.
+The notice explains that abnormal shutdowns are not proof that Aether caused a crash. The optional
+`/aether safe-mode` command is also available in-game. Saved module preferences are preserved and
+return on the next normal launch.

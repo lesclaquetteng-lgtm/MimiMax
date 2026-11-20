@@ -212,8 +212,8 @@ and otherwise uses defaults while preserving both files. A recovery notice is sh
 backup is restored or defaults are required.
 
 A small session guard records whether Fabric reached the normal client-stopping lifecycle event.
-Two consecutive unclean starts produce a notice that offers the player the `/aether safe-mode`
-command. The marker says only that the previous sessions did not close normally; it is not treated
+Two consecutive unclean starts produce a title-screen confirmation with separate `Start safe mode`
+and `Continue normally` choices. The optional `/aether safe-mode` command remains available in-game. The marker says only that the previous sessions did not close normally; it is not treated
 as proof that Aether caused a Minecraft crash. Safe mode disables Aether modules for that session,
 keeps the saved module preferences unchanged, and suppresses GUI/keybind toggles until the next
 normal launch.

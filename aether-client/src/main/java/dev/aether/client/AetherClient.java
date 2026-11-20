@@ -23,6 +23,8 @@ import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.screens.ConfirmScreen;
+import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -53,6 +55,7 @@ public class AetherClient implements ClientModInitializer {
 	private boolean configApplied;
 	private boolean recoveryNoticeShown;
 	private boolean recoverySafeMode;
+	private boolean recoveryDecisionMade;
 	private boolean recoveryMarkerInitialized;
 	private ClientRecoveryGuard.Startup recoveryStartup = new ClientRecoveryGuard.Startup(0, false);
 	private Path recoveryMarker;
@@ -72,6 +75,7 @@ public class AetherClient implements ClientModInitializer {
 			LOGGER.warn("Could not initialize the Aether session recovery marker; crash history is unavailable.",
 					exception);
 		}
+		recoveryDecisionMade = !recoveryStartup.recoveryRecommended();
 		config = AetherConfig.load();
 		Aether aether = Aether.create(config, moduleManager);
 
@@ -144,6 +148,22 @@ public class AetherClient implements ClientModInitializer {
 		ClientLifecycleEvents.CLIENT_STARTED.register(client -> {
 			hudManager.applyDefaultPositions(RenderUtil.screenWidth(), RenderUtil.screenHeight());
 			hudManager.applySavedPositions(Aether.get().getConfig());
+			if (recoveryStartup.recoveryRecommended()) {
+				Screen previousScreen = client.screen;
+				client.setScreen(new ConfirmScreen(
+						useSafeMode -> {
+							recoveryDecisionMade = true;
+							if (useSafeMode) {
+								recoverySafeMode = true;
+								moduleManager.disableAll();
+							}
+						client.setScreen(previousScreen);
+						},
+						Component.literal("Aether recovery mode"),
+						Component.literal("Two consecutive sessions did not close normally. This is not proof that Aether caused a crash. Start this session with Aether modules disabled? Your saved preferences will be preserved."),
+						Component.literal("Start safe mode"),
+						Component.literal("Continue normally")));
+			}
 		});
 
 		ClientLifecycleEvents.CLIENT_STOPPING.register(client -> {
@@ -212,13 +232,13 @@ public class AetherClient implements ClientModInitializer {
 			if (recoveryMessage != null) {
 				minecraft.player.displayClientMessage(Component.literal(recoveryMessage), false);
 			}
-			if (recoveryStartup.recoveryRecommended()) {
-				minecraft.player.displayClientMessage(Component.literal(
-						"Aether detected repeated sessions that did not close normally. This does not prove Aether caused them. "
-								+ "You can run /aether safe-mode to temporarily disable Aether modules; saved preferences will be preserved."),
-						false);
-			}
 			recoveryNoticeShown = true;
+		}
+
+		// Do not restore or tick configured modules until the player has explicitly chosen safe
+		// recovery or normal startup on the title screen.
+		if (recoveryStartup.recoveryRecommended() && !recoveryDecisionMade) {
+			return;
 		}
 
 		// The modules write into the options of the game, which do not exist yet while the client is
@@ -227,7 +247,7 @@ public class AetherClient implements ClientModInitializer {
 		// Auto Jump) was enabled in the configuration.
 		if (!configApplied && minecraft.options != null) {
 			configApplied = true;
-			config.applyTo(moduleManager);
+			config.applyTo(moduleManager, !recoverySafeMode);
 		}
 
 		while (clickGuiKey.consumeClick()) {

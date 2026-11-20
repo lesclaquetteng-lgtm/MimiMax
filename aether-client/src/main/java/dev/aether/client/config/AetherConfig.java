@@ -349,6 +349,14 @@ public final class AetherConfig {
 	}
 
 	public void applyTo(ModuleManager manager) {
+		applyTo(manager, true);
+	}
+
+	/**
+	 * Applies persisted settings and optionally restores the persisted enabled flags. Safe recovery
+	 * passes false so the player's settings are loaded without reactivating modules for this session.
+	 */
+	public void applyTo(ModuleManager manager, boolean restoreEnabledStates) {
 		for (Module module : manager.getAll()) {
 			String key = module.getName().toLowerCase(java.util.Locale.ROOT);
 			Map<String, Object> stored = settings.get(key);
@@ -360,9 +368,13 @@ public final class AetherConfig {
 					}
 				}
 			}
-			Boolean enabled = modules.get(key);
-			if (enabled != null) {
-				module.setEnabled(enabled);
+			if (restoreEnabledStates) {
+				Boolean enabled = modules.get(key);
+				if (enabled != null) {
+					module.setEnabled(enabled);
+				}
+			} else {
+				module.setEnabled(false);
 			}
 		}
 	}

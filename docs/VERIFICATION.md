@@ -478,7 +478,7 @@ Minecraft process crash, nor does it disable modules based on an unverified cras
 
 ### Non-destructive crash-loop recovery
 - A session marker is written at client initialization and cleared only from the normal client-stopping callback.
-- Two consecutive sessions that do not reach normal stopping trigger a non-blocking in-game suggestion.
-- `/aether safe-mode` disables all Aether modules for the current session and blocks their GUI/keybind reactivation.
+- Two consecutive sessions that do not reach normal stopping trigger a title-screen confirmation before module state is restored.
+- Choosing `Start safe mode` disables every Aether module for the current session; choosing `Continue normally` restores saved enabled states.
 - Safe mode saves HUD positions without capturing the temporarily disabled modules, preserving their prior enabled/disabled preferences.
 - The marker detects abnormal termination only; it does not attribute a Minecraft crash to Aether or to any specific module.
