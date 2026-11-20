@@ -39,6 +39,7 @@ JSON lines/events for the interface.
 | `paths.rs` | Resolution/creation of launcher and game directories (`AETHER_HOME`, `AETHER_SHARED_DIR`). |
 | `settings.rs` | Persistent settings, Java detection, mod jar discovery (`AETHER_MOD_JAR`). |
 | `accounts.rs` | Account store, offline accounts, Microsoft device-code login flow, session mapping, and the Mojang name lookup that tells a premium name from a free one. |
+| `credentials.rs` | Separate Microsoft access/refresh token vault: Windows DPAPI protection, legacy account-file migration, and no token serialization into JSON/renderer IPC. |
 | `offline.rs` | Offline username validation and deterministic Minecraft-compatible offline UUID generation. |
 | `minecraft.rs` | Mojang/Fabric metadata retrieval, rule evaluation, argument templating, library resolution/merging. |
 | `http.rs` | HTTP helpers, JSON/text/bytes requests with status (`get_with_status`), file download with checksum verification, SHA-1 utilities. |
