@@ -61,6 +61,11 @@ pub enum HttpError {
     Uri(String),
 }
 
+/// @return true when a status code is worth another attempt.
+fn retryable_status(status: u16) -> bool {
+    matches!(status, 408 | 425 | 429) || status >= 500
+}
+
 impl HttpError {
     /// @return true when the request is worth another attempt.
     ///
@@ -68,9 +73,7 @@ impl HttpError {
     /// malformed answer or an invalid URL is not.
     pub fn is_retryable(&self) -> bool {
         match self {
-            HttpError::Status { status, .. } => {
-                matches!(status, 408 | 425 | 429) || *status >= 500
-            }
+            HttpError::Status { status, .. } => retryable_status(*status),
             HttpError::Io(_) => true,
             HttpError::Checksum { .. } => true,
             HttpError::Json(_) | HttpError::Uri(_) => false,
@@ -542,6 +545,48 @@ pub fn get_text(url: &str) -> Result<String, HttpError> {
 /// Reads a document into a byte buffer with a client that only lives for the call.
 pub fn get_bytes(url: &str) -> Result<Vec<u8>, HttpError> {
     Client::new().get_bytes(url)
+}
+
+/// Reads a document with its status code, without turning a `4xx` answer into an error.
+///
+/// Most endpoints of the launcher treat an error code as a failure. A name lookup is different:
+/// Mojang answers `204` for a name nobody owns, and that is a useful answer, not a failure. A
+/// retryable code (rate limit, server error) is still raised so the retry loop can run.
+pub fn get_with_status(url: &str) -> Result<(u16, String), HttpError> {
+    let agent = agent();
+
+    with_retry(|| {
+        let failure = |status: u16, body: String| HttpError::Status {
+            url: url.to_string(),
+            status,
+            body: Some(body),
+        };
+
+        let response = match agent.get(url).call() {
+            Ok(response) => response,
+            Err(ureq::Error::Status(status, response)) => {
+                let body = response.into_string().unwrap_or_default();
+
+                if retryable_status(status) {
+                    return Err(failure(status, body));
+                }
+
+                return Ok((status, body));
+            }
+            Err(other) => return Err(HttpError::Io(std::io::Error::other(other.to_string()))),
+        };
+
+        let status = response.status();
+        let body = response
+            .into_string()
+            .map_err(|error| HttpError::Io(std::io::Error::other(error.to_string())))?;
+
+        if retryable_status(status) {
+            return Err(failure(status, body));
+        }
+
+        Ok((status, body))
+    })
 }
 
 /// Posts a form with a client that only lives for the call.

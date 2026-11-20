@@ -1,0 +1,73 @@
+{
+  "viewport": {
+    "width": 1180,
+    "height": 760
+  },
+  "scrollTop": 0,
+  "content": {
+    "top": 38,
+    "bottom": 760,
+    "height": 722,
+    "visible": true
+  },
+  "hero": {
+    "top": 66,
+    "bottom": 236,
+    "height": 170,
+    "visible": true
+  },
+  "grid": {
+    "top": 256,
+    "bottom": 671,
+    "height": 415,
+    "visible": true
+  },
+  "session": {
+    "top": 685,
+    "bottom": 1004.5,
+    "height": 319.5,
+    "visible": true
+  },
+  "actions": {
+    "top": 746.5,
+    "bottom": 789.5,
+    "height": 43,
+    "visible": true
+  },
+  "console": {
+    "top": 803.5,
+    "bottom": 983.5,
+    "height": 180,
+    "visible": true
+  },
+  "progress": {
+    "top": 0,
+    "bottom": 0,
+    "height": 0,
+    "visible": false
+  },
+  "install": {
+    "top": 749.25,
+    "bottom": 786.75,
+    "height": 37.5,
+    "visible": true
+  },
+  "launch": {
+    "top": 746.5,
+    "bottom": 789.5,
+    "height": 43,
+    "visible": true
+  },
+  "cancel": {
+    "top": 0,
+    "bottom": 0,
+    "height": 0,
+    "visible": false
+  },
+  "installInside": false,
+  "cancelInside": null,
+  "failures": [
+    "#btn-install"
+  ],
+  "state": "idle"
+}

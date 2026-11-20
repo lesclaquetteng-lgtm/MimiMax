@@ -1,0 +1,12 @@
+{
+  "accounts": [
+    {
+      "type": "offline",
+      "id": "0d2cc5eb-be91-4de1-9954-6597ea124027",
+      "username": "E2EPlayer",
+      "uuid": "7ae59273-5a35-3bf0-8aa6-4d7259319819",
+      "accessToken": "0"
+    }
+  ],
+  "selected": "0d2cc5eb-be91-4de1-9954-6597ea124027"
+}

@@ -163,16 +163,40 @@ fn random_password() -> String {
     password
 }
 
+/// One value of `server.properties`, on a single line.
+///
+/// A newline in a value would end the property and start another one: a server name could then
+/// add `enable-rcon=false`, move `level-name`, or change `server-port`. The value is flattened so
+/// that what the player typed can never become a second property.
+fn property_value(value: &str) -> String {
+    value
+        .chars()
+        .map(|character| {
+            if character == '\n' || character == '\r' {
+                ' '
+            } else {
+                character
+            }
+        })
+        .collect::<String>()
+        .trim()
+        .to_string()
+}
+
 /// The `server.properties` of an offline server.
+///
+/// The server listens on the loopback interface only. An offline server accepts every name without
+/// a password: bound to `0.0.0.0` it would be an open server for the whole local network, and its
+/// RCON, which travels in clear, would be reachable too.
 fn properties(name: &str, port: u16, rcon_port: u16, password: &str, max_players: u32) -> String {
     [
         "# Written by Aether Launcher.".to_string(),
         "# online-mode=false is what lets a cracked account join this server.".to_string(),
         format!("server-port={}", port),
-        "server-ip=".to_string(),
+        "server-ip=127.0.0.1".to_string(),
         "online-mode=false".to_string(),
         "enforce-secure-profile=false".to_string(),
-        format!("motd={}", name),
+        format!("motd={}", property_value(name)),
         format!("max-players={}", max_players.max(1)),
         "view-distance=10".to_string(),
         "simulation-distance=8".to_string(),
@@ -294,6 +318,26 @@ fn set_property(file: &Path, key: &str, value: &str) -> Result<(), String> {
     write_atomic(file, &text).map_err(|error| error.to_string())
 }
 
+/// The file that records the digest of the Fabric installer that was downloaded.
+const INSTALLER_DIGEST: &str = "fabric-installer.sha1";
+
+/// Whether a file starts like a zip archive, which every jar is.
+fn looks_like_jar(path: &Path) -> bool {
+    let mut magic = [0u8; 4];
+    fs::File::open(path)
+        .and_then(|mut file| file.read_exact(&mut magic))
+        .map(|()| &magic[..2] == b"PK")
+        .unwrap_or(false)
+}
+
+/// The digest that was recorded when the installer was downloaded.
+fn recorded_digest(file: &Path) -> Option<String> {
+    fs::read_to_string(file)
+        .ok()
+        .map(|text| text.trim().to_ascii_lowercase())
+        .filter(|text| text.len() == 40 && text.bytes().all(|byte| byte.is_ascii_hexdigit()))
+}
+
 /// The jar of the Fabric server, installed once and shared by every hosted server.
 ///
 /// Fabric no longer serves a prebuilt server jar: the official installer downloads the vanilla
@@ -311,11 +355,12 @@ fn ensure_server_jar(
     let launch = folder.join("fabric-server-launch.jar");
     let server = folder.join("server.jar");
 
-    let complete = launch.exists()
+    let complete = looks_like_jar(&launch)
         && server
             .metadata()
             .map(|metadata| metadata.len() > 1_000_000)
-            .unwrap_or(false);
+            .unwrap_or(false)
+        && looks_like_jar(&server);
 
     if complete {
         return Ok((launch, server));
@@ -324,10 +369,43 @@ fn ensure_server_jar(
     fs::create_dir_all(&folder).map_err(|error| error.to_string())?;
 
     let installer = folder.join("fabric-installer.jar");
+    let digest_file = folder.join(INSTALLER_DIGEST);
+
+    // The installer is a jar that is then run by the JVM, so it has to be a jar. The archive is
+    // checked after the download and its digest is recorded: the next start compares it, and a
+    // file that was replaced in between is refused instead of executed.
+    if installer.exists() && !looks_like_jar(&installer) {
+        let _ = fs::remove_file(&installer);
+    }
+
     if !installer.exists() {
         let url = installer_url()?;
         crate::http::download(&url, &installer, None, |_, _| {})
             .map_err(|error| format!("could not download the Fabric installer: {}", error))?;
+
+        if !looks_like_jar(&installer) {
+            let _ = fs::remove_file(&installer);
+            return Err(format!(
+                "the Fabric installer downloaded from {} is not a jar archive",
+                url
+            ));
+        }
+
+        let digest = crate::http::sha1(&installer)
+            .ok_or_else(|| "could not read the digest of the Fabric installer".to_string())?;
+        write_atomic(&digest_file, &format!("{}\n", digest))
+            .map_err(|error| format!("could not record the digest of the installer: {}", error))?;
+    } else if let Some(recorded) = recorded_digest(&digest_file) {
+        let current = crate::http::sha1(&installer).unwrap_or_default();
+        if current != recorded {
+            let _ = fs::remove_file(&installer);
+            let _ = fs::remove_file(&digest_file);
+            return Err(format!(
+                "the Fabric installer changed since it was downloaded (expected {}, got {}); \
+                 it was removed, start the server again to download it",
+                recorded, current
+            ));
+        }
     }
 
     let java = java(paths)?;
@@ -851,6 +929,79 @@ mod tests {
         assert_eq!(first.len(), 24);
         assert_ne!(first, second);
         assert!(first.chars().all(|character| character.is_ascii_hexdigit()));
+    }
+
+    #[test]
+    fn the_server_listens_on_the_loopback_only() {
+        let content = properties("Test", 25565, 25575, "secret", 10);
+
+        assert!(content.contains("\nserver-ip=127.0.0.1\n"));
+        assert!(!content.contains("server-ip=\n"), "the server would listen on 0.0.0.0");
+    }
+
+    #[test]
+    fn a_newline_in_the_motd_cannot_add_a_property() {
+        let content = properties(
+            "hello\nenable-rcon=false\r\nlevel-name=../../Windows",
+            25565,
+            25575,
+            "secret",
+            10,
+        );
+
+        assert_eq!(
+            content.lines().filter(|line| line.starts_with("motd=")).count(),
+            1
+        );
+        assert_eq!(
+            content
+                .lines()
+                .filter(|line| line.starts_with("enable-rcon="))
+                .count(),
+            1,
+            "the name added a second enable-rcon property"
+        );
+        assert!(content.contains("enable-rcon=true"));
+        assert!(content.contains("level-name=world"));
+        // The text is still there, but only as a value of the motd: it starts no property.
+        assert!(content.contains("motd=hello enable-rcon=false  level-name=../../Windows\n"));
+    }
+
+    #[test]
+    fn a_file_that_is_not_a_zip_is_not_a_jar() {
+        let directory = std::env::temp_dir().join(format!("aether-jar-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&directory);
+        std::fs::create_dir_all(&directory).unwrap();
+
+        let file = directory.join("server.jar");
+        fs::write(&file, b"<html>404 not found</html>").unwrap();
+        assert!(!looks_like_jar(&file));
+
+        fs::write(&file, b"PK\x03\x04the rest of a zip").unwrap();
+        assert!(looks_like_jar(&file));
+
+        assert!(!looks_like_jar(&directory.join("missing.jar")));
+
+        std::fs::remove_dir_all(&directory).ok();
+    }
+
+    #[test]
+    fn a_recorded_digest_is_only_kept_when_it_is_a_sha1() {
+        let directory = std::env::temp_dir().join(format!("aether-digest-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&directory);
+        std::fs::create_dir_all(&directory).unwrap();
+
+        let file = directory.join(INSTALLER_DIGEST);
+        fs::write(&file, "  DA39A3EE5E6B4B0D3255BFEF95601890AFD80709\n").unwrap();
+        assert_eq!(
+            recorded_digest(&file).as_deref(),
+            Some("da39a3ee5e6b4b0d3255bfef95601890afd80709")
+        );
+
+        fs::write(&file, "<html>404</html>").unwrap();
+        assert!(recorded_digest(&file).is_none());
+
+        std::fs::remove_dir_all(&directory).ok();
     }
 
     #[test]

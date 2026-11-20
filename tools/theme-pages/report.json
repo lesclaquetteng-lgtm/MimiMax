@@ -14,6 +14,11 @@
               "background": "color(srgb 0.189725 0.418039 0.791059)",
               "border": "rgba(0, 0, 0, 0)"
             },
+            "dangerButton": {
+              "color": "rgb(248, 113, 113)",
+              "background": "rgba(248, 113, 113, 0.15)",
+              "border": "rgba(248, 113, 113, 0.2)"
+            },
             "rangeValue": {
               "color": "color(srgb 0.707922 0.813726 0.986588)",
               "background": "color(srgb 0.231373 0.509804 0.964706 / 0.14)",
@@ -45,6 +50,11 @@
               "color": "rgb(255, 255, 255)",
               "background": "color(srgb 0.189725 0.418039 0.791059)",
               "border": "rgba(0, 0, 0, 0)"
+            },
+            "dangerButton": {
+              "color": "rgb(248, 113, 113)",
+              "background": "rgba(248, 113, 113, 0.15)",
+              "border": "rgba(248, 113, 113, 0.2)"
             },
             "rangeValue": {
               "color": "color(srgb 0.707922 0.813726 0.986588)",
@@ -78,6 +88,11 @@
               "background": "color(srgb 0.189725 0.418039 0.791059)",
               "border": "rgba(0, 0, 0, 0)"
             },
+            "dangerButton": {
+              "color": "rgb(248, 113, 113)",
+              "background": "rgba(248, 113, 113, 0.15)",
+              "border": "rgba(248, 113, 113, 0.2)"
+            },
             "rangeValue": {
               "color": "color(srgb 0.707922 0.813726 0.986588)",
               "background": "color(srgb 0.231373 0.509804 0.964706 / 0.14)",
@@ -109,6 +124,11 @@
               "color": "rgb(255, 255, 255)",
               "background": "color(srgb 0.189725 0.418039 0.791059)",
               "border": "rgba(0, 0, 0, 0)"
+            },
+            "dangerButton": {
+              "color": "rgb(248, 113, 113)",
+              "background": "rgba(248, 113, 113, 0.15)",
+              "border": "rgba(248, 113, 113, 0.2)"
             },
             "rangeValue": {
               "color": "color(srgb 0.707922 0.813726 0.986588)",
@@ -142,6 +162,11 @@
               "background": "color(srgb 0.189725 0.418039 0.791059)",
               "border": "rgba(0, 0, 0, 0)"
             },
+            "dangerButton": {
+              "color": "rgb(248, 113, 113)",
+              "background": "rgba(248, 113, 113, 0.15)",
+              "border": "rgba(248, 113, 113, 0.2)"
+            },
             "rangeValue": {
               "color": "color(srgb 0.707922 0.813726 0.986588)",
               "background": "color(srgb 0.231373 0.509804 0.964706 / 0.14)",
@@ -173,6 +198,11 @@
               "color": "rgb(255, 255, 255)",
               "background": "color(srgb 0.189725 0.418039 0.791059)",
               "border": "rgba(0, 0, 0, 0)"
+            },
+            "dangerButton": {
+              "color": "rgb(248, 113, 113)",
+              "background": "rgba(248, 113, 113, 0.15)",
+              "border": "rgba(248, 113, 113, 0.2)"
             },
             "rangeValue": {
               "color": "color(srgb 0.707922 0.813726 0.986588)",
@@ -206,6 +236,11 @@
               "background": "color(srgb 0.189725 0.418039 0.791059)",
               "border": "rgba(0, 0, 0, 0)"
             },
+            "dangerButton": {
+              "color": "rgb(248, 113, 113)",
+              "background": "rgba(248, 113, 113, 0.15)",
+              "border": "rgba(248, 113, 113, 0.2)"
+            },
             "rangeValue": {
               "color": "color(srgb 0.707922 0.813726 0.986588)",
               "background": "color(srgb 0.231373 0.509804 0.964706 / 0.14)",
@@ -237,6 +272,11 @@
               "color": "rgb(255, 255, 255)",
               "background": "color(srgb 0.189725 0.418039 0.791059)",
               "border": "rgba(0, 0, 0, 0)"
+            },
+            "dangerButton": {
+              "color": "rgb(248, 113, 113)",
+              "background": "rgba(248, 113, 113, 0.15)",
+              "border": "rgba(248, 113, 113, 0.2)"
             },
             "rangeValue": {
               "color": "color(srgb 0.707922 0.813726 0.986588)",
@@ -275,6 +315,11 @@
               "background": "color(srgb 0.276549 0.0353725 0.0353725)",
               "border": "rgba(0, 0, 0, 0)"
             },
+            "dangerButton": {
+              "color": "rgb(248, 113, 113)",
+              "background": "rgba(248, 113, 113, 0.15)",
+              "border": "rgba(248, 113, 113, 0.2)"
+            },
             "rangeValue": {
               "color": "color(srgb 0.748157 0.636392 0.636392)",
               "background": "color(srgb 0.337255 0.0431373 0.0431373 / 0.14)",
@@ -306,6 +351,11 @@
               "color": "rgb(255, 255, 255)",
               "background": "color(srgb 0.276549 0.0353725 0.0353725)",
               "border": "rgba(0, 0, 0, 0)"
+            },
+            "dangerButton": {
+              "color": "rgb(248, 113, 113)",
+              "background": "rgba(248, 113, 113, 0.15)",
+              "border": "rgba(248, 113, 113, 0.2)"
             },
             "rangeValue": {
               "color": "color(srgb 0.748157 0.636392 0.636392)",
@@ -339,6 +389,11 @@
               "background": "color(srgb 0.276549 0.0353725 0.0353725)",
               "border": "rgba(0, 0, 0, 0)"
             },
+            "dangerButton": {
+              "color": "rgb(248, 113, 113)",
+              "background": "rgba(248, 113, 113, 0.15)",
+              "border": "rgba(248, 113, 113, 0.2)"
+            },
             "rangeValue": {
               "color": "color(srgb 0.748157 0.636392 0.636392)",
               "background": "color(srgb 0.337255 0.0431373 0.0431373 / 0.14)",
@@ -370,6 +425,11 @@
               "color": "rgb(255, 255, 255)",
               "background": "color(srgb 0.276549 0.0353725 0.0353725)",
               "border": "rgba(0, 0, 0, 0)"
+            },
+            "dangerButton": {
+              "color": "rgb(248, 113, 113)",
+              "background": "rgba(248, 113, 113, 0.15)",
+              "border": "rgba(248, 113, 113, 0.2)"
             },
             "rangeValue": {
               "color": "color(srgb 0.748157 0.636392 0.636392)",
@@ -403,6 +463,11 @@
               "background": "color(srgb 0.276549 0.0353725 0.0353725)",
               "border": "rgba(0, 0, 0, 0)"
             },
+            "dangerButton": {
+              "color": "rgb(248, 113, 113)",
+              "background": "rgba(248, 113, 113, 0.15)",
+              "border": "rgba(248, 113, 113, 0.2)"
+            },
             "rangeValue": {
               "color": "color(srgb 0.748157 0.636392 0.636392)",
               "background": "color(srgb 0.337255 0.0431373 0.0431373 / 0.14)",
@@ -434,6 +499,11 @@
               "color": "rgb(255, 255, 255)",
               "background": "color(srgb 0.276549 0.0353725 0.0353725)",
               "border": "rgba(0, 0, 0, 0)"
+            },
+            "dangerButton": {
+              "color": "rgb(248, 113, 113)",
+              "background": "rgba(248, 113, 113, 0.15)",
+              "border": "rgba(248, 113, 113, 0.2)"
             },
             "rangeValue": {
               "color": "color(srgb 0.748157 0.636392 0.636392)",
@@ -467,6 +537,11 @@
               "background": "color(srgb 0.276549 0.0353725 0.0353725)",
               "border": "rgba(0, 0, 0, 0)"
             },
+            "dangerButton": {
+              "color": "rgb(248, 113, 113)",
+              "background": "rgba(248, 113, 113, 0.15)",
+              "border": "rgba(248, 113, 113, 0.2)"
+            },
             "rangeValue": {
               "color": "color(srgb 0.748157 0.636392 0.636392)",
               "background": "color(srgb 0.337255 0.0431373 0.0431373 / 0.14)",
@@ -498,6 +573,11 @@
               "color": "rgb(255, 255, 255)",
               "background": "color(srgb 0.276549 0.0353725 0.0353725)",
               "border": "rgba(0, 0, 0, 0)"
+            },
+            "dangerButton": {
+              "color": "rgb(248, 113, 113)",
+              "background": "rgba(248, 113, 113, 0.15)",
+              "border": "rgba(248, 113, 113, 0.2)"
             },
             "rangeValue": {
               "color": "color(srgb 0.748157 0.636392 0.636392)",
@@ -534,6 +614,11 @@
         "color": "rgb(255, 255, 255)",
         "background": "color(srgb 0.276549 0.0353725 0.0353725)",
         "border": "rgba(0, 0, 0, 0)"
+      },
+      "dangerButton": {
+        "color": "rgb(248, 113, 113)",
+        "background": "rgba(248, 113, 113, 0.15)",
+        "border": "rgba(248, 113, 113, 0.2)"
       },
       "rangeValue": {
         "color": "color(srgb 0.748157 0.636392 0.636392)",

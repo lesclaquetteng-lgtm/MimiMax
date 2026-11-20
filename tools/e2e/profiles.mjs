@@ -7,6 +7,12 @@
 // Usage: node profiles.mjs <debugging-port>
 
 import { setTimeout as sleep } from 'node:timers/promises';
+import { createClick } from './click.mjs';
+import { requireTestHome, requireTestPaths } from './guard.mjs';
+
+// Never on the profile of the player who runs the check.
+requireTestHome();
+
 
 const port = process.argv[2] || '9222';
 const results = [];
@@ -75,21 +81,8 @@ async function waitFor(expression, description, timeout = 20000) {
 	throw new Error(`timeout while waiting for ${description}`);
 }
 
-/** A real mouse click in the middle of an element. */
-async function click(selector) {
-	const point = await evaluate(`(() => {
-		const element = document.querySelector(${JSON.stringify(selector)});
-		const box = element.getBoundingClientRect();
-		return { x: box.left + box.width / 2, y: box.top + box.height / 2 };
-	})()`);
-
-	for (const type of ['mousePressed', 'mouseReleased']) {
-		await send('Input.dispatchMouseEvent', {
-			type, x: point.x, y: point.y, button: 'left', clickCount: 1
-		});
-	}
-	await sleep(150);
-}
+/** A real mouse click in the middle of an element, brought into view and checked first. */
+const { click } = createClick({ evaluate, send }, { settle: 150, move: false });
 
 /** Clicks a field and types into it, through the browser's own input. */
 async function type(selector, text) {
@@ -166,6 +159,9 @@ record('the core lists the profiles of the player',
 record('the interface offers them', (await options()).length === 2, JSON.stringify(await options()));
 
 const before = await evaluate('window.aether.info()');
+
+// The window says where it really writes: a home outside tools/ is a real profile.
+requireTestPaths(before);
 record('the account starts on the default profile',
 	before.profile.name === 'Default' && before.profile.maxMemory === 4096,
 	JSON.stringify(before.profile));

@@ -1,0 +1,29 @@
+{
+  "javaPath": "C:\\Users\\ee\\.gradle\\jdks\\eclipse_adoptium-21-amd64-windows.2\\bin\\java.exe",
+  "maxMemory": 4096,
+  "minMemory": 1024,
+  "windowWidth": 854,
+  "windowHeight": 480,
+  "gameVersion": "1.21.11",
+  "loaderVersion": "0.20.1",
+  "fabricApiVersion": "0.141.6+1.21.11",
+  "theme": "dark",
+  "accentColor": "#6C5CE7",
+  "showGameOutput": true,
+  "useG1gc": true,
+  "jvmPreset": "balanced",
+  "optionsPreset": "vanilla",
+  "requiredJavaVersion": 21,
+  "profiles": [
+    {
+      "name": "Default",
+      "gameVersion": "1.21.11",
+      "loaderVersion": "0.20.1",
+      "maxMemory": 4096,
+      "minMemory": 1024,
+      "windowWidth": 854,
+      "windowHeight": 480
+    }
+  ],
+  "activeProfile": "Default"
+}

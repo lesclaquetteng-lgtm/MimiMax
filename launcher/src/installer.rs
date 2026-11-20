@@ -208,16 +208,25 @@ pub fn install_version(
         "https://maven.fabricmc.net/net/fabricmc/fabric-api/fabric-api/{}/fabric-api-{}.jar",
         fabric_api_version, fabric_api_version
     );
-    // Maven publishes the digest of every artifact next to it, the file is not trusted without it.
+    // Maven publishes the digest of every artifact next to it, and the jar is loaded by the game:
+    // without a digest the file cannot be trusted, so a missing one stops the installation instead
+    // of downloading an unverified jar.
     let fabric_api_sha1 = client
         .get_text(&format!("{}.sha1", fabric_api_url))
         .ok()
         .as_deref()
-        .and_then(published_sha1);
+        .and_then(published_sha1)
+        .ok_or_else(|| {
+            InstallError::Http(HttpError::Checksum {
+                path: fabric_api_jar.display().to_string(),
+                expected: format!("the digest that Maven publishes for {}", fabric_api_url),
+                actual: "none, the .sha1 file was missing or unreadable".to_string(),
+            })
+        })?;
     let metrics = client.download(
         &fabric_api_url,
         &fabric_api_jar,
-        fabric_api_sha1.as_deref(),
+        Some(&fabric_api_sha1),
         |received, total| report("Downloading Fabric API", received, total, completed),
     )?;
     log_download(

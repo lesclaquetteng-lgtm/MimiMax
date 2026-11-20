@@ -14,8 +14,26 @@ fn main() {
 		);
 	}
 
-	// The installer carries the version of the core it was built with.
+	// The mod is embedded too: an installed launcher has to be able to repair its own installation
+	// on a machine that never saw the sources of the project.
+	let client = manifest
+		.join("..")
+		.join("..")
+		.join("aether-client")
+		.join("build")
+		.join("libs")
+		.join("aether-client-1.0.0.jar");
+
+	if !client.is_file() {
+		panic!(
+			"the client jar is missing: build it first with `gradle build` in {}",
+			manifest.join("..").join("..").join("aether-client").display()
+		);
+	}
+
+	// The installer carries the versions of the core and of the mod it was built with.
 	println!("cargo:rerun-if-changed={}", core.display());
+	println!("cargo:rerun-if-changed={}", client.display());
 	println!("cargo:rerun-if-changed=tauri.conf.json");
 	println!("cargo:rerun-if-changed=../gui/src/ui/index.html");
 

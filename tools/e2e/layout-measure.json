@@ -1,0 +1,45 @@
+{
+  "geometry": {
+    "button": {
+      "top": 749.25,
+      "bottom": 786.75,
+      "height": 37.5,
+      "centre": 768
+    },
+    "viewportHeight": 760,
+    "fullyVisible": false,
+    "page": "play"
+  },
+  "settings": {
+    "ok": true,
+    "settings": {
+      "accentColor": "#3B82F6",
+      "activeProfile": "Default",
+      "fabricApiVersion": "0.141.6+1.21.11",
+      "gameVersion": "1.21.11",
+      "javaPath": "C:\\Users\\ee\\.gradle\\jdks\\eclipse_adoptium-21-amd64-windows.2\\bin\\java.exe",
+      "jvmPreset": "balanced",
+      "loaderVersion": "0.20.1",
+      "maxMemory": 4096,
+      "minMemory": 1024,
+      "optionsPreset": "vanilla",
+      "profiles": [
+        {
+          "gameVersion": "1.21.11",
+          "loaderVersion": "0.20.1",
+          "maxMemory": 4096,
+          "minMemory": 1024,
+          "name": "Default",
+          "windowHeight": 480,
+          "windowWidth": 854
+        }
+      ],
+      "requiredJavaVersion": 21,
+      "showGameOutput": true,
+      "theme": "dark",
+      "useG1gc": true,
+      "windowHeight": 480,
+      "windowWidth": 854
+    }
+  }
+}

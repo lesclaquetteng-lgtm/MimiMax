@@ -178,6 +178,76 @@ impl From<&Account> for Session {
     }
 }
 
+/// The endpoint that tells whether a Mojang account owns a name.
+const NAME_LOOKUP_URL: &str = "https://api.mojang.com/users/profiles/minecraft/";
+
+/// What Mojang knows about a name.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NameStatus {
+    /// The name that was asked, as the launcher wrote it.
+    pub name: String,
+    /// True when a Mojang account owns the name.
+    pub premium: bool,
+}
+
+impl NameStatus {
+    /// @return true when the name is owned by a Mojang account.
+    ///
+    /// A cracked server almost always protects the premium names: it refuses a client that
+    /// presents a name Mojang owns, because that would be an impersonation of its owner. The
+    /// player has to pick another name; no client can talk its way past that rule.
+    pub fn is_taken_by_a_mojang_account(&self) -> bool {
+        self.premium
+    }
+}
+
+/// Asks Mojang whether an account owns a name.
+///
+/// The answer arrives before the game starts, which is the whole point: in game, such a server
+/// only says `Unauthorized: You cannot join the server`, with no hint about the name.
+pub fn name_status(name: &str) -> Result<NameStatus, HttpError> {
+    let request = format!("{}{}", NAME_LOOKUP_URL, name);
+    let (status, body) = crate::http::get_with_status(&request)?;
+    read_name_answer(&request, name, status, &body)
+}
+
+/// Reads the answer of the name lookup.
+///
+/// `200` carries the profile of the owner, `204` and `404` mean nobody owns the name. Anything
+/// else is an error, the caller must not read it as "the name is free".
+fn read_name_answer(
+    request: &str,
+    name: &str,
+    status: u16,
+    body: &str,
+) -> Result<NameStatus, HttpError> {
+    match status {
+        200 => {
+            #[derive(Deserialize)]
+            struct Profile {
+                name: String,
+            }
+
+            let profile: Profile = serde_json::from_str(body)?;
+
+            Ok(NameStatus {
+                name: profile.name,
+                premium: true,
+            })
+        }
+        204 | 404 => Ok(NameStatus {
+            name: name.to_string(),
+            premium: false,
+        }),
+        other => Err(HttpError::Status {
+            url: request.to_string(),
+            status: other,
+            body: Some(body.to_string()),
+        }),
+    }
+}
+
 /// The answer of the device code endpoint.
 #[derive(Clone, Debug, Deserialize)]
 pub struct DeviceCode {
@@ -441,7 +511,23 @@ pub fn complete_microsoft_login(token: &TokenResponse) -> Result<Account, HttpEr
     )?;
 
     // 3. Minecraft
-    let identity = format!("XBL3.0 x={};{}", xsts.token, xbl.display_claims.xui[0].uhs);
+    //
+    // `DisplayClaims.xui` is a list and Microsoft has been seen to send it empty, for an account
+    // without a gamertag or when a proxy rewrites the answer. Indexing it directly aborted the
+    // process (`panic = "abort"`), so the missing claim is reported as a normal error.
+    let user_hash = xbl
+        .display_claims
+        .xui
+        .first()
+        .map(|claim| claim.uhs.trim().to_string())
+        .filter(|uhs| !uhs.is_empty())
+        .ok_or_else(|| {
+            HttpError::Json(
+                "Microsoft did not return an Xbox user hash: DisplayClaims.xui is empty".to_string(),
+            )
+        })?;
+
+    let identity = format!("XBL3.0 x={};{}", xsts.token, user_hash);
     let minecraft = post_json::<MinecraftLogin>(
         MC_LOGIN_URL,
         &serde_json::json!({ "identityToken": identity }),
@@ -469,7 +555,7 @@ pub fn complete_microsoft_login(token: &TokenResponse) -> Result<Account, HttpEr
         uuid: profile.id,
         access_token: minecraft.access_token,
         refresh_token: token.refresh_token.clone(),
-        xuid: Some(xbl.display_claims.xui[0].uhs.clone()),
+        xuid: Some(user_hash),
         client_id: Some(String::new()),
         profile: None,
         expires_at: Some(
@@ -713,6 +799,37 @@ mod tests {
         assert_eq!(store.accounts.len(), 1);
         assert_eq!(store.accounts[0].access_token, "a new token");
         assert_eq!(store.selected.as_deref(), Some(account.id.as_str()));
+    }
+
+    #[test]
+    fn a_name_owned_by_a_mojang_account_is_read_as_premium() {
+        let answer = r#"{"id":"069a79f444e94726a5befca90e38aaf5","name":"Notch"}"#;
+        let status = read_name_answer("https://example.invalid/Notch", "notch", 200, answer)
+            .expect("a profile is a valid answer");
+
+        assert!(status.premium);
+        assert_eq!(status.name, "Notch", "the name of the owner was lost");
+        assert!(status.is_taken_by_a_mojang_account());
+    }
+
+    #[test]
+    fn a_name_nobody_owns_is_not_premium() {
+        for status in [204, 404] {
+            let answer = read_name_answer("https://example.invalid/Somebody", "Somebody", status, "")
+                .expect("an empty answer is a valid answer");
+
+            assert!(!answer.premium, "a free name was read as premium on {status}");
+            assert_eq!(answer.name, "Somebody");
+        }
+    }
+
+    #[test]
+    fn a_broken_lookup_is_never_read_as_a_free_name() {
+        let error = read_name_answer("https://example.invalid/Notch", "Notch", 429, "")
+            .expect_err("a rate limit is not an answer about the name");
+
+        assert!(error.is_retryable(), "a rate limit has to be retried");
+        assert_eq!(error.body(), Some(""));
     }
 
     #[test]

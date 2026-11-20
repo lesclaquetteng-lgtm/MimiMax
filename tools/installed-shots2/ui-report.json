@@ -1,0 +1,258 @@
+{
+  "layout": [
+    {
+      "page": "play",
+      "viewport": {
+        "width": 1180,
+        "height": 760
+      },
+      "documentOverflow": 0,
+      "contentOverflow": 0,
+      "contentVertical": 0,
+      "offenders": [],
+      "size": "1180x760"
+    },
+    {
+      "page": "accounts",
+      "viewport": {
+        "width": 1180,
+        "height": 760
+      },
+      "documentOverflow": 0,
+      "contentOverflow": 0,
+      "contentVertical": 0,
+      "offenders": [],
+      "size": "1180x760"
+    },
+    {
+      "page": "versions",
+      "viewport": {
+        "width": 1180,
+        "height": 760
+      },
+      "documentOverflow": 0,
+      "contentOverflow": 0,
+      "contentVertical": 0,
+      "offenders": [],
+      "size": "1180x760"
+    },
+    {
+      "page": "mods",
+      "viewport": {
+        "width": 1180,
+        "height": 760
+      },
+      "documentOverflow": 0,
+      "contentOverflow": 0,
+      "contentVertical": 0,
+      "offenders": [],
+      "size": "1180x760"
+    },
+    {
+      "page": "servers",
+      "viewport": {
+        "width": 1180,
+        "height": 760
+      },
+      "documentOverflow": 0,
+      "contentOverflow": 0,
+      "contentVertical": 353,
+      "offenders": [],
+      "size": "1180x760"
+    },
+    {
+      "page": "performance",
+      "viewport": {
+        "width": 1180,
+        "height": 760
+      },
+      "documentOverflow": 0,
+      "contentOverflow": 0,
+      "contentVertical": 720,
+      "offenders": [],
+      "size": "1180x760"
+    },
+    {
+      "page": "logs",
+      "viewport": {
+        "width": 1180,
+        "height": 760
+      },
+      "documentOverflow": 0,
+      "contentOverflow": 0,
+      "contentVertical": 674,
+      "offenders": [],
+      "size": "1180x760"
+    },
+    {
+      "page": "play",
+      "viewport": {
+        "width": 940,
+        "height": 620
+      },
+      "documentOverflow": 0,
+      "contentOverflow": 0,
+      "contentVertical": 0,
+      "offenders": [],
+      "size": "940x620"
+    },
+    {
+      "page": "accounts",
+      "viewport": {
+        "width": 940,
+        "height": 620
+      },
+      "documentOverflow": 0,
+      "contentOverflow": 0,
+      "contentVertical": 0,
+      "offenders": [],
+      "size": "940x620"
+    },
+    {
+      "page": "versions",
+      "viewport": {
+        "width": 940,
+        "height": 620
+      },
+      "documentOverflow": 0,
+      "contentOverflow": 0,
+      "contentVertical": 0,
+      "offenders": [],
+      "size": "940x620"
+    },
+    {
+      "page": "mods",
+      "viewport": {
+        "width": 940,
+        "height": 620
+      },
+      "documentOverflow": 0,
+      "contentOverflow": 0,
+      "contentVertical": 23,
+      "offenders": [],
+      "size": "940x620"
+    },
+    {
+      "page": "servers",
+      "viewport": {
+        "width": 940,
+        "height": 620
+      },
+      "documentOverflow": 0,
+      "contentOverflow": 0,
+      "contentVertical": 481,
+      "offenders": [],
+      "size": "940x620"
+    },
+    {
+      "page": "performance",
+      "viewport": {
+        "width": 940,
+        "height": 620
+      },
+      "documentOverflow": 0,
+      "contentOverflow": 0,
+      "contentVertical": 752,
+      "offenders": [],
+      "size": "940x620"
+    },
+    {
+      "page": "logs",
+      "viewport": {
+        "width": 940,
+        "height": 620
+      },
+      "documentOverflow": 0,
+      "contentOverflow": 0,
+      "contentVertical": 686,
+      "offenders": [],
+      "size": "940x620"
+    },
+    {
+      "page": "servers",
+      "viewport": {
+        "width": 940,
+        "height": 620
+      },
+      "documentOverflow": 0,
+      "contentOverflow": 0,
+      "contentVertical": 483,
+      "offenders": [],
+      "size": "940x620"
+    },
+    {
+      "page": "performance",
+      "viewport": {
+        "width": 940,
+        "height": 620
+      },
+      "documentOverflow": 0,
+      "contentOverflow": 0,
+      "contentVertical": 752,
+      "offenders": [],
+      "size": "940x620"
+    }
+  ],
+  "pages": {
+    "servers": {
+      "buttons": [
+        "Add server",
+        "Test address",
+        "Create the server",
+        "Refresh",
+        "Join",
+        "Test",
+        "Remove",
+        "Join",
+        "Test",
+        "Remove",
+        "Start"
+      ],
+      "serverRows": 2,
+      "hostRows": 1,
+      "hostText": [
+        "Local Test\n127.0.0.1:25565 · offline mode · 1.21.11\nstopped\nStart"
+      ],
+      "count": "2 servers",
+      "hostCount": "1 server"
+    },
+    "performance": {
+      "rows": 11,
+      "installed": 11,
+      "count": "11/11",
+      "jvm": "Current preset: performance. It applies on the next launch.",
+      "options": "Last applied preset: max.",
+      "path": "C:\\Users\\ee\\Desktop\\MimiMax\\tools\\aether-home\\.minecraft\\mods"
+    },
+    "mods": {
+      "count": "13/13 on",
+      "rows": 13,
+      "names": [
+        "aether-client.jar",
+        "BadOptimizations-2.4.1-1.21.11.jar",
+        "cloth-config-21.11.153-fabric.jar",
+        "Clumps-fabric-1.21.11-29.0.0.1.jar",
+        "dynamic-fps-3.11.6+minecraft-1.21.11-fabric.jar",
+        "entityculling-fabric-1.12.1-mc1.21.11.jar",
+        "fabric-api-0.141.6+1.21.11.jar",
+        "ferritecore-8.2.0-fabric.jar",
+        "ImmediatelyFast-Fabric-1.14.3+1.21.11.jar",
+        "krypton-0.2.10.jar",
+        "lithium-fabric-0.21.4+mc1.21.11.jar",
+        "moreculling-fabric-1.21.11-1.6.2.jar",
+        "sodium-fabric-0.8.15-beta.1+mc1.21.11.jar"
+      ]
+    }
+  },
+  "interactions": {
+    "probe": "Premium only: the server runs in online mode, a Microsoft account is required. 24654/200000 players · 402 ms · Requires MC 1.8 / 1.21",
+    "serverRow": {
+      "text": "Hypixel\nmc.hypixel.net\n402 ms\n24654/200000\nHypixel Network [1.8/26.3] SB MAGIC FIND, ACCESSORY BAG REWORK\nJoin\nTest\nRemove",
+      "buttons": [
+        "Join",
+        "Test",
+        "Remove"
+      ]
+    }
+  }
+}

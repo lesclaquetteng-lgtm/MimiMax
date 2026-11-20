@@ -7,6 +7,12 @@
 // Usage: node cancel.mjs <debugging-port>
 
 import { setTimeout as sleep } from 'node:timers/promises';
+import { createClick } from './click.mjs';
+import { requireTestHome } from './guard.mjs';
+
+// Never on the profile of the player who runs the check.
+requireTestHome();
+
 
 const port = process.argv[2] || '9222';
 const results = [];
@@ -75,27 +81,7 @@ async function waitFor(expression, description, timeout = 30000) {
 	throw new Error(`timeout while waiting for ${description}`);
 }
 
-async function clickElement(selector) {
-	const box = await evaluate(`(() => {
-		const element = document.querySelector(${JSON.stringify(selector)});
-		const rect = element.getBoundingClientRect();
-		return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2, disabled: element.disabled, hidden: element.hidden };
-	})()`);
-
-	if (box.disabled || box.hidden) throw new Error(`${selector} cannot be clicked (disabled or hidden)`);
-
-	for (const type of ['mouseMoved', 'mousePressed', 'mouseReleased']) {
-		await send('Input.dispatchMouseEvent', {
-			type,
-			x: box.x,
-			y: box.y,
-			button: 'left',
-			buttons: type === 'mousePressed' ? 1 : 0,
-			clickCount: 1
-		});
-	}
-	await sleep(120);
-}
+const { click: clickElement } = createClick({ evaluate, send }, { settle: 120 });
 
 const view = () => evaluate(`(() => {
 	const progress = document.querySelector('#install-progress');

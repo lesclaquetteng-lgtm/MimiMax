@@ -4,6 +4,12 @@
 // Usage: node sliders.mjs <debugging-port>
 
 import { setTimeout as sleep } from 'node:timers/promises';
+import { pointAt } from './click.mjs';
+import { requireTestHome } from './guard.mjs';
+
+// Never on the profile of the player who runs the check.
+requireTestHome();
+
 
 const port = process.argv[2] || '9222';
 
@@ -108,8 +114,13 @@ async function drag(box, from, to) {
 const results = [];
 
 async function checkDrag(name, selector, target) {
+	// The track may sit under the fold: it is brought to the middle of the page, and the point the
+	// press starts from is checked, so a press on something else fails at once instead of dragging
+	// nothing until the deadline.
+	const start = await pointAt(evaluate, selector, 0.1);
+
 	const before = await state(selector);
-	await drag(before.box, 0.1, target);
+	await drag(start.box, 0.1, target);
 	const after = await state(selector);
 
 	const fill = Number.parseFloat(after.fill);

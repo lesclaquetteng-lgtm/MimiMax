@@ -4,6 +4,11 @@
 // Usage: node timeout.mjs <debugging-port>
 
 import { setTimeout as sleep } from 'node:timers/promises';
+import { requireTestHome } from './guard.mjs';
+
+// Never on the profile of the player who runs the check.
+requireTestHome();
+
 
 const port = process.argv[2] || '9222';
 

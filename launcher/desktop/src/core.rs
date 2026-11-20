@@ -19,22 +19,37 @@ use tauri::{AppHandle, Emitter, Manager};
 /// first start (and replaced whenever it differs from the embedded bytes).
 static EMBEDDED_CORE: &[u8] = include_bytes!("../../target/release/aether-launcher.exe");
 
+/// The client mod is embedded as well. The core looks for `aether-client.jar` next to itself and in
+/// the folder of the project, which an installed launcher on another machine has neither of. The
+/// archive is written once into the data directory and handed to the core through `AETHER_MOD_JAR`,
+/// so that "Install / repair" works on a machine that never saw the sources.
+static EMBEDDED_MOD: &[u8] = include_bytes!("../../../aether-client/build/libs/aether-client-1.0.0.jar");
+
 const CORE_NAME: &str = "aether-launcher.exe";
+const MOD_NAME: &str = "aether-client.jar";
 
 /// `CREATE_NO_WINDOW`: the core and `taskkill` must never flash a console over the interface.
 #[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
-/// Tells the core where the shell lives.
+/// Tells the core where the shell lives, and which client mod to install.
 ///
 /// The embedded core runs from the application data of the launcher, so on its own it could not find
 /// an installation delivered next to the portable executable. The anchor is the folder of the shell.
-pub fn anchored(command: &mut Command) -> &mut Command {
+/// The same applies to the mod: it is extracted next to that core and given to it, because a machine
+/// that only received the installer has no `aether-client.jar` anywhere else.
+pub fn anchored<'a>(app: &AppHandle, command: &'a mut Command) -> &'a mut Command {
 	if std::env::var("AETHER_ANCHOR").map(|value| value.is_empty()).unwrap_or(true) {
 		if let Ok(executable) = std::env::current_exe() {
 			if let Some(directory) = executable.parent() {
 				command.env("AETHER_ANCHOR", directory);
 			}
+		}
+	}
+
+	if std::env::var("AETHER_MOD_JAR").map(|value| value.is_empty()).unwrap_or(true) {
+		if let Ok(path) = extract_mod(app) {
+			command.env("AETHER_MOD_JAR", path);
 		}
 	}
 
@@ -147,6 +162,43 @@ fn extract_core(app: &AppHandle) -> Result<PathBuf, String> {
 	Ok(path)
 }
 
+/// Writes the embedded client mod into the data directory of the launcher.
+fn extract_mod(app: &AppHandle) -> Result<PathBuf, String> {
+	let directory = app
+		.path()
+		.app_local_data_dir()
+		.map_err(|error| error.to_string())?
+		.join("mods");
+	write_embedded_mod(&directory, EMBEDDED_MOD)
+}
+
+/// Writes `bytes` to `directory/MOD_NAME`, replacing an older copy.
+///
+/// Kept separate from the app handle so that the replacement can be tested without a window.
+fn write_embedded_mod(directory: &std::path::Path, bytes: &[u8]) -> Result<PathBuf, String> {
+	std::fs::create_dir_all(directory).map_err(|error| error.to_string())?;
+
+	let path = directory.join(MOD_NAME);
+	let current = std::fs::read(&path).unwrap_or_default();
+	if current == bytes {
+		return Ok(path);
+	}
+
+	let temporary = directory.join(format!("{MOD_NAME}.new"));
+	std::fs::write(&temporary, bytes).map_err(|error| error.to_string())?;
+
+	// Unlike the core, the archive is not a running executable: nothing locks it, and the rename
+	// replaces the previous version in one step. The rewrite below only covers a file system that
+	// refuses the rename, for instance when the archive is open in a file manager.
+	if std::fs::rename(&temporary, &path).is_err() {
+		let _ = std::fs::remove_file(&temporary);
+		let _ = std::fs::remove_file(&path);
+		std::fs::write(&path, bytes).map_err(|error| error.to_string())?;
+	}
+
+	Ok(path)
+}
+
 /// The time the core has to answer before it is considered stuck.
 ///
 /// The commands that read the network are given more room, the local ones only need a moment.
@@ -204,7 +256,7 @@ pub fn run_core_blocking(app: &AppHandle, args: &[String]) -> Value {
 		.stdin(Stdio::null())
 		.stdout(Stdio::piped())
 		.stderr(Stdio::piped());
-	anchored(&mut command);
+	anchored(app, &mut command);
 	hidden(&mut command);
 
 	let mut child = match command.spawn() {
@@ -375,7 +427,7 @@ pub fn run_core_streaming(
 		.stdin(Stdio::piped())
 		.stdout(Stdio::piped())
 		.stderr(Stdio::piped());
-	anchored(&mut command);
+	anchored(app, &mut command);
 	hidden(&mut command);
 
 	let mut child = match command.spawn() {
@@ -446,6 +498,36 @@ mod tests {
 		// The core forwards the output of Java on the same stream as its own documents.
 		let output = "[23:36:46] [Render thread/INFO]: Connecting to 127.0.0.1\n";
 		assert!(last_document(output).is_none());
+	}
+
+	#[test]
+	fn the_embedded_mod_is_a_jar() {
+		// A truncated or empty inclusion would only fail on the target machine, at install time.
+		assert!(EMBEDDED_MOD.len() > 100_000);
+		assert_eq!(&EMBEDDED_MOD[..4], b"PK\x03\x04");
+	}
+
+	#[test]
+	fn the_mod_is_written_and_replaced_atomically() {
+		let directory =
+			std::env::temp_dir().join(format!("aether-mod-test-{}", std::process::id()));
+		let _ = std::fs::remove_dir_all(&directory);
+		let temporary = directory.join(format!("{MOD_NAME}.new"));
+
+		let path = write_embedded_mod(&directory, b"first").unwrap();
+		assert_eq!(std::fs::read(&path).unwrap(), b"first");
+
+		// Same bytes: the archive is left alone and no temporary file is written.
+		let path = write_embedded_mod(&directory, b"first").unwrap();
+		assert_eq!(std::fs::read(&path).unwrap(), b"first");
+		assert!(!temporary.exists());
+
+		// New bytes: the archive is replaced, and nothing is left behind.
+		let path = write_embedded_mod(&directory, b"second").unwrap();
+		assert_eq!(std::fs::read(&path).unwrap(), b"second");
+		assert!(!temporary.exists());
+
+		let _ = std::fs::remove_dir_all(&directory);
 	}
 
 	#[test]

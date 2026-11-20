@@ -35,6 +35,7 @@ fn main() {
 			commands::settings_update,
 			commands::accounts_get,
 			commands::accounts_add_offline,
+			commands::accounts_check_name,
 			commands::accounts_remove,
 			commands::accounts_select,
 			commands::accounts_microsoft_sign_in,

@@ -68,6 +68,7 @@
 		accounts: {
 			get: () => invoke('accounts_get'),
 			addOffline: (username) => invoke('accounts_add_offline', { username }),
+			checkName: (username) => invoke('accounts_check_name', { username }),
 			remove: (id) => invoke('accounts_remove', { id }),
 			select: (id) => invoke('accounts_select', { id }),
 			microsoft: {

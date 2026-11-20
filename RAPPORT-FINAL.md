@@ -33,13 +33,15 @@ qui permet de tout vérifier en ligne de commande, sans lancer la coquille.
 | HUD **FPS Graph** (3 s d'historique, barres vert/orange/rouge) | `aether-client/.../HudModules.java` | visible en jeu, placé sous le watermark |
 | Lancement direct sur un serveur (`--server`, `--quickPlayMultiplayer`) | `launcher/src/game.rs`, `lib.rs` | « Connecting to 127.0.0.1, 25565 » puis « Notch joined the game » |
 | Sonde de login réelle (pas une heuristique sur le MOTD) | `servers.rs` | `encryption request` = premium, `set compression` = hors-ligne accepté |
-| Correctifs issus des tests (voir §4) | client + cœur | 4 défauts réels trouvés et corrigés |
+| Garde-fou **pseudo premium** : vérification chez Mojang, avertissement à la saisie, dialogue avant de rejoindre | `launcher/src/accounts.rs`, `http.rs`, `gui/src/ui/app.js` | `Notch` → refusé par JartexNetwork, `AetherTester9281` → rejoint |
+| Mod Aether **embarqué** dans la coquille et extrait à la première exécution | `launcher/desktop/src/core.rs`, `build.rs` | « Install / repair » fonctionne sur une machine sans sources |
+| Correctifs issus des tests (voir §5) | client + cœur | 7 défauts réels trouvés et corrigés |
 
 ### 1.3 Santé du code
 
-- **127 tests Rust** (98 unitaires, 6 téléchargement, 20 intégration, 3 SHA-1), `cargo clippy
+- **163 tests Rust** (134 unitaires, 6 téléchargement, 20 intégration, 3 SHA-1), `cargo clippy
   --release --all-targets` : **0 avertissement**, binaire de **2,1 Mo**.
-- **25 tests Java** (5 suites), jar remappé de **118,9 Ko**.
+- **87 tests Java** (16 suites), jar remappé de **159,8 Ko**.
 - **16 contrôles de mise en page** de l'interface, **0 débordement**.
 - Aucun `TODO` bloquant ; la dette restante est listée en §6.
 
@@ -127,9 +129,47 @@ C'est une différence de nature avec les launchers qui se contentent de lire le 
 connexion TCP : ici, on sait **avant** de lancer le jeu. Le protocole utilisé est celui que le serveur
 annonce lui-même dans son ping (774 ici), donc la sonde reste valable quand la version change.
 
+**Cas réel : JartexNetwork.** C'est le serveur qui a fait remonter le défaut « je n'arrive pas à me
+connecter » :
+
+```text
+servers ping play.jartexnetwork.com   → online, 658/5000, 1466 ms, Velocity 1.7.2-26.3, protocole 774
+servers probe play.jartexnetwork.com  → offline accepté, premier paquet « set compression »
+```
+
+Deux lancements identiques, seul le compte change :
+
+| Compte hors-ligne | Résultat en jeu |
+| --- | --- |
+| `Notch` | `Failed to connect to the server` — `Unauthorized: You cannot join the server` |
+| `AetherTester9281` | rejoint le lobby **Prison** de JartexNetwork |
+
+Preuves : `docs/images/jartex-premium-kick.png` (le refus) et `docs/images/jartex-joined.png` (le
+lobby, livre « JartexSecurity » à l'écran).
+
+Le client n'était pas en cause : JartexNetwork accepte bien les sessions hors-ligne, mais **protège
+les pseudos qui appartiennent à un compte Mojang**. « Notch » en fait partie ; le serveur refuse donc
+le client qui le présente, pour protéger le propriétaire de ce pseudo. Le jeu n'affiche ni la raison
+ni le pseudo, et aucun client ne peut négocier cette règle.
+
+Le launcher répond maintenant à la question avant le lancement :
+
+```text
+account check Notch            → {"name":"Notch","ok":true,"premium":true}
+account check AetherTester9281 → {"name":"AetherTester9281","ok":true,"premium":false}
+```
+
+L'interface s'en sert à deux endroits : un avertissement orange sous le champ du pseudo (après 450 ms
+de pause), et un dialogue *This name belongs to a Mojang account* au moment de rejoindre un serveur
+public, avec `Choose another name` ou `Join anyway`. Les adresses locales ne sont jamais bloquées, et
+une vérification qui échoue (hors réseau, limite de débit) ne bloque jamais un lancement : le jeu
+reste juge. Preuves : `docs/images/launcher-premium-input.png` et
+`docs/images/launcher-premium-name.png`, capturées sur la version livrée.
+
 **Limite à assumer** : un serveur en `online-mode=true` ne peut pas accepter un compte hors-ligne, et
-aucun client ne peut y changer quoi que ce soit sans contourner l'authentification Mojang — ce que ce
-projet ne fait pas. Le produit le dit dans l'interface au lieu de laisser l'utilisateur échouer.
+un serveur cracké qui protège un pseudo ne peut pas être forcé de l'accepter — ce projet ne contourne
+ni l'un ni l'autre. Dans les deux cas, le produit le dit dans l'interface au lieu de laisser
+l'utilisateur échouer sans explication.
 
 ### 3.3 FPS mesurés
 
@@ -144,6 +184,35 @@ Preuves : `docs/images/fps-debug-sodium.png` (F3, renderer Sodium, ImmediatelyFa
 
 Point important : le fichier `options.txt` a été comparé **octet par octet** avant et après la
 session ; il est identique. Les réglages ne sont donc pas « annulés » par le jeu au démarrage.
+
+### 3.4 Livrables, installation et désinstallation
+
+Les deux fichiers de `dist/` ont été reconstruits après le correctif, puis installés pour de vrai :
+
+| Livrable | Taille | SHA-256 (début) |
+| --- | --- | --- |
+| `Aether-Launcher-1.0.0-portable.exe` | 8,75 Mo | `3CB7EB3A…` |
+| `Aether-Launcher-Setup-1.0.0.exe` | 4,42 Mo | `40AB1F5F…` |
+
+Installation silencieuse : code de sortie 0 en **1,6 s**, dossier `%LOCALAPPDATA%\Aether Launcher`,
+raccourcis Bureau et menu Démarrer, entrée « Aether Launcher 1.0.0 » dans les applications
+installées, licence `AETHER-LICENSE-FR.txt` de 1 942 octets. Les cinq pages de l'assistant
+français (Bienvenue, Licence, Dossier, Installation, Fin) ont été capturées depuis la version
+livrée : `docs/images/installer-welcome.png`, `installer-license.png`, `installer-folder.png`,
+`installer-install.png`, `installer-finish.png`. La désinstallation rend la main en **1,3 s** et le
+dossier disparaît dans la seconde.
+
+Le cœur embarqué dans la coquille et celui du dossier `target/release/` ont le même SHA-256
+(`E04CF9F0…`) : l'application installée n'exécute pas une autre version que celle qui a été testée.
+Le mod Aether est embarqué de la même façon (159,8 Ko, SHA-256 `6BF21897…`) et extrait dans
+`%LOCALAPPDATA%\dev.aether.launcher\mods\aether-client.jar`. C'est ce qui rend « Install / repair »
+possible sur une machine qui n'a jamais eu les sources : lancé depuis un dossier vide et sans
+`AETHER_MOD_JAR`, le cœur répond « the Aether client jar was not found at
+aether-client/build/libs/aether-client-1.0.0.jar » ; lancé par la coquille, il reçoit le mod extrait
+et l'installation démarre (contrôle `tools/clean-install-check.ps1`, fait sur la version installée).
+Après installation, les commandes de l'interface répondent depuis l'application installée
+(`accounts.checkName('Notch')` → `premium: true`) et le contrôle de mise en page passe ses
+**16 contrôles** avec 0 débordement.
 
 ---
 
@@ -188,6 +257,8 @@ adaptatif au taux de rafraîchissement).
 | La moitié du réglage disparaissait après une session | `graphicsPreset:"fast"` réapplique son bundle | `graphicsPreset:"custom"` |
 | Les réglages du client étaient perdus | un BOM UTF-8 faisait échouer Gson | BOM retiré avant lecture, test dédié |
 | Le graphe FPS chevauchait le watermark | deux éléments au même coin | position par défaut décalée |
+| JartexNetwork refusait la connexion avec seulement `Unauthorized: You cannot join the server` | le compte hors-ligne s'appelait `Notch`, un pseudo que Mojang possède et que le serveur protège ; le jeu ne dit ni la raison ni le pseudo | `account check` interroge Mojang, avertissement sous le champ après 450 ms, dialogue avant de rejoindre avec `Choose another name` / `Join anyway` |
+| « Install / repair » échouait sur une machine sans le dépôt (`the Aether client jar was not found`) | le jar n'était cherché qu'à côté de l'exécutable et dans les dossiers du projet, absents d'une installation propre | le mod est embarqué dans la coquille, extrait dans `dev.aether.launcher\mods` et passé au cœur par `AETHER_MOD_JAR` ; `build.rs` refuse de construire une coquille sans jar |
 
 ---
 
@@ -272,6 +343,9 @@ adaptatif au taux de rafraîchissement).
 - **Hors-ligne ≠ sécurisé** : un serveur `online-mode=false` accepte n'importe quel pseudo. C'est
   affiché dans l'interface et dans la documentation ; aucun contournement d'`online-mode=true` n'est
   proposé.
+- **Les pseudos premium restent protégés** : un serveur cracké peut refuser un pseudo que Mojang
+  possède. Le launcher l'explique avant le lancement et propose un pseudo libre ; il ne peut pas
+  contraindre le serveur, et ne le fait pas.
 - **Les modules de combat** peuvent être interdits sur certains serveurs : le mode « fair play » est
   une piste, pas encore implémenté.
 - **Les FPS dépendent de la machine** : 889 FPS en 854×480, distance 8. Le preset et la liste de mods
@@ -284,8 +358,9 @@ adaptatif au taux de rafraîchissement).
 
 Le projet tient la promesse « client complet avec mode hors-ligne de première classe » : un compte
 suffit, un serveur local s'héberge et s'arrête proprement, un serveur distant est testé avant d'être
-rejoint, et le pack d'optimisation est installé, vérifié et réellement appliqué (le fichier d'options
-ne bouge plus après une session). Les interfaces sont solides et mesurées — zéro débordement, zéro
-défaut de mise en page — mais pas « parfaites » : la liste du §2.2 est le chemin exact qui reste à
-parcourir. Les gains de performance restants ne sont plus dans les mods, ils sont dans le diagnostic
-(§6.1), et c'est la prochaine étape logique.
+rejoint, un pseudo que Mojang possède est signalé avant que le serveur cracké ne le refuse, et le pack
+d'optimisation est installé, vérifié et réellement appliqué (le fichier d'options ne bouge plus après
+une session). Les interfaces sont solides et mesurées — zéro débordement, zéro défaut de mise en page —
+mais pas « parfaites » : la liste du §2.2 est le chemin exact qui reste à parcourir. Les gains de
+performance restants ne sont plus dans les mods, ils sont dans le diagnostic (§6.1), et c'est la
+prochaine étape logique.

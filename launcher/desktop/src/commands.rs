@@ -126,6 +126,15 @@ pub async fn accounts_add_offline(app: AppHandle, username: String) -> Value {
 }
 
 #[tauri::command(rename_all = "snake_case")]
+pub async fn accounts_check_name(app: AppHandle, username: String) -> Value {
+	core::run_core(
+		app,
+		vec!["account".to_string(), "check".to_string(), username],
+	)
+	.await
+}
+
+#[tauri::command(rename_all = "snake_case")]
 pub async fn accounts_remove(app: AppHandle, id: String) -> Value {
 	account_store(
 		core::run_core(app, vec!["account".to_string(), "remove".to_string(), id]).await,

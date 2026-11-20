@@ -7,6 +7,11 @@
 import { mkdir, readdir, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
+import { requireTestHome, requireTestPaths } from './guard.mjs';
+
+// Never on the profile of the player who runs the check.
+requireTestHome();
+
 
 const port = process.argv[2] || '9222';
 const output = process.argv[3] || '.';
@@ -150,6 +155,9 @@ await waitFor(`document.querySelectorAll('#mods-table .mod-row').length > 0`, 't
 await sleep(400);
 
 const info = await evaluate('window.aether.info()');
+
+// The window says where it really writes: a home outside tools/ is a real profile.
+requireTestPaths(info);
 console.log('paths', JSON.stringify(info.paths));
 
 await openPage('play');

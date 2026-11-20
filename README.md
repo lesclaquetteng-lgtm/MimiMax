@@ -65,6 +65,34 @@ passes the same deterministic identifier explicitly and starts the game with:
 - In-game, the mod detects offline sessions and reflects that in the UI/session information (and
   disables online-only flows such as Realms where applicable).
 
+### Joining a cracked server
+
+A cracked server (JartexNetwork, and most `online-mode=false` servers) accepts an offline account, but
+almost all of them **protect the names Mojang owns**: if the name is registered by a Mojang account,
+the server refuses the connection and the game only shows `Unauthorized: You cannot join the server`.
+No client can talk its way past that rule; the name has to change.
+
+The launcher therefore asks Mojang before the game starts
+(`https://api.mojang.com/users/profiles/minecraft/<name>`, `200` = owned by a Mojang account,
+`204`/`404` = free):
+
+```powershell
+aether-launcher account check Notch
+# {"name":"Notch","ok":true,"premium":true}        -> refused by cracked servers
+
+aether-launcher account check Notch9281
+# {"name":"Notch9281","ok":true,"premium":false}  -> accepted everywhere
+```
+
+The interface uses the same answer in two places: an amber warning appears under the name field while
+an offline account is typed, and joining a public server with a premium name opens a dialog that says
+why and offers either `Choose another name` or `Join anyway`. Local and loopback addresses are never
+blocked, and a lookup that fails (no network, rate limit) never prevents a launch: the game stays the
+judge.
+
+This is not a workaround of `online-mode=true`. It is the opposite: the launcher refuses to let the
+player believe a name is usable when the server will reject it.
+
 The UUID logic is implemented and tested in:
 - `launcher/src/offline.rs` (Rust)
 - `aether-client/src/test/java/dev/aether/client/OfflineSessionTest.java` (Java)
@@ -134,6 +162,8 @@ See [`docs/FEATURES.md`](docs/FEATURES.md) for the detailed list.
 - Downloads/verifies game client, libraries, assets, Fabric profile dependencies, Fabric API and Aether mod jar.
 - Builds and runs the Java launch command (CLI) or launches from the native shell.
 - Servers page: server list, ping, offline-account probe, one-click hosting of an offline server.
+- Premium-name guard: `account check` asks Mojang whether a name belongs to a Mojang account, and the
+  interface warns before a cracked server can reject the connection.
 - Performance page: optimisation pack from Modrinth, options and JVM presets.
 - Records the process of the game, so a game left behind by a closed launcher can still be stopped
   (`aether-launcher stop`, or the Stop button of the next session).
@@ -182,7 +212,7 @@ cargo build --release --manifest-path desktop/Cargo.toml
 ```
 
 Binary:
-- `launcher/desktop/target/release/aether-desktop.exe` (~8.5 MB, the core and the interface are embedded)
+- `launcher/desktop/target/release/aether-desktop.exe` (~8.75 MB, the core, the mod and the interface are embedded)
 
 The shell embeds the core binary at compile time, so the core is always built first:
 `npm run core && npm run shell`. `npm start` runs the shell from the build directory.
@@ -214,6 +244,7 @@ cargo run --release -- info
 cargo run --release -- versions --limit 20
 cargo run --release -- loaders --version 1.21.11
 cargo run --release -- account add-offline Notch
+cargo run --release -- account check Notch
 cargo run --release -- accounts
 cargo run --release -- install --version 1.21.11 --loader 0.20.1
 cargo run --release -- command --account <account-id>
@@ -262,11 +293,19 @@ cargo test --release
 cargo clippy --release --all-targets
 ```
 
+163 tests: 134 unit, 6 download, 20 integration and 3 SHA-1. The three newest cover the premium-name
+lookup (a `200` with a profile, a `204`/`404` free name, and an error that must never be read as "the
+name is free").
+
 ### Launcher shell (Rust)
 ```powershell
 cd launcher
 cargo test --release --manifest-path desktop/Cargo.toml
 ```
+
+8 tests, including the embedded mod: that it is a real jar, and that its extraction replaces an older
+archive without leaving a temporary file behind. `tools/clean-install-check.ps1` proves the rest on a
+clean machine (see `launcher/desktop/README.md`).
 
 ### Design tokens
 ```powershell
@@ -280,6 +319,19 @@ and `tools/theme-probe.mjs` reads the computed theme over the DevTools protocol 
 audits every page: unresolved tokens, text below the WCAG contrast floor, leftovers of the previous
 palette. Start the shell with `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS="--remote-debugging-port=9247"`,
 then `node tools/theme-sweep.mjs 9247 tools/theme-pages` (optionally a colour as a fourth argument).
+With `AETHER_INSTALL_STATE=1` it also measures the interface during an installation, the only state
+that renders a `.btn--danger` (and it hovers it, where the danger colour is filled): start the shell
+on the fake core with `AETHER_FAKE_FAIL=install-slow`, then add `--install-only` to measure just that
+state. `AETHER_INSTALL_STATE=legacy` forces the pre-fix danger fill back, which is how the audit is
+proved to catch it (2,77:1).
+
+`tools/e2e/play-fold.mjs` measures the action row of the Play page in the real 760 px window, where
+the primary action has to be clickable without scrolling: it exits non-zero when `#btn-install` or
+`#btn-cancel-install` crosses the bottom of the window, when the scroll zone above it is too short
+or cannot reach its content, and when the page itself still scrolls. `--install` starts an
+installation on the fake core first, so the cancel row is measured as well; `--json <path>` keeps
+the geometry, `--size 980x700` overrides the layout viewport, `--shot <path>` captures the measured
+state.
 
 ### Client (Java / Gradle)
 ```powershell
@@ -302,10 +354,25 @@ node tools/ui-check.mjs 9233 tools/ui-shots
 The behavioural end-to-end checks (failures, crash report, cancellation, timeouts, accessibility,
 profiles, sliders) live in `tools/e2e/` and run through `npm run e2e:*` from `launcher/` — see
 [`docs/VERIFICATION.md`](docs/VERIFICATION.md) §4.2 for the full procedure.
+`powershell -NoProfile -File tools/e2e/replay.ps1` replays all of them in one go: it starts one
+window per scenario with the core mode that scenario needs, seeds the home its checks expect (an
+offline account, mods, a finished session), and prints every `PASS`/`FAIL` with the exit code of the
+check. Every check starts with `tools/e2e/guard.mjs`, which refuses to run unless `AETHER_HOME` is a
+home under `tools/`: this walk deletes accounts, mods and profiles, so it must never meet the profile
+of the person running it (`AETHER_E2E_ALLOW_ANY_HOME=1` overrides it on a disposable machine).
+
+The eight scripts that click or drag go through `tools/e2e/click.mjs`: the target is scrolled to
+the middle of the page and
+the point is checked with `document.elementFromPoint` before any mouse event is sent, so a click that
+would land on a toast, a dialog or a hidden layer fails at once with the name of what is in the way
+instead of waiting for the 30 s timeout. `tools/e2e/hit.mjs` proves both directions (a covered button
+is refused in milliseconds without sending anything, a hit on a child counts as the target), and
+`node --test tools/e2e/click.test.mjs` keeps every press on that path.
 
 ## Documentation
 
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) – component design and key decisions
+- [`launcher/desktop/README.md`](launcher/desktop/README.md) – Tauri build, installer and CDP recipe
 - [`docs/FEATURES.md`](docs/FEATURES.md) – user-facing features and modules
 - [`docs/VERIFICATION.md`](docs/VERIFICATION.md) – verification checklist and measured results
 - [`ANALYSE-AMELIORATIONS.md`](ANALYSE-AMELIORATIONS.md) – the improvement log, with the evidence of

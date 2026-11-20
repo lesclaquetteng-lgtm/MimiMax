@@ -203,6 +203,14 @@ fn command_account(arguments: &[String]) -> Result<(), String> {
             launcher.select_account(id);
             emit(&serde_json::json!({ "ok": true, "accounts": launcher.accounts }));
         }
+        Some("check") => {
+            let name = flags
+                .positional
+                .get(1)
+                .ok_or_else(|| "usage: account check <username>".to_string())?;
+            let status = accounts::name_status(name).map_err(|error| error.to_string())?;
+            emit(&serde_json::json!({ "ok": true, "name": status.name, "premium": status.premium }));
+        }
         Some("microsoft") => {
             // The code is printed first so that the interface can show it, the sign in is then
             // finished in the background.
@@ -224,7 +232,7 @@ fn command_account(arguments: &[String]) -> Result<(), String> {
             // The last document of a command is its result, the interface reads it for the account.
             emit(&serde_json::json!({ "ok": true, "account": account }));
         }
-        _ => return Err("usage: account <add-offline|remove|select|microsoft>".to_string()),
+        _ => return Err("usage: account <add-offline|remove|select|check|microsoft>".to_string()),
     }
 
     Ok(())
@@ -819,6 +827,7 @@ fn print_help() {
         "  account add-offline <name>    create an offline account",
         "  account remove <id>           remove an account",
         "  account select <id>           select the active account",
+        "  account check <name>          ask Mojang whether a name is a premium one",
         "  account microsoft             start the sign in with Microsoft",
         "  versions [--limit N]          list the Minecraft versions",
         "  loaders [--version X]         list the Fabric loaders of a version",

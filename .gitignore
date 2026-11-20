@@ -18,9 +18,10 @@ tools/gradle-*/
 tools/jdk*/
 tools/*.zip
 
-# Runtime state of the launcher
-.aether/
-Aether/
+# Runtime state of the launcher, anchored to the repository root: a bare "Aether/" matched the
+# package folder dev/aether/ on a case-insensitive file system and hid every Java source of the mod.
+/.aether/
+/Aether/
 
 # Editors / IDE
 .idea/
@@ -30,6 +31,14 @@ Aether/
 # OS files
 .DS_Store
 Thumbs.db
+
+# Captures and throwaway homes produced by the theme sweep and the end-to-end replay
+tools/theme-pages-install/
+tools/e2e/shots-replay/
+tools/e2e/home-replay-*
+tools/e2e/pids-replay.txt
+tools/ui-home/
+tools/test-home/
 
 # Logs and temporary files
 *.log

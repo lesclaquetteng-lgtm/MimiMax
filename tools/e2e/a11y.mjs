@@ -5,6 +5,12 @@
 // Usage: node a11y.mjs <debugging-port>
 
 import { setTimeout as sleep } from 'node:timers/promises';
+import { createClick } from './click.mjs';
+import { requireTestHome } from './guard.mjs';
+
+// Never on the profile of the player who runs the check.
+requireTestHome();
+
 
 const port = process.argv[2] || '9222';
 const results = [];
@@ -74,24 +80,7 @@ async function waitFor(expression, description, timeout = 30000) {
 }
 
 /** Clicks the centre of an element with the mouse, so the focus lands where a player would. */
-async function clickElement(selector) {
-	const box = await evaluate(`(() => {
-		const rect = document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect();
-		return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
-	})()`);
-
-	for (const type of ['mouseMoved', 'mousePressed', 'mouseReleased']) {
-		await send('Input.dispatchMouseEvent', {
-			type,
-			x: box.x,
-			y: box.y,
-			button: 'left',
-			buttons: type === 'mousePressed' ? 1 : 0,
-			clickCount: 1
-		});
-	}
-	await sleep(200);
-}
+const { click: clickElement } = createClick({ evaluate, send }, { settle: 200 });
 
 async function pressKey(key, virtualKeyCode) {
 	await send('Input.dispatchKeyEvent', {

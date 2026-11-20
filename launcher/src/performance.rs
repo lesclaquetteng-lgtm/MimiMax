@@ -198,6 +198,28 @@ pub struct ModProgress {
     pub total: u64,
 }
 
+/// The name of the jar on the disk, without a directory.
+///
+/// The name comes from the Modrinth API and is used to build a path in the mods folder. A name such
+/// as `../../aether/settings.json` would write outside of it, and the file would then be loaded by
+/// the game, so only a plain `.jar` name is accepted.
+fn jar_name(filename: &str) -> Result<String, String> {
+    let name = Path::new(filename)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| format!("{:?} is not a file name", filename))?;
+
+    if name != filename {
+        return Err(format!("{:?} contains a directory", filename));
+    }
+
+    if !name.to_ascii_lowercase().ends_with(".jar") || name.starts_with('.') {
+        return Err(format!("{:?} is not a mod jar", filename));
+    }
+
+    Ok(name.to_string())
+}
+
 /// The list of the pack with the state of every mod.
 pub fn list(paths: &Paths) -> Vec<OptimisationMod> {
     let manifest = load_manifest(paths);
@@ -207,7 +229,11 @@ pub fn list(paths: &Paths) -> Vec<OptimisationMod> {
             let installed = manifest
                 .mods
                 .iter()
-                .find(|entry| entry.slug == spec.slug && paths.mods.join(&entry.filename).exists());
+                .find(|entry| {
+                    jar_name(&entry.filename)
+                        .map(|name| paths.mods.join(name).exists())
+                        .unwrap_or(false)
+                });
 
             OptimisationMod {
                 slug: spec.slug.to_string(),
@@ -280,33 +306,51 @@ pub fn install(
             continue;
         };
 
-        let destination = paths.mods.join(&file.filename);
-        if destination.exists()
-            && (file.hashes.sha1.is_empty()
-                || http::sha1(&destination).as_deref() == Some(file.hashes.sha1.as_str()))
-        {
+        let filename = match jar_name(&file.filename) {
+            Ok(name) => name,
+            Err(detail) => {
+                on_progress(&announce("failed", &detail, 0, 0));
+                report.failed.push(FailedMod {
+                    slug: spec.slug.to_string(),
+                    error: detail,
+                });
+                continue;
+            }
+        };
+
+        // Modrinth publishes a SHA-1 for every file. Without it the jar cannot be verified, and an
+        // unverified jar is code the game would load, so the mod is reported instead.
+        let checksum = match file.hashes.sha1.trim() {
+            "" => {
+                let detail = "Modrinth did not publish a SHA-1 for this file".to_string();
+                on_progress(&announce("failed", &detail, 0, 0));
+                report.failed.push(FailedMod {
+                    slug: spec.slug.to_string(),
+                    error: detail,
+                });
+                continue;
+            }
+            sha1 => sha1.to_ascii_lowercase(),
+        };
+
+        let destination = paths.mods.join(&filename);
+        if destination.exists() && http::sha1(&destination).as_deref() == Some(checksum.as_str()) {
             remember(
                 &mut manifest,
                 spec.slug,
                 &version.version_number,
-                &file.filename,
-                &file.hashes.sha1,
+                &filename,
+                &checksum,
             );
             on_progress(&announce("skipped", "already installed", 0, 0));
             report.skipped.push(spec.slug.to_string());
             continue;
         }
 
-        on_progress(&announce("downloading", &file.filename, 0, 0));
+        on_progress(&announce("downloading", &filename, 0, 0));
 
-        let checksum = if file.hashes.sha1.is_empty() {
-            None
-        } else {
-            Some(file.hashes.sha1.as_str())
-        };
-
-        let result = client.download(&file.url, &destination, checksum, |received, total| {
-            on_progress(&announce("downloading", &file.filename, received, total));
+        let result = client.download(&file.url, &destination, Some(&checksum), |received, total| {
+            on_progress(&announce("downloading", &filename, received, total));
         });
 
         match result {
@@ -315,8 +359,8 @@ pub fn install(
                     &mut manifest,
                     spec.slug,
                     &version.version_number,
-                    &file.filename,
-                    &file.hashes.sha1,
+                    &filename,
+                    &checksum,
                 );
                 on_progress(&announce(
                     "done",
@@ -628,6 +672,21 @@ mod tests {
             // A named graphics preset rewrites the options below it at start up.
             assert_eq!(raw("graphicsPreset"), Some("custom"));
         }
+    }
+
+    #[test]
+    fn a_mod_name_cannot_leave_the_mods_folder() {
+        assert_eq!(jar_name("sodium-0.6.1.jar").unwrap(), "sodium-0.6.1.jar");
+        assert_eq!(jar_name("Cloth-Config.JAR").unwrap(), "Cloth-Config.JAR");
+
+        assert!(jar_name("../../aether/settings.json").is_err());
+        assert!(jar_name("..\\..\\aether\\settings.json").is_err());
+        assert!(jar_name("sub/dir/mod.jar").is_err());
+        assert!(jar_name("./mod.jar").is_err());
+        assert!(jar_name("mod.zip").is_err());
+        assert!(jar_name(".hidden.jar").is_err());
+        assert!(jar_name("").is_err());
+        assert!(jar_name("..").is_err());
     }
 
     #[test]

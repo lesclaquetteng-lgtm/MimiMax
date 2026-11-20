@@ -61,6 +61,7 @@ Available commands:
 | `account add-offline <username>` | Create/select an offline account |
 | `account remove <id>` | Remove an account |
 | `account select <id>` | Select the active account |
+| `account check <username>` | Ask Mojang whether a name belongs to a Mojang account (`premium`), before a cracked server can refuse it |
 | `account microsoft` | Start Microsoft device-code sign-in (emits device code, then account/result messages) |
 | `versions [--limit N]` | List released Minecraft versions |
 | `loaders [--version X]` | List Fabric loader versions for a game version |
@@ -110,6 +111,12 @@ For offline accounts, the launcher computes the UUID exactly like Minecraft:
 The game is started with the offline username, that deterministic UUID, and `accessToken` set to `0`.
 The Aether mod detects offline sessions in-game and adjusts session-specific behavior accordingly.
 
+Cracked servers accept that session, but nearly all of them refuse a name that a Mojang account
+already owns: the game then only shows `Unauthorized: You cannot join the server`. `account check`
+answers the question before the launch (`200` = premium, `204`/`404` = free), and the interface shows
+the same warning under the name field and in a dialog when a public server is joined. A failed lookup
+never blocks a launch: the game stays the judge.
+
 Implementation: `src/offline.rs`, `src/accounts.rs`, `src/game.rs`.
 
 ## Project layout
@@ -117,11 +124,12 @@ Implementation: `src/offline.rs`, `src/accounts.rs`, `src/game.rs`.
 ```text
 launcher/
 ├── src/                  Rust core (CLI, install, launch, metadata, accounts, settings)
-├── desktop/              Native shell (Tauri 2)
+├── desktop/              Native shell (Tauri 2), see desktop/README.md
 │   ├── src/main.rs       window, single-instance lock, command registration
 │   ├── src/commands.rs   one command per interface call (same names as the old IPC)
-│   ├── src/core.rs       runs the core, streams its JSON events, embeds the binary
+│   ├── src/core.rs       runs the core, streams its JSON events, embeds the binary and the mod
 │   ├── src/state.rs      the processes the window can stop (install, game)
+│   ├── installer/        French licence page and installer branding
 │   └── tauri.conf.json   window, CSP, NSIS (French) packaging
 ├── gui/src/ui/           the interface: HTML/CSS/JS + bridge.js (window.aether over Tauri IPC)
 ├── tests/                Rust integration/unit tests
@@ -141,3 +149,7 @@ cargo clippy --all-targets --manifest-path desktop/Cargo.toml
 The end-to-end scripts live in `../tools/e2e/` and drive the real window over the DevTools protocol
 of WebView2 (`WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS="--remote-debugging-port=9222"`); they use the
 same `window.aether` bridge as a player. See `../docs/VERIFICATION.md` §4.
+
+Current counts: **134 unit + 6 download + 20 integration + 3 SHA-1 = 163** tests in the core (all
+green), **8** in the shell, and **87** (16 suites) in the Fabric mod. `desktop/README.md` covers the
+Tauri build, the installer and the constraint that the core must be built first.

@@ -9,6 +9,12 @@
 //   node failure.mjs <port> crash       # launch only, the core dies without a document
 
 import { setTimeout as sleep } from 'node:timers/promises';
+import { createClick } from './click.mjs';
+import { requireTestHome } from './guard.mjs';
+
+// Never on the profile of the player who runs the check.
+requireTestHome();
+
 
 const port = process.argv[2] || '9222';
 const mode = process.argv[3] || 'documents';
@@ -78,28 +84,8 @@ async function waitFor(expression, description, timeout = 30000) {
 	throw new Error(`timeout while waiting for ${description}`);
 }
 
-/** Clicks the centre of an element with the mouse, like a player does. */
-async function clickElement(selector) {
-	const box = await evaluate(`(() => {
-		const element = document.querySelector(${JSON.stringify(selector)});
-		const rect = element.getBoundingClientRect();
-		return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2, disabled: element.disabled };
-	})()`);
-
-	if (box.disabled) throw new Error(`${selector} is disabled, it cannot be clicked`);
-
-	for (const type of ['mouseMoved', 'mousePressed', 'mouseReleased']) {
-		await send('Input.dispatchMouseEvent', {
-			type,
-			x: box.x,
-			y: box.y,
-			button: 'left',
-			buttons: type === 'mousePressed' ? 1 : 0,
-			clickCount: 1
-		});
-	}
-	await sleep(150);
-}
+/** Clicks the centre of an element with the mouse, like a player does, once the point is checked. */
+const { click: clickElement } = createClick({ evaluate, send }, { settle: 150 });
 
 /** Presses Escape like a player does, the dialog must close and give the focus back. */
 async function pressEscape() {

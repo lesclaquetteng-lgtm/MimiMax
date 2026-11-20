@@ -5,9 +5,12 @@
 	"compatibilityLevel": "JAVA_21",
 	"client": [
 		"ChatComponentMixin",
+		"ClientPacketListenerMixin",
+		"GameRendererMixin",
 		"GuiMixin",
 		"MouseHandlerMixin",
 		"MinecraftMixin",
+		"ScreenEffectRendererMixin",
 		"ScreenMixin",
 		"TitleScreenMixin"
 	],

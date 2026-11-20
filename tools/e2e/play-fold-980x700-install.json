@@ -1,0 +1,82 @@
+{
+  "viewport": {
+    "width": 980,
+    "height": 700
+  },
+  "scrollTop": 0,
+  "content": {
+    "top": 38,
+    "bottom": 700,
+    "height": 662,
+    "visible": true
+  },
+  "hero": {
+    "top": 58,
+    "bottom": 212,
+    "height": 154,
+    "visible": true
+  },
+  "grid": {
+    "top": 222,
+    "bottom": 629,
+    "height": 407,
+    "visible": true
+  },
+  "session": {
+    "top": 394,
+    "bottom": 668,
+    "height": 274,
+    "visible": true
+  },
+  "actions": {
+    "top": 482,
+    "bottom": 525,
+    "height": 43,
+    "visible": true
+  },
+  "console": {
+    "top": 539,
+    "bottom": 651,
+    "height": 112,
+    "visible": true
+  },
+  "progress": {
+    "top": 451.5,
+    "bottom": 468,
+    "height": 16.5,
+    "visible": true
+  },
+  "install": {
+    "top": 484.75,
+    "bottom": 522.25,
+    "height": 37.5,
+    "visible": true
+  },
+  "launch": {
+    "top": 482,
+    "bottom": 525,
+    "height": 43,
+    "visible": true
+  },
+  "cancel": {
+    "top": 484.75,
+    "bottom": 522.25,
+    "height": 37.5,
+    "visible": true
+  },
+  "scrollZone": {
+    "height": 324,
+    "content": 571,
+    "scrollable": true,
+    "reachedBottom": true,
+    "overflowY": "auto",
+    "tabindex": "0",
+    "role": "region",
+    "label": "Account and profile configuration",
+    "focusable": true
+  },
+  "installInside": true,
+  "cancelInside": true,
+  "failures": [],
+  "state": "install"
+}

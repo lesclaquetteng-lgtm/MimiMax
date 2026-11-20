@@ -282,6 +282,16 @@ eux qui méritent le prochain passage.
 
 Limite assumee : aucun client Minecraft n'a ete lance ici (pas d'affichage, pas de session) ; la verification s'arrete au build et aux 19 tests du mod, pas a un rendu observe.
 
+### Click GUI refait de zéro (19/11)
+
+| Sujet | Changement | Preuve |
+| --- | --- | --- |
+| Composition | Le panneau quitte les cartes pour un **rail de catégories** à gauche (marque, compteurs par catégorie, pastille d'accent qui glisse d'une catégorie à l'autre) et une **liste de modules** à droite : nom, description sur une seconde ligne, chip de raccourci, chevron de réglages, interrupteur animé. L'en-tête porte le nom de la catégorie, le nombre de modules visibles et la recherche encadrée. | `gui/ClickGuiScreen.java`, build vert. |
+| Géométrie | Une seule fonction de mise en page, `rows()`, rend chaque rectangle de ligne ; le dessin, le survol, le clic, le glisser et la molette lisent tous ces rectangles. Les positions qui étaient calculées deux fois (barre de réglage peinte dix pixels à côté de la zone cliquable, première catégorie peinte 34 px au-dessus de sa zone de clic) passent par des accesseurs uniques : `categoryTop`, `sliderX`, `toggleX`, `chevronX`, `chipTop`, `searchX`. | Aucune constante de position recopiée dans le code d'entrée. |
+| Interactions | Clic sur une ligne : bascule le module. Clic sur le chevron (ou clic droit) : déplie les réglages. Clic sur le chip : capture la touche suivante (Échap délie). Recherche : filtre nom et description. Les nombres restent de vrais sliders (clic pour situer, glisser pour suivre, double-clic pour le défaut) et un clic sur le **nom** d'un réglage numérique ne le remet plus à zéro. | `mouseClicked`, `mouseDragged`, `keyPressed`, `charTyped`. |
+| Fenêtre étroite | Le rail se réduit avant la liste (120 px minimum), la liste garde au moins 120 px, les descriptions disparaissent sous 300 px de large : plus de largeur négative sur une petite fenêtre. | Calcul dans `init()`. |
+| Vérification | Build et 87 tests verts ; la composition a été contrôlée par un rendu statique des mêmes coordonnées, **pas** par une capture du jeu (la fenêtre native ne peut pas être pilotée ici). | `./gradlew build` ; mockup temporaire supprimé. |
+
 ### Deux défauts révélés par la panne réelle (corrigés)
 
 - **Une progression tardive repeignait la barre après l'échec.** Le cœur peut écrire une ligne
@@ -1390,3 +1400,306 @@ rayon 10 px, `missing: []`.
 - Le dialogue couleur natif de Windows n'est pas automatisé (il est ouvert puis refermé par `Échap`) :
   c'est la paire d'événements qu'il émet qui est rejouée, pas son interface.
 - Les scripts `tools/e2e/*.mjs` restent hors de ce pass.
+
+---
+
+## Relecture : simplifier le thème, puis rejouer l'e2e (19/11)
+
+### L'encre du bouton primaire, ramenée à une décision
+
+`inkFor` comparait le contraste du blanc et celui du noir pur, mais rendait `#0b111a` : la bande de
+luminance entre les deux planchers (0,175 → 0,1855) laissait un accent sans encre lisible. La nouvelle
+version ne calcule plus qu'une chose — le blanc tient-il encore 4,5:1 sur le fond dérivé ? — et
+répond blanc ou noir. Les deux planchers se recouvrent (blanc jusqu'à 0,1833 ; noir dès 0,175), donc
+aucun accent ne tombe entre les deux. Douze lignes au lieu de vingt, plus de cas à trois chiffres.
+
+Mesuré après coup, sur 32 états (8 pages × accents défaut, joueur et clair) : `contraste=0` partout ;
+accent `#560b0b` → `rgb(255, 255, 255)` sur `color(srgb 0.2765 0.0354 0.0354)` ; accent `#7DD3FC`
+→ `rgb(0, 0, 0)` sur `color(srgb 0.4020 0.6785 0.8104)`.
+
+### Le balayage, dégraissé
+
+`tools/theme-sweep.mjs` : coupé la lecture de persistance (le pont ne rendait qu'`undefined`, le
+`settings.json` du home l'avait déjà prouvée), le titre, l'audit initial qui dupliquait l'état
+« défaut », trois consommateurs qui ne dérivent pas de l'accent (`.input`, `.nav-item.is-active`,
+`.card`) et le champ `accent` redondant du rapport. Restent les jetons avant/après, les consommateurs
+dérivés (bouton primaire, pastille de valeur) et le survol d'un champ.
+
+### Les dix scripts e2e, rejoués contre la coquille
+
+`tools/e2e/replay.ps1` rejoue tout d'une traite : une fenêtre par scénario, un home neuf et unique,
+le mode de cœur attendu, le semis que les contrôles supposent (compte hors ligne, trois mods, une
+session terminée), un port décalé à chaque exécution, et — jusqu'au 19/11 — une vue de 1180×1000
+tenue ouverte pendant le contrôle, qui compensait des clics envoyés sous la ligne de flottaison.
+Cette vue est supprimée depuis : voir « Les clics e2e dans la vraie fenêtre ».
+
+| Scénario | Contrôles |
+| --- | --- |
+| `a11y` | 9/9 |
+| `sliders` | 2/2 |
+| `screens` | 21/21 captures sans débordement |
+| `drive` | 41/41 |
+| `profiles` | 26/26 |
+| `failure` | 23/23 |
+| `crash-report` | 12/12 |
+| `cancel` | 12/12 |
+| `stubborn` | 10/10 (cœur tué à 10,2 s) |
+| `timeout` | 2/2 |
+
+**137 `PASS`, 0 `FAIL`.** Trois réglages ont été nécessaires, tous côté harnais : `AETHER_REAL_CORE`
+est obligatoire (le faux cœur délègue les comptes et les profils au vrai), `AETHER_FAKE_FAIL` doit
+porter `launch` et non `launch-exit` pour le mode `documents`, et la vue doit être tenue pendant le
+contrôle (l'override DevTools disparaît avec sa session).
+
+### Incident : un harnais qui a tourné dans le vrai profil
+
+Les premières versions de `replay.ps1` affectaient `$home` — une variable **automatique** de
+PowerShell, dont l'affectation est ignorée : les dix scénarios ont tourné sur `C:\Users\ee`, le vrai
+profil, au lieu d'un home de test. Dégâts constatés et réparés :
+
+- ✅ retirés : les trois faux mods (`aether-client.jar`, `sodium.jar`, `iris.jar.disabled`, contenu
+  « dummy … »), la fausse session `session-20261118-160000.log`, le profil `Hardcore`, la mémoire
+  ramenée à 4 096 Mo et `useG1gc` à `true` (les valeurs par défaut de `settings.rs`) ;
+- ⚠️ non récupérable : `screens.mjs` vide la liste des comptes et le dossier des mods avant de les
+  photographier. Si un compte hors ligne ou des mods vivaient dans ce profil, ils ne sont plus là et
+  aucun outil ne les a sauvegardés. L'accent a été remis à `#560b0b`, la valeur du joueur.
+
+Le script est corrigé (`$dataHome`), et chaque scénario tourne désormais dans son propre dossier.
+
+### Garde-fous et artefact
+
+Audit : 61/61 jetons résolus, 0 manquant, 0 doublon. `cargo test` : 160 tests, 0 échec.
+`cargo clippy --all-targets -- -D warnings` : 0 avertissement. `cargo tauri build` relancé ;
+`dist/Aether-Launcher-1.0.0-portable.exe` (8 991 744 o) et `dist/Aether-Launcher-Setup-1.0.0.exe`
+(4 477 894 o) régénérés, l'exe publié relancé : bouton primaire `color(srgb 0.1897 0.4180 0.7911)`,
+`missing: []`.
+
+---
+
+## Les clics e2e dans la vraie fenêtre (19/11)
+
+### Ce qui a changé
+
+Les huit scripts qui cliquent ou glissent à la souris (`a11y`, `cancel`, `crash-report`, `failure`,
+`hit`, `profiles`, `sliders`, `stubborn`) passent tous par **un seul helper**, `tools/e2e/click.mjs` :
+`scrollIntoView` de la cible au milieu de la page, puis **le point qui va être pressé est vérifié avec
+`document.elementFromPoint`** avant qu'un seul événement soit envoyé. Si ce point touche autre chose —
+un toast, un fond de modale, une couche oubliée — le contrôle s'arrête en quelques millisecondes avec
+le nom de ce qui est devant, au lieu de cliquer dans le vide puis d'attendre le délai de 30 s. Un
+point sur un **enfant** de la cible vaut la cible (`element.contains`), et un contrôle absent, caché,
+désactivé ou hors fenêtre est refusé par son nom.
+
+L'override de vue qui compensait (`tools/e2e/viewport.mjs`, lancé par `replay.ps1` pendant chaque
+scénario) est **supprimé**, fichier compris : les contrôles tournent dans la fenêtre que le joueur
+reçoit réellement, 1180×760.
+
+### Ce que la suppression a révélé
+
+`sliders` échouait sans la vue haute — `FAIL play: memory — value 4096 → 4096, --fill 20%` : le
+glissement partait d'un `y` mesuré hors fenêtre, sur la page Play. Après le `scrollIntoView` du
+curseur : `4096 → 13312`, `--fill 80%` (attendu 80 %) et, sur Settings, `4096 → 10752`,
+`--fill 63,33%` (attendu 63 %). Les autres scénarios n'ont rien demandé : la barre d'action de Play
+tient désormais dans la fenêtre (recommandation 1), donc `#btn-install` est déjà visible à 760 px —
+l'override ne servait plus qu'aux curseurs, et le harnais sait maintenant faire ce qu'un joueur
+fait : défiler jusqu'à ce qu'il veut cliquer.
+
+### Preuve — les onze scénarios, sans aucun override
+
+`powershell -NoProfile -ExecutionPolicy Bypass -File tools/e2e/replay.ps1` (exécution complète
+avec le contrôle des points de clic et le nouveau scénario `hit`) :
+
+| Scénario | Contrôles | Sortie |
+| --- | --- | --- |
+| `a11y` | 9/9 | `EXIT a11y=0` |
+| `sliders` | 2/2 | `EXIT sliders=0` |
+| `screens` | 21/21 captures sans débordement | `EXIT screens=0` |
+| `drive` | 41/41 | `EXIT drive=0` |
+| `profiles` | 26/26 | `EXIT profiles=0` |
+| `failure` | 23/23 | `EXIT failure=0` |
+| `crash-report` | 12/12 | `EXIT crash=0` |
+| `cancel` | 12/12 | `EXIT cancel=0` |
+| `stubborn` | 10/10 (cœur tué à 10,2 s) | `EXIT stubborn=0` |
+| `timeout` | 2/2 | `EXIT timeout=0` |
+| `hit` | 12/12 | `EXIT hit=0` |
+| **Total** | **170** | **0 `FAIL`** |
+
+### Les tests du garde lui-même
+
+Deux contrôles, l'un en vol, l'autre statique :
+
+- **`tools/e2e/hit.mjs`** (12/12, nouveau scénario de `replay.ps1`) exerce le garde dans les deux
+  sens sur la vraie page : le bouton d'installation est atteignable en `329,534` ; une couche fixe
+  plein écran sur la page le fait refuser **`#btn-install is covered by #probe-overlay at 329,534`**
+  et **aucun événement n'est envoyé** (`installing:false`, barre cachée, bouton toujours actif) ; la
+  couche retirée, il redevient atteignable ; un point sur l'enfant d'un bouton est accepté
+  (`hit=#probe-child`) ; un bouton fixé à `top:-400px` est refusé `is outside the window at 90,-380`.
+  Les cinq refus reviennent en **62 ms au plus** (délai d'un contrôle : 30 000 ms).
+- **`tools/e2e/click.test.mjs`** (8 tests, `node --test`) garde la garde : `elementFromPoint`
+  précède `Input.dispatchMouseEvent` dans `click.mjs` (commentaires retirés avant la mesure) ; la
+  ligne qui décide `reachable` doit lire le point et non une constante ; les huit scripts qui cliquent
+  importent ce helper ; `sliders.mjs` est le seul à garder sa paire presse/relâche (son point de départ
+  passe par `pointAt`) ; aucun script n'envoie de presse à une coordonnée écrite en dur ; aucun `try`
+  n'entoure un clic (le seul `catch` de `hit.mjs` est `expectRefusal`, qui **lève** quand le clic
+  passe) ; `hit.mjs` est enregistré dans `replay.ps1` ; les trois documents annoncent le même nombre
+  de scripts gardés que le code.
+
+### La mutation du garde : la preuve qu'il mord
+
+Un contrôle présent n'est pas un contrôle porteur d'échec. Trois mutations ont donc été appliquées à
+une copie de `tools/e2e/click.mjs` (sauvegarde `click.mjs.bak`), puis le fichier a été restauré à
+l'octet près : `sha256` avant et après, **`b628bc93df0265eee057fce208340cbc60230741172a453dfeffcd4870ba3bdc`**,
+sauvegarde supprimée, aucun résidu dans `tools/e2e`.
+
+**Mutation 1 — le contrôle neutralisé.**
+`const reachable = !!at && (at === element || element.contains(at));` devient `const reachable = true;`
+(l'appel à `elementFromPoint` reste dans le fichier, mais sa réponse ne décide plus rien).
+
+| Contrôle | Avant | Sous mutation 1 |
+| --- | --- | --- |
+| `hit.mjs` | 12/12 | **8/12, `EXIT hit=1`**, quatre `FAIL` : `a covered button stops the click — the click went through`, `the refusal names the point it would have hit`, `an element outside the window is refused — the point was accepted`, `every refusal comes back under a second…` ; puis le scénario s'arrête sur `Error: the click went through, the guard refused nothing (124 ms)` |
+| `click.test.mjs` | 8/8 | **d'abord 8/8 : le test était complaisant.** Il ne vérifiait que la présence et l'ordre de la chaîne, pas la décision. Renforcé par le test « the reachable decision comes from the hit test, not from a constant » (qui épingle la ligne exacte et interdit `reachable = true`), il tombe : `✖ the reachable decision comes from the hit test, not from a constant — the hit test has to decide what is reachable`. |
+
+**Mutation 2 — le contrôle déplacé.** Le bloc `createClick` (qui construit `Input.dispatchMouseEvent`)
+est passé avant `pointAt` : le clic est fabriqué avant la vérification. Le comportement ne change pas —
+`hit.mjs` reste **12/12, `EXIT hit=0`** —, et seul le test statique peut le voir :
+`✖ the shared helper asks elementFromPoint before it presses — the hit test has to run before the mouse
+event is built`. Cette mutation a aussi révélé que ce test lisait le **commentaire d'en-tête** du
+fichier (qui parle d'`elementFromPoint`) : il mesure désormais le code commentaires retirés, et il
+échoue bien.
+
+**Mutation 3 — les deux à la fois** (fichier de test final) : `✖` sur les deux tests de `click.mjs`
+ci-dessus, les six autres restant verts.
+
+Après restauration : `click.test.mjs` **8/8**, `hit.mjs` **12/12**, suite complète **170 contrôles,
+0 `FAIL`**, onze `EXIT` à `0`.
+
+Limite : le harnais clique désormais le centre d'une cible défilée jusqu'au milieu de la page ; un
+élément plus haut que la fenêtre serait centré sans être entièrement visible — aucun contrôle ne
+clique un tel élément aujourd'hui.
+
+---
+
+## Gameplay in-game : HUD, animations et glyphes (19/11)
+
+### Ce qui était cassé
+
+Trois classes de défauts, toutes dans le client Fabric, trouvées en relisant le code plutôt qu'en
+regardant une capture (impossible ici : aucun client Minecraft ne démarre sur cette machine).
+
+| Défaut | Où | Ce qu'on voyait | Correctif |
+| --- | --- | --- | --- |
+| `new Animation(initial)` laissait la vitesse à **zéro** : le facteur d'interpolation valait 0 | `util/Animation.java` | une animation qui existe, qui a une cible, et qui ne bouge jamais | `DEFAULT_SPEED = 12`, vitesse nulle remplacée par ce défaut, delta négatif ignoré (une horloge qui recule ne jette pas la valeur de l'autre côté) — 6 tests dans `AnimationTest` |
+| Le fondu de la cible était **calculé puis jeté** : `fadeAnim` ne servait que de seuil `> 0.01` | `HudModules.TargetHud` | la carte apparaissait et disparaissait d'un coup, et le flash de dégâts était coupé net après 180 ms | `RenderUtil.card(…, opacity)` + `ColorUtil.fade(…)` appliqués au panneau, au nom, au texte et aux barres ; le flash devient une `Animation` qui décroît |
+| Même carte sans aucun fondu, et les mêmes défauts d'emoji | `HudModules.TargetInfo`, `Speed`, `Reach`, `Combo` | apparition sèche, glyphes vides à la place des emoji, valeurs qui sautent | `TargetInfo` reçoit le même fondu et le même flash ; `Speed` et `Reach` glissent leurs valeurs ; les emoji sont remplacés par une pastille dessinée |
+| Le compteur **Combo n'était jamais alimenté** : `recordHit()` était déclaré, documenté « incremented by the attack mixin », et appelé par personne | `HudModules.ComboCounter`, absent des mixins | le HUD affichait « COMBO ×0 » pour toute la session | `MouseHandlerMixin` compte un clic gauche **dans le jeu** quand le réticule est sur une entité ; une perte de vie dans `onTick` termine la série. Aucun module de combat n'est touché. |
+| La pastille de catégorie se déplaçait de `0.28` **par image** | `gui/ClickGuiScreen` | glissement plus vif à 240 Hz qu'à 60 Hz : le même clic ne rendait pas pareil d'un écran à l'autre | deux `Animation` sur l'horloge des frames |
+| Emoji hors du plan de base (`🏃 🎨 📊 🎲 🖊 🎯 ⚡`) dans le GUI et le HUD | `ClickGuiScreen`, `HudModules` | la police du jeu n'a pas ces glyphes : chaque tabulation et chaque bouton affichait des carrés vides | noms de catégories sans emoji, bouton « HUD », pastilles dessinées (`roundedRect`) |
+| `RenderUtil.roundedRectSelective` ignorait trois de ses quatre rayons, et n'était appelé nulle part | `util/RenderUtil.java` | une API qui promet un coin par angle et n'en dessine qu'un | supprimée |
+
+### Comment c'est prouvé, et ce qui ne l'est pas
+
+- `./gradlew build` (JDK 25 pour Loom, Java 21 pour le mod) : **BUILD SUCCESSFUL**, **87 tests,
+  0 échec**, dont les 6 de `AnimationTest` (défaut qui bouge, indépendance à la fréquence, delta
+  négatif ignoré, pas de dépassement, animation en cours, vitesse nulle rattrapée), le test de
+  `ColorUtil.fade` qui vérifie qu'une surface déjà translucide garde son propre alpha, et les 2 de
+  `LangCoverageTest` qui refusent une clé de traduction manquante.
+- `grep -rn 'ud83c\|ud83d' aether-client/src/main/java` : **aucun** emoji hors plan de base restant.
+- `node tools/dead-api.mjs` : **288** déclarations publiques, **1** sans appelant — l'entrypoint
+  `onInitializeClient`, que Fabric appelle lui-même. Le module `Anti Knockback` n'en fait plus
+  partie depuis qu'il est branché sur le paquet de vélocité (ligne 20).
+- La revue de code du 19/11 a corrigé les lignes 21 à 33 ; les tests passent de 74 à **87**
+  (`ModuleLifecycleTest` 3, `AetherConfigTest` 1 de plus, `EspTargetsTest` 6, `ModuleCatalogTest` 3).
+- **Rien de tout cela n'a été vu en jeu** : le recul, les keybinds, les curseurs, les emoji, les deux
+  overlays et le glow de l'ESP ne sont prouvés que par le calcul, la compilation, la lecture des
+  sources vanilla et les tests hors session. En particulier l'annulation de `renderFire`, celle de
+  `bobHurt`, le zoom par `getFov` et les deux nouveaux comportements d'`AutoTool`/`AutoGG` n'ont pas
+  été observés manche allumée. Le client a toutefois été lancé (`runClient`) le
+  19/11 : il atteint le menu principal sans erreur d'injection, ce qui prouve que les deux mixins
+  s'appliquent (`required: true`, `defaultRequire: 1` : un point d'injection manquant ferait planter
+  le chargement des classes) — pas que le feu soit invisible ni l'inclinaison neutralisée.
+- `node tools/check-theme-tokens.mjs`, `git check-ignore -v` : les preuves des lignes 14 et des trois
+  lignes retirées du tableau.
+- Limite : **aucun rendu observé**. Le mod compile et ses tests passent, mais l'apparence du HUD, la
+  fluidité perçue et les nouveaux glyphes demandent une session de jeu, que cette machine ne permet
+  pas. C'est un correctif de code mesuré par ses tests, pas une capture avant/après.
+
+### Trouvaille de dépôt, corrigée au passage
+
+La règle `.gitignore` `Aether/` (état d'exécution du launcher) masquait **tout le code Java du mod** :
+le dossier de paquet `dev/aether/` correspond au motif sur un système de fichiers insensible à la
+casse, si bien que 46 fichiers sources et de test n'étaient suivis par personne — un clone du dépôt
+n'avait pas le mod. Les motifs sont désormais ancrés à la racine (`/Aether/`, `/.aether/`) ; l'état d'exécution du
+launcher vit de toute façon hors du dépôt.
+
+---
+
+## Recommandations
+
+Classement par rapport **impact / effort** : d'abord ce qui casse l'usage, ensuite ce qui protège les
+données, puis la dette. « **Implémentée** » = faite dans cette campagne, le fichier qui la porte est
+cité ; « **Proposée** » = constatée et mesurée, pas encore faite. Chaque preuve est un fichier de ce
+dépôt, un test exécuté ou une mesure reproductible — aucune ligne sans preuve.
+
+**État au 19/11 : 17 entrées au tableau, 17 implémentées, 0 proposée.** Les numéros 6, 13 et 15 en
+sont sortis : ils décrivaient des défauts réels de l'interface du launcher (CSS/HTML), listés juste
+après le tableau avec leur mesure — ni oubliés, ni maquillés en « faits ». La numérotation garde ces
+trous pour que les renvois existants (« voir ligne 2 ») restent valides.
+
+| # | Impact / effort | Problème constaté | Amélioration proposée | État | Preuve |
+| --- | --- | --- | --- | --- | --- |
+| 1 | élevé / faible | Sur Play, l'action principale sortait de l'écran : `#btn-install` mesurait `top 749,25` / `bottom 786,75` dans une vue de 760 px (`fullyVisible: false`), et `#btn-cancel-install` `top 779,75` / `bottom 817,25`. | Donner à la page Play la hauteur de la fenêtre : la bannière et les cartes de compte et de profil défilent dans un conteneur interne, la carte Game Session reste ancrée en bas. | **Implémentée** | `styles.css` (page Play en colonne, `height: 100%`, `.play-scroll` défilant, en-tête et console resserrés sous 900 px de haut), `index.html` (`.play-scroll` autour de la bannière et de la grille). Mesure nommée `tools/e2e/play-fold.mjs` : avant `749,25/786,75` hors fenêtre ; après `515,16/552,66` entièrement visible, et à l'identique en installation pour les deux boutons (`play-fold-before*.json`, `play-fold-after*.json`). Vérifié aussi à `980×700` : `484,75/522,25` au repos et pour les deux boutons en installation, avec une zone défilante de `355` / `324` px qui atteint le bas de ses cartes et prend le focus clavier (`role=region`, nom accessible) — `play-fold-980x700*.json`. |
+| 2 | élevé / faible | `screens.mjs` supprime le premier compte puis vide le dossier `mods` du profil sur lequel il tourne, sans vérifier que c'est un home de test : c'est ce qui a effacé des données réelles pendant cette campagne. | Refuser de démarrer si `AETHER_HOME` n'est pas sous `tools/` — garde dans `replay.ps1` **et** dans les scripts qui suppriment. | **Implémentée** | `tools/e2e/guard.mjs`, importé et appelé par les dix scripts ; `tools/e2e/replay.ps1` applique le même contrôle avant toute suppression. Refus vérifiés : `AETHER_HOME` absent → `guard.mjs:22`, `AETHER_HOME=C:\\Users\\ee` → `guard.mjs:35` ; `AETHER_E2E_ALLOW_ANY_HOME=1` laisse passer (le script échoue alors sur le port, pas sur la garde). Rappel du dégât qui l'a motivée : `tools/e2e/screens.mjs:207`, `:264-266`. |
+| 3 | élevé / faible | `clickElement` calcule le centre d'un élément sans le faire défiler : sous la ligne de flottaison, le clic réel tombe hors page et le contrôle attend jusqu'au délai — observé sur `failure`, `crash`, `cancel` et `stubborn`. | `scrollIntoView({ block: 'center' })` + une frame d'attente avant d'envoyer les événements souris, dans chaque script. | **Implémentée** | Un seul helper, `tools/e2e/click.mjs` : `scrollIntoView` de la cible au milieu de la page, puis **vérification du point par `document.elementFromPoint`** avant tout événement — un clic qui tomberait sur autre chose échoue en quelques millisecondes avec le nom de l'obstacle, au lieu d'attendre le délai. Il est utilisé par les huit scripts qui cliquent — `a11y`, `cancel`, `crash-report`, `failure`, `hit`, `profiles`, `stubborn`, et `sliders` via `pointAt` pour le point de départ du glissement. `tools/e2e/viewport.mjs` supprimé, `replay.ps1` ne lance plus d'override. Onze scénarios rejoués dans la fenêtre réelle (1180×760) : **170 contrôles, 0 échec** (`a11y` 9/9, `sliders` 2/2, `screens` 21/21, `drive` 41/41, `profiles` 26/26, `failure` 23/23, `crash-report` 12/12, `cancel` 12/12, `stubborn` 10/10, `timeout` 2/2, `hit` 12/12) ; le nouveau `tools/e2e/hit.mjs` prouve le garde dans les deux sens (bouton couvert refusé en 59 ms sans aucun événement, enfant accepté, hors fenêtre refusé), et `tools/e2e/click.test.mjs` (8 tests, dont un sur la décision `reachable` et un sur le nombre de scripts gardés cité par la doc) interdit tout clic qui ne passerait pas par le helper — mutation à l'appui, voir « La mutation du garde ». La suppression de l'override avait trouvé un cas de plus : `sliders` échouait sans la vue haute. |
+| 4 | élevé / faible | L'initiale d'un compte était blanche sur la couleur du compte : blanc sur `rgb(95,208,57)` mesurait **1,99:1** (plancher 4,5). Le balayage ne le voyait pas, faute de compte sur un home neuf. | Choisir l'encre de l'avatar par la luminance de son fond, comme pour le bouton primaire. | **Implémentée** | `app.js:384` (`hslToRgb`), `:406` (`paintAvatar`), `:1985` (`contrastInk`, partagé avec `inkFor`) ; mesure après correctif : avatar `color: rgb(0, 0, 0)` sur `rgb(95,208,57)`, `install-state.json` à **0 problème** contre 1,99 avant (`install-state-legacy.json`). Contexte : `styles.css:883-893`. |
+| 5 | élevé / faible | Blanc sur `#F87171` mesure **2,77:1** pour `.btn--danger` : arrêt d'installation, arrêt de session, suppression d'un compte ou d'un serveur. | `--danger-fill` (danger ×72 % de noir) donne **4,98:1**, utilisé pour le fond et la bordure au survol. | **Implémentée** | `launcher/gui/src/ui/styles.css:35`, `:167`, `:822-823` ; mesure WCAG 2,77 → 4,98 (mêmes formules que l'audit). |
+| 7 | faible / faible | L'UUID d'un compte, en 10 px, mesurait **4,49:1** sur le fond de la ligne sélectionnée (`rgb(124,143,161)` sur `rgb(22,39,67)`) : juste sous le plancher de 4,5. | Passer cet UUID à `--text-secondary`. | **Implémentée** | `launcher/gui/src/ui/styles.css:904-908` ; mesure après correctif : `color: rgb(163, 181, 198)` (`#a3b5c6`) sur le même fond = **7,10:1**, 0 problème dans `install-state.json`. |
+| 8 | moyen / faible | L'audit de contraste ne mesurait jamais un bouton danger : les deux de la page Play sont `hidden`, les autres n'existent qu'avec une ligne de compte ou de serveur. C'est pour cela que le défaut de la ligne 5 n'a été trouvé qu'à la lecture des règles. | Ajouter au balayage un état « installation en cours » (bouton Annuler visible puis survolé) pour mesurer les `.btn--danger`. | **Implémentée** | `tools/theme-sweep.mjs` : `sweepInstall()`, `AETHER_INSTALL_STATE=1`, `--install-only` ; `tools/theme-pages-install/install-state.json` (bouton Annuler survolé, aucun problème) et `install-state-legacy.json` (ancienne valeur forcée → `.btn--danger` blanc sur `rgb(248,113,113)` = **2,77** signalé) ; capture `installation.png`. |
+| 9 | élevé / faible | Blanc sur l'accent brut mesure **3,68:1** (< 4,5 exigé à 13 px) sur 7 boutons de 5 pages ; le défaut existait déjà avec l'ancien violet (3,4:1). | `--accent-fill` (accent ×82 % de noir, **5,17:1**) et `--on-accent` choisi par `inkFor` selon la luminance du fond. | **Implémentée** | `styles.css:34`, `:751-753`, `launcher/gui/src/ui/app.js:1958-1971` ; mesure 3,68 → 5,17 ; `tools/theme-pages/report.json` : 0 problème sur 32 états. |
+| 10 | moyen / faible | La carte de preset active gardait un dégradé **violet** (`--accent-cyan` = `#8B5CF6`) au milieu d'une interface bleue puis rouge : survivance de l'ancienne palette. | Dériver le dégradé de `--accent-text` et supprimer l'alias devenu inutile. | **Implémentée** | `styles.css:1705` ; captures `tools/theme-pages/defaut-performance.png` et `tools/theme-pages/choisi-performance.png`. |
+| 11 | élevé / faible | `replay.ps1` affectait `$home`, variable **automatique** de PowerShell : l'affectation est ignorée et les dix scénarios ont tourné dans le vrai profil. | `$dataHome` + un home neuf et unique par scénario, plus une garde de chemin (voir ligne 2). | **Implémentée** (renommage, homes uniques et garde de chemin — voir ligne 2) | `tools/e2e/replay.ps1` ; `tools/e2e/replay.log` : `home …\tools\e2e\home-replay-a11y-1358703063`. |
+| 12 | moyen / faible | La procédure documentée de l'e2e ne donnait que trois commandes pour onze scripts, et ne disait ni que `AETHER_REAL_CORE` est obligatoire (sans lui le faux cœur panique), ni la matrice `AETHER_FAKE_FAIL`, ni le semis attendu. | Remplacer les trois commandes de `docs/VERIFICATION.md` §4.2 par `replay.ps1` et y reporter la matrice. | **Implémentée** | `docs/VERIFICATION.md` §4.2 remplacé : la commande unique, le tableau des onze scénarios (script, port, cœur, `AETHER_FAKE_FAIL`, semis) recopié de `tools/e2e/replay.ps1:11-23`, pourquoi `AETHER_REAL_CORE` est obligatoire, la garde de home et les ports. |
+| 14 | faible / faible | Chaque exécution laissait des captures et des homes non ignorés dans l'arbre de travail : 17 fichiers (1,1 Mo) pour le thème, 21 fichiers (1,5 Mo) pour l'e2e. | Ignorer les dossiers de captures, les homes jetables et les journaux produits par les outils. | **Implémentée** | `.gitignore` : `tools/theme-pages-install/`, `tools/e2e/shots-replay/`, `tools/e2e/home-replay-*/`, `tools/e2e/pids-replay.txt`, `tools/ui-home/`, `tools/test-home/` ; `git check-ignore -v` nomme la règle pour chacun et `git status --short` ne montre plus ces artefacts. Les 17 fichiers de `tools/theme-pages/` sont **déjà suivis** — ce document les cite comme preuves : les ignorer n'aurait aucun effet rétroactif, et les retirer de l'index supprimerait des preuves. Ils restent suivis, c'est un choix assumé, pas un oubli. |
+| 16 | élevé / faible | La règle `.gitignore` `Aether/` (état d'exécution du launcher) masquait tout le code Java du mod : le dossier de paquet `dev/aether/` correspond au motif sur un système de fichiers insensible à la casse — 46 sources et fichiers de test suivis par personne, donc absents d'un clone. | Ancrer les motifs à la racine (`/Aether/`, `/.aether/`) : l'état d'exécution du launcher vit hors du dépôt. | **Implémentée** | `git check-ignore -v aether-client/src/main/java/dev/aether/client/util/Animation.java` ne répond plus rien (la sortie nommait `.gitignore:23:Aether/`) ; `git status --short aether-client` liste désormais les sources ; `build/`, `aether-client/run/` et `tools/aether-home/` restent ignorés. |
+| 17 | élevé / faible | Les interrupteurs du Click GUI étaient avancés depuis le tick client, par `updateAnimations(50L)` : vingt pas par seconde alors que l'écran se peint à 60, 144 ou 240 images par seconde — l'animation la plus visible de l'interface était donc saccadée, et figée dès que l'écran se fermait. | Avancer l'animation sur l'horloge des frames, dans l'écran qui la dessine, avec le delta réel borné à 100 ms. | **Implémentée** | `ClickGuiScreen.advanceModuleAnimations()`, appelé en tête de `render` ; `AetherClient.onTick` n'appelle plus `updateAnimations`. L'indépendance à la fréquence est couverte par `AnimationTest`. |
+| 18 | moyen / faible | Le mod n'embarquait aucun fichier de langue : l'écran des contrôles affichait les clés brutes `key.aether.click_gui`, `key.aether.hud_editor` et `key.aether.kill_aura` pour les 46 modules, faute de `en_us.json`. | Livrer `assets/aether/lang/en_us.json` et un test qui refuse une clé manquante. | **Implémentée** | `src/main/resources/assets/aether/lang/en_us.json` (50 clés) ; `LangCoverageTest` (2 tests) reconstruit la clé de chaque module comme `Module.createKeyBinding` et échoue si elle manque. |
+| 19 | faible / faible | Quatorze API publiques étaient déclarées et jamais appelées : `Animation.setSpeed`, `ColorUtil.luminance`, `ColorUtil.argb`, `RenderUtil.horizontalGradient`, `HudManager.find`, `HudManager.getHudModules`, `HudManager.getElements`, `HudElement.isDragging`, `Module.isDefaultEnabled`, `ModuleManager.setCategoryEnabled`, `ModuleManager.getModules`, `AetherConfig.normalize`, `IntegerSetting.getDefaultValue` et le constructeur `ConfigScreen(Screen)`. | Les retirer : une API que personne n'appelle promet ce que le client ne sait pas faire, et invite à coder contre un contrat mort. | **Implémentée** | Scan de `tools/dead-api.mjs` : 282 déclarations publiques, **1 sans appelant** après la passe (16 au départ) ; le seul restant est l'entrypoint `onInitializeClient`, appelé par Fabric — le module de combat `Anti Knockback` est traité à la ligne 20. Le même balayage a trouvé un champ jamais lu hors API : l'option `Health` de l'ESP, enregistrée dans le GUI et sauvegardée, que la seule ligne de rendu du module (le tag lumineux, coloré par l'équipe de l'entité) n'utilisait pas — supprimée plutôt que laissée comme une promesse vide. |
+| 20 | élevé / moyen | Le module **Anti Knockback** ne modifiait rien : `onDamage`, ses deux facteurs, `isActive()` et les trois `getSavedDelta*()` n'avaient aucun appelant, donc les réglages Horizontal et Vertical ne changeaient pas le recul d'un pixel — le module s'affichait, se sauvegardait, et ne faisait rien. | Brancher le module là où le client reçoit réellement le recul, et sortir le calcul dans une classe sans dépendance Minecraft pour le prouver hors jeu. | **Implémentée** | `mixin/ClientPacketListenerMixin` corrige la vitesse du joueur local au tail de `handleSetEntityMotion` ; `util/KnockbackReduction` porte l'arithmétique ; `AntiKnockbackTest` (6 tests) prouve que le module réduit ou annule le delta, que désactivé il le rend intact et que les réglages le pilotent ; `KnockbackReductionTest` (11 tests) couvre les valeurs par défaut, les facteurs hors bornes et un delta nul. `MixinConfigTest` vérifie le descripteur exact de `handleSetEntityMotion(Lnet/minecraft/network/protocol/game/ClientboundSetEntityMotionPacket;)V`, et un relevé bytecode montre que `LivingEntity#knockback` n'est appelé que par `hurtServer`, `doSweepAttack`, `causeExtraKnockback` et `blockedByItem`, tous côté serveur — d'où le paquet de vélocité et non le knockback vanilla. Le recul d'explosion ne remplace pas la vitesse, il s'y **ajoute** (`handleExplosion` → `playerKnockback().ifPresent(player::addDeltaMovement)`) : un second hook au même endroit lit la poussée dans le paquet, la retire puis remet la poussée réduite (`KnockbackReduction#applyToAdded`), ce qui laisse la marche et la chute intactes ; une poussée non finie est ignorée comme `addDeltaMovement` l'ignore, faute de quoi la soustraction rendrait la vitesse `NaN` (5 tests). La relecture de la passe a aussi retiré un helper de test jamais appelé (`hasMethod`) et fait choisir à `MixinConfigTest` la surcharge exacte du descripteur plutôt que la première méthode portant le nom. Enfin les trois conditions qui autorisent le module à agir — module actif, paquet nommant le joueur local, explosion portant une poussée — sont sorties de l'inline du mixin dans `KnockbackFilter`, pur et testé par 6 tests (`KnockbackFilterTest`) : paquet d'une autre entité, module éteint et explosion sans poussée sont ignorés. |
+| 21 | élevé / faible | Les keybinds de modules ne faisaient rien : `Kill Aura`, `Auto Crystal` et `Zoom` en ont un par défaut, le Click GUI permet d'en changer, le jeu les liste dans ses contrôles — mais aucun code ne lisait jamais `consumeClick`, et un keybind créé depuis le GUI n'était même pas enregistré auprès de Fabric, donc aucun clic ne lui était livré. | Enregistrer la mapping à sa création et consommer les appuis dans le tick client, hors écran. | **Implémentée** | Chaque module reçoit au démarrage une mapping enregistrée via `KeyBindingHelper` (non liée sauf les trois défauts) : `KeyBindingRegistryImpl` lève `IllegalStateException` dès que les options du jeu existent, donc le GUI ne peut pas en créer une — il déplace la touche (`KeyMapping#setKey`) et masque la pastille d'une mapping non liée ; `AetherClient#onTick` consomme les appuis (`consumeClick`) hors écran et sauvegarde une fois. |
+| 22 | moyen / faible | Deux emoji hors du plan de base étaient réapparus : la loupe du champ de recherche du Click GUI (`\uD83D\uDD0D`) et le stylo du bouton « HUD EDITOR » de `ConfigScreen` (`\uD83D\uDD8A`) — la police du jeu les dessine en deux carrés vides. | Les remplacer par du texte. | **Implémentée** | `grep -rn 'uD83D\|uD83C' aether-client/src/main/java` → **0** (il en restait 2). |
+| 23 | moyen / faible | `Module.reset()`, appelé par le bouton « RESET MODULES », écrivait le drapeau `enabled` directement : un module qui avait modifié une option du jeu (gamma, FOV, view bobbing, auto jump) était éteint sans `onDisable`, donc l'option restait à la valeur du module alors qu'il ne tournait plus. | Passer par `setEnabled`, qui déclenche les callbacks. | **Implémentée** | `ModuleLifecycleTest` (3 tests) : le reset d'un module activé appelle `onDisable` une fois, restaure les réglages et remet l'interrupteur à zéro sans animation ; un module jamais touché n'appelle rien. |
+| 24 | moyen / faible | `AetherConfig.applyTo` activait le module avant d'appliquer ses réglages : `Fullbright` lit son option `Gamma` dans `onEnable`, donc une configuration « Fullbright activé, Gamma désactivé » appliquait quand même le gamma à 1.0, et rien ne la corrigeait (le module n'a pas de tick). | Appliquer les réglages d'abord, l'état ensuite. | **Implémentée** | `AetherConfigTest` : un module qui note la valeur lue dans `onEnable` reçoit **9**, la valeur sauvegardée, et non le défaut 5. |
+| 25 | moyen / faible | Le curseur des réglages numériques ne correspondait pas à sa zone d'entrée : le `DoubleSetting` était peint 10 px à gauche de l'endroit où le clic était interprété, et un clic sur le **nom** du réglage était lu comme un clic à l'extrême gauche de la barre, donc remettait la valeur au minimum. | Une seule géométrie (`sliderX`) pour le dessin et l'entrée, et édition limitée à la barre. | **Implémentée** | `ClickGuiScreen#sliderX`, `SLIDER_WIDTH`, `SLIDER_LABEL_WIDTH` ; la zone de clic tolère 4 px autour de la barre, le glissement utilise les mêmes bornes. |
+| 26 | faible / faible | Trois doublons morts : `ModuleManager.render` n'était appelé nulle part (le rendu était recopié dans `AetherClient`), `ModuleManager.updateAnimations` non plus (le Click GUI bouclait lui-même sur tous les modules), et `Animation.setValue` n'avait aucun appelant. | Faire passer le rendu et les animations par le manager, supprimer le setter mort. | **Implémentée** | `AetherClient#onHudRender` appelle `moduleManager.render`, qui exclut les `HudElement` (sinon chaque élément serait dessiné deux fois, une fois à l'origine) ; `ClickGuiScreen` appelle `moduleManager.updateAnimations` ; `Animation.setValue` supprimée. |
+| 27 | élevé / moyen | `Hide Fire Overlay` existait mais n'était **pas enregistré** : il ne figurait pas dans le GUI et rien ne masquait les flammes à l'écran. | Brancher un mixin sur le seul dessin de l'overlay de feu, et enregistrer le module. | **Implémentée** | `mixin/ScreenEffectRendererMixin` annule `ScreenEffectRenderer#renderFire(Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;Lnet/minecraft/client/renderer/texture/TextureAtlasSprite;)V` à la tête ; `MixinConfigTest` vérifie le descripteur contre la classe réelle ; `hide fire overlay` est enregistré. Les overlays de bloc et d'eau passent par `renderTex` et `renderWater` et restent intacts. |
+| 28 | moyen / moyen | `Hide Hurt Overlay` annonçait « l'overlay rouge » : 1.21.11 n'en dessine aucun, le retour d'un coup est l'inclinaison de caméra de `GameRenderer#bobHurt`. Le module n'était pas enregistré non plus. | Annuler le dessin de l'inclinaison plutôt que toucher à l'option. | **Implémentée** | `mixin/GameRendererMixin` annule `bobHurt(Lcom/mojang/blaze3d/vertex/PoseStack;F)V` à la tête ; module enregistré (`hide hurt overlay`), description corrigée. La première tentative écrivait `damageTiltStrength` à 0 : cette option est sauvegardée dans `options.txt`, donc au lancement suivant la « valeur d'origine » relue était le 0 du module et la désactivation restaurait 0 — abandonnée pour le hook. |
+| 29 | élevé / moyen | `ESP` posait le tag lumineux sans jamais le retirer : une entité sortie de portée restait lumineuse pour toute la session, et la désactivation éteignait le glow de **toutes** les entités du niveau, y compris celles rendues lumineuses par le serveur (flèche spectrale, effet). | Suivre les entités réellement marquées et relâcher celles qui ne sont plus sélectionnées. | **Implémentée** | `util/EspTargets` (pur) : `selects` (mode + portée, une distance `NaN` est refusée) et `stale` (différence entre l'ancienne et la nouvelle sélection) ; `Esp` garde l'ensemble des ids marqués, relâche à la sortie de portée comme à la désactivation, et ne touche qu'à ses propres entités. La relecture a ajouté le suivi du `ClientLevel` : un id n'est unique que dans un monde, donc un changement de dimension jette l'ensemble sans le relâcher (sinon le glow d'une entité sans rapport, qui réutilise l'id, serait éteint). `EspTargetsTest` (6 tests). |
+| 30 | élevé / faible | Trois modules listés et activables ne faisaient rien : `Tracers` dessinait un point de 2×2 au centre de l'écran pour chaque cible (aucune ligne, aucune projection), `Motion Blur` n'avait qu'un réglage et aucun effet, `Blink` comptait des ticks sans jamais retenir un paquet. `HudModules.TargetInfo` était en plus un élément HUD complet jamais enregistré. | Retirer plutôt que simuler : une suppression propre vaut mieux qu'une fausse implémentation. | **Implémentée** | Classes, enregistrements et clés de langue supprimés (`tracers`, `motion blur`, `blink`, `target info`) ; `grep -rn "Tracers\|Blink\|MotionBlur\|TargetInfo" src/` → aucun résultat ; imports devenus inutiles retirés de `RenderModules` et `MovementModules` ; la liste des HUD reste à 19 classes pour 19 éléments enregistrés. |
+| 31 | élevé / faible | Chaque mixin écrivait le nom du module qu'il lit en toutes lettres (`"hide fire overlay"`, `"zoom"`, `"crosshair"`…), alors que le module est enregistré sous la forme minuscule de son nom : renommer l'un sans l'autre rendait le hook muet, sans aucune erreur. Le test a d'ailleurs trouvé une dérive réelle : `HudModules.ComboCounter` s'appelle « Combo » mais la liste d'enregistrement portait « combo counter ». | Une constante par clé lue par un mixin, une seule source de vérité pour la liste des modules, et un test qui interroge le vrai `ModuleManager`. | **Implémentée** | `module/ModuleKeys` (`READ_BY_MIXINS`) ; `module/ModuleCatalog` ne porte plus de clés et rend la liste des modules, que `AetherClient` enregistre ; `ModuleCatalogTest` (3 tests) vérifie que chaque clé résout un module, qu'aucun module n'est perdu par un nom en double et que la clé est bien le nom minuscule du module — c'est ce test qui a levé le cas « combo counter ». |
+| 32 | moyen / moyen | `Zoom` écrivait le FOV dans l'option vanilla et restaurait une valeur littérale : comme `damageTiltStrength`, `options.txt` garde le FOV zoomé d'une session à l'autre, donc un zoom activé au moment de quitter laissait le jeu zoomé au lancement suivant et la désactivation restaurait un nombre faux. | Diviser le FOV calculé plutôt que l'option. | **Implémentée** | `GameRendererMixin` injecte au retour de `getFov(Lnet/minecraft/client/Camera;FZ)F` et divise la valeur par le facteur du module ; `Zoom` n'a plus d'état ni d'écriture d'option, seulement `getZoomFactor()` ; descripteur validé par `MixinConfigTest`. |
+| 33 | moyen / faible | Audit des modules restants : `AutoTool` changeait d'objet dès que la visée tombait sur un bloc, sans que le joueur mine ; `AutoGG` annonçait « en fin de partie » alors que son seul déclencheur est la mort du joueur ; `AntiBlind` et `KillAura` faisaient déjà ce qu'ils annoncent. | Rendre chacun vrai : condition réelle pour `AutoTool`, description exacte pour `AutoGG`, conserver les deux autres. | **Implémentée** | `AutoTool` n'agit plus que touche d'attaque enfoncée (et rend l'objet précédent dès qu'elle est relâchée) ; `AutoGG` est décrit comme « envoie le message choisi à la mort du joueur » ; `AntiBlind` (retrait client de `BLINDNESS`/`DARKNESS`) et `KillAura` (attaque la cible la plus proche, rotation et indicateur) conservés sans changement. |
+
+### Retirées du classement (passe in-game du 19/11)
+
+Trois lignes décrivaient des défauts réels de l'**interface du launcher** : les corriger demande
+d'éditer `styles.css` ou `index.html`, que cette passe s'interdit. Elles sortent du classement au
+lieu d'y rester « Proposées » sans échéance ; le constat et sa mesure restent intacts ici.
+
+| Problème constaté | Pourquoi hors périmètre | Preuve du constat |
+| --- | --- | --- |
+| 44 jetons de thème sur 105 ne sont référencés nulle part (échelles typographique et d'espacement, ombres, rayons, durées). | Les supprimer ou les rebrancher demande d'éditer `styles.css`. | `node tools/check-theme-tokens.mjs` → `UNUSED …` (44), `0 missing, 0 duplicated`. |
+| L'accent ne se choisit que par `<input type="color">`, donc par un dialogue natif de Windows que rien ne pilote. | Des pastilles d'accent demandent `index.html` et `styles.css`. | `launcher/gui/src/ui/index.html:476` ; `tools/theme-sweep.mjs` rejoue la paire `input`/`change`. |
+| `getComputedStyle(root).getPropertyValue('--accent-dim')` rend `color-mix(in srgb, …)`, pas une couleur, donc tout audit doit passer par les éléments consommateurs. | Exposer des jetons résolus touche aux jetons CSS du launcher. | `tools/theme-pages/report.json` : `tokens` = chaînes `color-mix(…)`, `consumers` = `color(srgb …)`. |
+
+### Hypothèses assumées
+
+Deux affirmations ci-dessus reposent sur une déduction, pas sur une mesure directe ; elles sont
+marquées ici plutôt que fondues dans le tableau.
+
+- **Ligne 3** : je déduis qu'un défilement avant le clic suffit. Ce qui est mesuré, c'est que les
+  quatre scénarios passent dès qu'on agrandit la vue — le rendu d'un `scrollIntoView`, lui, n'a pas
+  été essayé. (La ligne 1 n'est plus une hypothèse : `play-fold.mjs` la vérifie à chaque exécution.)
+- **Premier point des lignes retirées** : la suppression des 44 jetons est sûre pour le code actuel (l'audit prouve l'absence de
+  référence), mais elle suppose qu'aucun écran futur ne les prévoyait. C'est un choix de produit, pas
+  une mesure.
+- **Ligne 13** : « le parcours clavier n'est pas prouvé » est un constat d'absence (aucun contrôle ne
+  l'exerce), pas un défaut mesuré du sélecteur.

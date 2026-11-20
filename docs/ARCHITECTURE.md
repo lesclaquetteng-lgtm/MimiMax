@@ -38,10 +38,10 @@ JSON lines/events for the interface.
 | `lib.rs` | High-level `Launcher` API tying paths, settings, accounts, install, launch and the game record together. |
 | `paths.rs` | Resolution/creation of launcher and game directories (`AETHER_HOME`, `AETHER_SHARED_DIR`). |
 | `settings.rs` | Persistent settings, Java detection, mod jar discovery (`AETHER_MOD_JAR`). |
-| `accounts.rs` | Account store, offline accounts, Microsoft device-code login flow and session mapping. |
+| `accounts.rs` | Account store, offline accounts, Microsoft device-code login flow, session mapping, and the Mojang name lookup that tells a premium name from a free one. |
 | `offline.rs` | Offline username validation and deterministic Minecraft-compatible offline UUID generation. |
 | `minecraft.rs` | Mojang/Fabric metadata retrieval, rule evaluation, argument templating, library resolution/merging. |
-| `http.rs` | HTTP helpers, JSON/text/bytes requests, file download with checksum verification, SHA-1 utilities. |
+| `http.rs` | HTTP helpers, JSON/text/bytes requests with status (`get_with_status`), file download with checksum verification, SHA-1 utilities. |
 | `installer.rs` | Version installation pipeline (client, libraries, assets, Fabric API, natives, mod copy) with progress reporting. |
 | `game.rs` | Classpath construction, JVM/game argument construction, process launch, output forwarding, and the record of the running game (`game.pid`). |
 | `servers.rs` | Saved server list, Server List Ping, login probe that tells an offline-accepting server from a premium-only one. |
@@ -56,7 +56,7 @@ Key properties:
 ### Native shell (`launcher/desktop`)
 
 Tauri 2 serves the interface to the system WebView2 runtime. There is no bundled browser: the shell
-is a single ~8.5 MB executable, the backend is the same language as the core, and the interface files
+is a single ~8.75 MB executable, the backend is the same language as the core, and the interface files
 are the same ones the previous Electron shell loaded.
 
 | File | Responsibility |
@@ -71,7 +71,7 @@ The interface (`launcher/gui/src/ui/`) is plain HTML/CSS/JavaScript. `bridge.js`
 `window.aether` over Tauri's `invoke`, so `app.js` never learned that the shell changed.
 
 **Why the shell is native and not Electron.** The Electron build shipped a whole Chromium for a
-launcher: ~150 MB installed against one ~8.5 MB executable, and it added a Node runtime next to the
+launcher: ~150 MB installed against one ~8.75 MB executable, and it added a Node runtime next to the
 Rust core for no benefit (the interface calls the core over JSON either way). The cost of the move
 was the shell only — not the interface, not the core, not the module system.
 
@@ -116,6 +116,30 @@ login with the name of the player:
 
 The protocol version used is the one the server reports in its ping, so the probe stays valid when
 the game version changes.
+
+### Premium-name guard
+
+The probe answers "does this server verify sessions with Mojang". It cannot answer the next question:
+a cracked server accepts offline sessions but **reserves the names Mojang owns**, so `Notch` is
+disconnected with `Unauthorized: You cannot join the server` while `Notch9281` joins in the same
+second. The game logs neither the reason nor the name, and no client can negotiate the rule away.
+
+`accounts::name_status` therefore asks Mojang before the launch:
+
+```text
+GET https://api.mojang.com/users/profiles/minecraft/<name>
+200 + profile  -> premium (a Mojang account owns it)
+204 / 404      -> free
+other status   -> error, never read as "free"
+```
+
+`http::get_with_status` exists for this call: it returns `(status, body)` and only raises the codes
+the retry loop is meant to see (`408`, `425`, `429`, `5xx`). A rate limit cannot turn into a false
+"this name is free". The command is `account check <name>`; the interface calls the same command
+through `accounts_check_name` and uses the answer twice: live under the name field (debounced 450 ms,
+out-of-order answers dropped) and once more before joining a non-local server. `Join anyway` is
+offered, and a failed lookup lets the launch continue: the guard informs, it does not decide for the
+player.
 
 ## Offline session design
 

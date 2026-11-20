@@ -103,11 +103,13 @@ function Save-Page([IntPtr]$Handle, [string]$Path) {
 function Get-Page([IntPtr]$Handle) {
 	$children = [SetupWindow]::Children($Handle)
 
+	# The captions carry the keyboard accelerator, "&Fermer" and not "Fermer": the ampersand has to
+	# be tolerated or the last page is never recognised and the capture never stops.
 	if ($children -match 'RichEdit') { return 'license' }
-	if ($children -match 'Button\s+(?:Fermer|Terminer)') { return 'finish' }
+	if ($children -match 'Button[^\n]*(?:Fermer|Terminer)') { return 'finish' }
 	if ($children -match 'msctls_progress32') { return 'install' }
 	if ($children -match '\sEdit\s') { return 'folder' }
-	if ($children -match 'Suivant') { return 'welcome' }
+	if ($children -match 'Button[^\n]*Suivant') { return 'welcome' }
 
 	return 'unknown'
 }
@@ -149,7 +151,19 @@ for ($attempt = 0; $attempt -lt 600; $attempt++) {
 		Start-Sleep -Milliseconds 500
 	}
 
-	if ($page -eq 'finish') { break }
+	if ($page -eq 'finish') {
+		# The last page is captured. The wizard is then closed by ending its process rather than by
+		# pressing "Fermer": the checked box "Lancer Aether Launcher" starts the application, and a
+		# capture must not leave it running. The application is a child of the wizard, so only that
+		# child is stopped, never an instance the user already had open.
+		Get-CimInstance Win32_Process -Filter "Name='aether-desktop.exe'" -ErrorAction SilentlyContinue |
+			Where-Object { $_.ParentProcessId -eq $setup.Id } |
+			ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+
+		Stop-Process -Id $setup.Id -Force -ErrorAction SilentlyContinue
+		Start-Sleep -Milliseconds 600
+		break
+	}
 
 	if ($page -eq 'welcome' -or $page -eq 'license' -or $page -eq 'folder' -or $page -eq 'unknown') {
 		[SetupWindow]::SendMessage($wizard, 0x0111, [IntPtr]1, [IntPtr]0) | Out-Null

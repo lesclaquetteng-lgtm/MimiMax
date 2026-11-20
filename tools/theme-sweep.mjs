@@ -117,10 +117,10 @@ async function openPage(page) {
 	await sleep(450);
 }
 
-/** Hovers a text field with the mouse and reads the border it takes: that is `--border-hover`. */
-async function hoverField() {
+/** Moves the mouse over an element and reads the colours it takes, or null when it is absent. */
+async function hover(selector) {
 	const box = await evaluate(`(() => {
-		const element = document.querySelector('#input-java');
+		const element = document.querySelector(${JSON.stringify(selector)});
 		if (!element) return null;
 		const rect = element.getBoundingClientRect();
 		return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
@@ -132,9 +132,101 @@ async function hoverField() {
 	await sleep(300);
 
 	return evaluate(`(() => {
-		const computed = getComputedStyle(document.querySelector('#input-java'));
-		return { border: computed.borderTopColor };
+		const computed = getComputedStyle(document.querySelector(${JSON.stringify(selector)}));
+		return { border: computed.borderTopColor, background: computed.backgroundColor, color: computed.color };
 	})()`);
+}
+
+/** The hover state of a text field: its border is `--border-hover`. */
+async function hoverField() {
+	const state = await hover('#input-java');
+	return state ? { border: state.border } : null;
+}
+
+/**
+ * Measures the interface while an installation runs.
+ *
+ * "Cancel install" is the only `.btn--danger` a fresh home renders, and its worst state is the
+ * hover: that is where the label sits on the filled danger colour. No other screen shows a danger
+ * button, which is why the contrast of that rule went unnoticed for three passes.
+ *
+ * `AETHER_INSTALL_STATE=legacy` puts the pre-fix fill back for the audit, to prove this state
+ * measures what it claims to. The shipped value is untouched.
+ */
+async function sweepInstall() {
+	const mode = process.env.AETHER_INSTALL_STATE === 'legacy' ? 'legacy' : 'current';
+
+	await openPage('play');
+
+	const started = await evaluate(`(() => {
+		const button = document.querySelector('#btn-install');
+		if (!button) return 'no install button';
+		if (button.disabled) return 'the install button is disabled';
+		button.click();
+		return 'started';
+	})()`);
+
+	if (started !== 'started') return { skipped: started };
+
+	const shown = await evaluate(`new Promise((resolve) => {
+		const deadline = Date.now() + 8000;
+		const tick = () => {
+			const cancel = document.querySelector('#btn-cancel-install');
+			const progress = document.querySelector('#install-progress');
+			if (cancel && !cancel.hidden && progress && !progress.hidden) return resolve(true);
+			if (Date.now() > deadline) return resolve(false);
+			setTimeout(tick, 100);
+		};
+		tick();
+	})`);
+
+	if (!shown) return { skipped: 'no installation started (is the launcher on the fake core?)' };
+
+	// The whole Play page is taller than the window, and this button sits at its very bottom: it has
+	// to be brought into view before the mouse can reach it (see the first recommendation).
+	await evaluate(`document.querySelector('#btn-cancel-install').scrollIntoView({ block: 'center' }), true`);
+	await sleep(250);
+
+	await hover('#btn-cancel-install');
+
+	const cancelButton = await evaluate(`(() => {
+		const button = document.querySelector('#btn-cancel-install');
+		const computed = getComputedStyle(button);
+		return {
+			hovered: button.matches(':hover'),
+			color: computed.color,
+			background: computed.backgroundColor,
+			border: computed.borderTopColor,
+		};
+	})()`);
+
+	if (mode === 'legacy') {
+		await evaluate(`document.documentElement.style.setProperty('--danger-fill', 'var(--color-danger)'), true`);
+		await sleep(300);
+	}
+
+	const data = await audit();
+	await screenshot('installation');
+
+	if (mode === 'legacy') {
+		await evaluate(`document.documentElement.style.removeProperty('--danger-fill'), true`);
+	}
+
+	// Leave the launcher idle: the rest of the sweep expects a still interface.
+	await evaluate(`document.querySelector('#btn-cancel-install')?.click(), true`);
+
+	const idle = await evaluate(`new Promise((resolve) => {
+		const deadline = Date.now() + 10000;
+		const tick = () => {
+			const button = document.querySelector('#btn-install');
+			if (button && !button.disabled) return resolve(true);
+			if (Date.now() > deadline) return resolve(false);
+			setTimeout(tick, 150);
+		};
+		tick();
+	})`);
+
+	return { mode, cancelButton, ...data, idle };
 }
 
 /* -------------------------------------------------------------------- the reading */
@@ -300,6 +392,9 @@ const AUDIT = String.raw`(() => {
 	const consumers = {};
 	for (const [name, selector] of Object.entries({
 		primaryButton: '.btn--primary',
+		dangerButton: '.btn--danger',
+		avatar: '.avatar',
+		accountUuid: '.account-uuid',
 		rangeValue: '.range-row output',
 		badge: '.badge, .pill, [class*="badge"]',
 	})) {
@@ -341,6 +436,29 @@ async function screenshot(name) {
 const report = { pages: [], picked: PICK, after: null };
 
 await sleep(1200);
+
+// `AETHER_INSTALL_STATE` opts into the state that renders a danger button; without it the sweep is
+// unchanged (eight pages, two accents). `--install-only` measures that state alone.
+if (process.env.AETHER_INSTALL_STATE) {
+	report.install = await sweepInstall();
+	const install = report.install;
+	console.log(
+		`installation: mode=${install.mode || '-'} mesure=${install.measured ?? 0} ` +
+			`contraste=${install.problems?.length ?? 0} idle=${install.idle ?? '-'} ` +
+			`annuler=${install.cancelButton ? JSON.stringify(install.cancelButton) : '-'}` +
+			(install.skipped ? ` ignore=${install.skipped}` : ''),
+	);
+	for (const problem of install.problems || []) {
+		console.log(`  contraste ${problem.where} ${problem.colour} sur ${problem.behind} = ${problem.ratio} (plancher ${problem.floor})`);
+	}
+
+	if (process.argv.includes('--install-only')) {
+		await writeFile(join(outDir, 'install-state.json'), JSON.stringify(install, null, 2));
+		console.log(`rapport: ${join(outDir, 'install-state.json')}`);
+		socket.close();
+		process.exit(0);
+	}
+}
 
 const sweep = async (label) => {
 	const pages = {};

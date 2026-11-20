@@ -1,15 +1,13 @@
 /**
  * Aether Client — design tokens.
  *
- * This file is the only place a colour, a radius, a shadow or a duration is written. Every rule of
- * the interface reads these names, directly or through the aliases of `styles.css`; a literal in
- * another file overrides the theme without warning, which is how the interface stopped following
- * this file in the first place.
+ * This file is the only place a colour, a size, a radius or a duration is written. Every rule of
+ * the interface reads these names.
  *
- * Identity — "ciel d'hiver": a cold graphite base, one deep azure accent for actions and focus, one
- * violet secondary kept from the previous palette so the gradient still reads as Aether. The accent
- * is dark enough to carry white text (buttons), the tints are light enough to stay legible as text
- * (badges, values), and every status colour is a 300/400 step so it never sinks into the surface.
+ * Identity — "graphite": a near-black base, two levels of surface separated by a hairline, and one
+ * accent that only ever marks an action, the current page, a focus ring or a live dot. The accent
+ * is neutral by default (a warm graphite white) and stays replaceable by the player: the tints are
+ * derived from whatever accent the interface wears, never frozen on the shipped one.
  *
  * `node tools/check-theme-tokens.mjs` fails when a `var(--…)` of the interface has no definition
  * here, and when the same token is declared twice.
@@ -18,109 +16,76 @@
 	color-scheme: dark;
 
 	/* ---------------------------------------------------------------- surfaces */
-	--color-bg: #070b12;
-	--color-bg-elevated: #0b111a;
-	--color-surface: #101826;
-	--color-surface-hover: #17212f;
-	--color-surface-active: #1e2a3a;
-	--color-border: #223040;
-	--color-border-strong: #2e3f52;
+	--color-bg: #0a0b0d;
+	--color-bg-elevated: #0d0f12;
+	--color-surface: #121418;
+	--color-surface-hover: #171a1f;
+	--color-surface-active: #1c2026;
+	--color-border: #21252b;
+	--color-border-strong: #2c323a;
 	--color-border-focus: var(--color-accent);
 
 	/* ----------------------------------------------------------------- accents */
-	/* The accent itself, and nothing else: its tints (dim, soft, mid, text, hover, borders) are
-	 * derived from the accent the interface actually wears — including the one the player picked —
-	 * in the alias block of `styles.css`. A fixed blue tint beside a chosen red accent is how a
-	 * coherent theme starts looking patched. */
-	--color-accent: #3b82f6;
-	--color-accent-secondary: #8b5cf6;
-	--gradient-aether: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
-	--gradient-aether-glow: linear-gradient(135deg, rgba(59, 130, 246, 0.35) 0%, rgba(139, 92, 246, 0.35) 100%);
-	--gradient-accent-soft: linear-gradient(135deg, rgba(59, 130, 246, 0.16) 0%, rgba(139, 92, 246, 0.16) 100%);
+	/* Neutral by design: on a graphite interface a coloured accent everywhere is what made the
+	 * previous screen read as a template. The player may replace it in the settings. */
+	--color-accent: #e7e9ec;
 
 	/* ------------------------------------------------------------------ status */
-	--color-success: #34d399;
-	--color-success-text: #6ee7b7;
-	--color-success-dim: rgba(52, 211, 153, 0.15);
-	--color-warning: #fbbf24;
-	--color-warning-text: #fcd34d;
-	--color-warning-dim: rgba(251, 191, 36, 0.15);
-	--color-danger: #f87171;
-	--color-danger-text: #fca5a5;
-	--color-danger-dim: rgba(248, 113, 113, 0.15);
+	--color-success: #46c98b;
+	--color-success-text: #7fe3b0;
+	--color-warning: #d9a441;
+	--color-danger: #e06060;
+	--color-danger-text: #f09a9a;
+	--color-danger-dim: rgba(224, 96, 96, 0.14);
 
 	/* -------------------------------------------------------------------- text */
-	--color-text-primary: #eef4fa;
-	--color-text-secondary: #a3b5c6;
-	--color-text-muted: #7c8fa1;
-	--color-text-dim: #5d6e7e;
-
-	/* ---------------------------------------------------------------- spacings */
-	--spacing-1: 4px;
-	--spacing-2: 8px;
-	--spacing-3: 12px;
-	--spacing-4: 16px;
-	--spacing-5: 20px;
-	--spacing-6: 24px;
-	--spacing-8: 32px;
-	--spacing-unit: 8px;
+	--color-text-primary: #f2f4f6;
+	--color-text-secondary: #a9b1b9;
+	--color-text-muted: #7d868f;
+	/* 4.7:1 on the background: the third level is still read at 11 px, not guessed. */
+	--color-text-dim: #767f88;
 
 	/* ------------------------------------------------------------------- radii */
-	--radius-xs: 4px;
-	--radius-sm: 6px;
-	--radius-md: 10px;
-	--radius-lg: 14px;
+	--radius-xs: 3px;
+	--radius-sm: 4px;
+	--radius-panel: 8px;
 	--radius-full: 9999px;
 
 	/* -------------------------------------------------------------- elevation */
-	--shadow-sm: 0 1px 2px rgba(3, 7, 12, 0.6);
-	--shadow-md: 0 8px 24px rgba(3, 7, 12, 0.5);
-	--shadow-lg: 0 20px 48px rgba(3, 7, 12, 0.6);
-	--shadow-glow: 0 0 24px rgba(59, 130, 246, 0.22);
-	/* A ring that stays visible on a surface *and* on the background: the dark gap is what makes
-	   the focus of an input readable when the input already has an accent border. */
-	--ring: 0 0 0 2px var(--color-bg), 0 0 0 4px var(--color-border-focus);
+	/* No glow anywhere: depth comes from the border and the surface steps. */
+	--shadow-md: 0 10px 30px rgba(0, 0, 0, 0.45);
+	--shadow-lg: 0 24px 60px rgba(0, 0, 0, 0.55);
+	--ring: 0 0 0 3px color-mix(in srgb, var(--color-border-focus) 22%, transparent);
 
 	/* --------------------------------------------------------------- typography */
 	--font-ui: "Segoe UI Variable Text", "Segoe UI", "SF Pro Text", system-ui, -apple-system, sans-serif;
 	--font-display: "Segoe UI Variable Display", "Segoe UI Semibold", "Segoe UI", system-ui, sans-serif;
-	--font-mono: "Cascadia Code", "JetBrains Mono", "Fira Code", monospace;
-	--text-xs: 10px;
+	--font-mono: "Cascadia Mono", "Cascadia Code", "JetBrains Mono", ui-monospace, monospace;
 	--text-sm: 11px;
-	--text-base: 13px;
-	--text-md: 14px;
-	--text-lg: 16px;
-	--text-xl: 20px;
-	--weight-regular: 400;
+	--text-base: 12px;
+	--text-md: 13px;
+	--text-lg: 15px;
+	--text-2xl: 32px;
 	--weight-medium: 500;
 	--weight-semibold: 600;
-	--weight-bold: 700;
-	--tracking-tight: -0.01em;
-	--tracking-wide: 0.06em;
-	--tracking-widest: 1.4px;
-	--leading-tight: 1.25;
+	--tracking-tight: -0.02em;
+	--tracking-wide: 0.02em;
 	--leading-base: 1.5;
 
 	/* ------------------------------------------------------------------- states */
-	--state-hover: rgba(255, 255, 255, 0.06);
-	--state-pressed: rgba(0, 0, 0, 0.18);
-	--state-disabled-opacity: 0.45;
+	--state-hover: rgba(255, 255, 255, 0.04);
+	--state-disabled-opacity: 0.4;
 	--state-disabled-cursor: not-allowed;
 
-	/* Runtime values, written by `app.js`: the position of a range thumb, and the accent the player
-	   picked in the settings. Both are declared here so that the audit sees a definition, and so
-	   that a rule never reads an empty custom property before the script has run. */
+	/* Runtime values, written by `app.js`. */
 	--fill: 0%;
 	--accent-user: var(--color-accent);
-	/* The ink of a filled accent surface. `app.js` replaces it with the white or the near-black that
-	 * keeps a label readable on the fill it derives from the accent the player chose. */
-	--on-accent: #ffffff;
+	--on-accent: #0a0b0d;
 
 	/* ------------------------------------------------------------------- motion */
 	--ease-out-expo: cubic-bezier(0.22, 1, 0.36, 1);
-	--ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
 	--ease: var(--ease-out-expo);
-	--dur-micro: 120ms;
-	--dur: 150ms;
-	--dur-page: 220ms;
+	--dur-micro: 90ms;
+	--dur: 140ms;
+	--dur-page: 180ms;
 }

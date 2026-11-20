@@ -118,117 +118,6 @@ function parseMinecraftMotd(raw) {
 
 /* -------------------------------------------------------- 3D Skin Renderer */
 
-let skinCanvasAnimId = null;
-let skinRotationAngle = 0;
-let skinIsDragging = false;
-let skinDragStartX = 0;
-
-function init3DSkinViewer() {
-	const canvas = $('#player-skin-canvas');
-	if (!canvas) return;
-	const ctx = canvas.getContext('2d');
-	if (!ctx) return;
-
-	canvas.addEventListener('mousedown', (e) => {
-		skinIsDragging = true;
-		skinDragStartX = e.clientX;
-	});
-
-	window.addEventListener('mousemove', (e) => {
-		if (!skinIsDragging) return;
-		const delta = e.clientX - skinDragStartX;
-		skinRotationAngle += delta * 0.02;
-		skinDragStartX = e.clientX;
-	});
-
-	window.addEventListener('mouseup', () => {
-		skinIsDragging = false;
-	});
-
-	function drawIsometricBox(cx, cy, w, h, d, angle, colTop, colFront, colSide) {
-		const cos = Math.cos(angle);
-		const sin = Math.sin(angle);
-
-		ctx.save();
-		ctx.translate(cx, cy);
-
-		const frontX1 = -w * cos;
-		const frontY1 = -w * sin * 0.45;
-		const frontX2 = w * cos;
-		const frontY2 = w * sin * 0.45;
-
-		const sideX1 = -d * sin;
-		const sideY1 = d * cos * 0.45;
-		const sideX2 = d * sin;
-		const sideY2 = -d * cos * 0.45;
-
-		// Side Face
-		ctx.fillStyle = colSide;
-		ctx.beginPath();
-		ctx.moveTo(frontX2, frontY2);
-		ctx.lineTo(frontX2 + sideX1, frontY2 + sideY1);
-		ctx.lineTo(frontX2 + sideX1, frontY2 + sideY1 + h);
-		ctx.lineTo(frontX2, frontY2 + h);
-		ctx.closePath();
-		ctx.fill();
-
-		// Front Face
-		ctx.fillStyle = colFront;
-		ctx.beginPath();
-		ctx.moveTo(frontX1, frontY1);
-		ctx.lineTo(frontX2, frontY2);
-		ctx.lineTo(frontX2, frontY2 + h);
-		ctx.lineTo(frontX1, frontY1 + h);
-		ctx.closePath();
-		ctx.fill();
-
-		// Top Face
-		ctx.fillStyle = colTop;
-		ctx.beginPath();
-		ctx.moveTo(0, -w * Math.abs(sin) * 0.5 - d * Math.abs(cos) * 0.5);
-		ctx.lineTo(frontX2, frontY2);
-		ctx.lineTo(frontX2 + sideX1, frontY2 + sideY1);
-		ctx.lineTo(frontX1 + sideX1, frontY1 + sideY1);
-		ctx.closePath();
-		ctx.fill();
-
-		ctx.restore();
-	}
-
-	function renderFrame() {
-		ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-		if (!skinIsDragging) {
-			skinRotationAngle += 0.012; // Gentle idle spin
-		}
-
-		const selected = state.accounts.accounts.find((a) => a.id === state.accounts.selected);
-		const baseHue = selected ? (selected.type === 'offline' ? 260 : 200) : 260;
-
-		const colSkinTop   = `hsl(${baseHue}, 50%, 68%)`;
-		const colSkinFront = `hsl(${baseHue}, 65%, 52%)`;
-		const colSkinSide  = `hsl(${baseHue}, 70%, 38%)`;
-
-		const colBodyTop   = `hsl(${baseHue + 20}, 45%, 45%)`;
-		const colBodyFront = `hsl(${baseHue + 20}, 55%, 35%)`;
-		const colBodySide  = `hsl(${baseHue + 20}, 60%, 25%)`;
-
-		// Head
-		drawIsometricBox(60, 34, 15, 20, 15, skinRotationAngle, colSkinTop, colSkinFront, colSkinSide);
-		// Torso
-		drawIsometricBox(60, 60, 16, 26, 12, skinRotationAngle, colBodyTop, colBodyFront, colBodySide);
-		// Left/Right Arm
-		const armSwing = Math.sin(skinRotationAngle * 2) * 3;
-		drawIsometricBox(38, 62 + armSwing, 7, 24, 7, skinRotationAngle, colSkinTop, colSkinFront, colSkinSide);
-		drawIsometricBox(82, 62 - armSwing, 7, 24, 7, skinRotationAngle, colSkinTop, colSkinFront, colSkinSide);
-
-		skinCanvasAnimId = requestAnimationFrame(renderFrame);
-	}
-
-	if (skinCanvasAnimId) cancelAnimationFrame(skinCanvasAnimId);
-	skinCanvasAnimId = requestAnimationFrame(renderFrame);
-}
-
 /* ------------------------------------------------ Catmull-Rom Live FPS Spline */
 
 let fpsCanvasAnimId = null;
@@ -239,6 +128,17 @@ function initFpsSplineGraph() {
 	if (!canvas) return;
 	const ctx = canvas.getContext('2d');
 	if (!ctx) return;
+
+	// The backing store follows the CSS box and the screen density: the fixed 600 px canvas was
+	// stretched by the layout and read as a blurry line.
+	const fit = () => {
+		const ratio = window.devicePixelRatio || 1;
+		const box = canvas.getBoundingClientRect();
+		canvas.width = Math.max(1, Math.round(box.width * ratio));
+		canvas.height = Math.max(1, Math.round(box.height * ratio));
+	};
+	fit();
+	window.addEventListener('resize', fit);
 
 	function catmullRom(p0, p1, p2, p3, t) {
 		const t2 = t * t;
@@ -262,7 +162,7 @@ function initFpsSplineGraph() {
 			if (fpsHistory.length > 24) fpsHistory.shift();
 
 			const badge = $('#fps-spline-status');
-			if (badge) badge.textContent = `⚡ ${next} FPS (Real-time)`;
+			if (badge) badge.textContent = `${next} FPS · sample`;
 		}
 
 		ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -292,9 +192,9 @@ function initFpsSplineGraph() {
 
 		// Gradient Fill under spline
 		const grad = ctx.createLinearGradient(0, 0, 0, h);
-		grad.addColorStop(0, 'rgba(124, 92, 252, 0.35)');
-		grad.addColorStop(0.5, 'rgba(56, 189, 248, 0.15)');
-		grad.addColorStop(1, 'rgba(12, 16, 23, 0)');
+		grad.addColorStop(0, 'rgba(231, 233, 236, 0.10)');
+		grad.addColorStop(0.6, 'rgba(231, 233, 236, 0.04)');
+		grad.addColorStop(1, 'rgba(231, 233, 236, 0)');
 
 		ctx.beginPath();
 		ctx.moveTo(points[0].x, points[0].y);
@@ -340,11 +240,8 @@ function initFpsSplineGraph() {
 			}
 		}
 		ctx.strokeStyle = themeColors().graph;
-		ctx.lineWidth = 2.5;
-		ctx.shadowColor = themeColors().glow;
-		ctx.shadowBlur = 8;
+		ctx.lineWidth = 1.5;
 		ctx.stroke();
-		ctx.shadowBlur = 0;
 
 		fpsCanvasAnimId = requestAnimationFrame(renderGraph);
 	}
@@ -371,13 +268,43 @@ async function withBusy(reset, work) {
 	}
 }
 
-function avatarColor(name) {
+/** The colour of an account's avatar: the same name always paints the same hue. */
+function avatarHue(name) {
 	let hash = 0;
 	for (let i = 0; i < name.length; i++) {
 		hash = name.charCodeAt(i) + ((hash << 5) - hash);
 	}
-	const hue = Math.abs(hash) % 360;
-	return `hsl(${hue}, 62%, 52%)`;
+	return Math.abs(hash) % 360;
+}
+
+/** `hsl()` to three channels, so the ink of the initial can be measured like any other colour. */
+function hslToRgb(hue, saturation, lightness) {
+	const chroma = (1 - Math.abs(2 * lightness - 1)) * saturation;
+	const section = (hue / 60) % 6;
+	const second = chroma * (1 - Math.abs((section % 2) - 1));
+	const [red, green, blue] =
+		section < 1 ? [chroma, second, 0]
+		: section < 2 ? [second, chroma, 0]
+		: section < 3 ? [0, chroma, second]
+		: section < 4 ? [0, second, chroma]
+		: section < 5 ? [second, 0, chroma]
+		: [chroma, 0, second];
+	const floor = lightness - chroma / 2;
+
+	return [red, green, blue].map((channel) => Math.round((channel + floor) * 255));
+}
+
+/**
+ * Paints the avatar of an account: the hue of its name, and the ink that stays readable on it.
+ *
+ * The hue alone used to decide the colour with a fixed white label, which measured 1.99:1 on a
+ * green avatar: the ink is now chosen on the colour, like every other coloured surface.
+ */
+function paintAvatar(element, name) {
+	const hue = avatarHue(name);
+	// Quiet hues: two accounts stay distinguishable without six saturated blocks in a table.
+	element.style.background = `hsl(${hue}, 20%, 24%)`;
+	element.style.color = contrastInk(hslToRgb(hue, 0.20, 0.24));
 }
 
 function formatBytes(bytes) {
@@ -434,7 +361,7 @@ function renderAccounts() {
 
 			const avatar = document.createElement('div');
 			avatar.className = 'avatar';
-			avatar.style.background = avatarColor(account.username);
+			paintAvatar(avatar, account.username);
 			avatar.textContent = account.username.charAt(0);
 
 			const meta = document.createElement('div');
@@ -444,7 +371,10 @@ function renderAccounts() {
 			name.textContent = account.username;
 			const uuid = document.createElement('div');
 			uuid.className = 'account-uuid';
-			uuid.textContent = account.uuid;
+			// The identifier is 32 hexadecimal characters: eight are enough to tell two accounts
+			// apart, the full value stays in the tooltip and in the configuration.
+			uuid.textContent = account.uuid.slice(0, 8);
+			uuid.title = account.uuid;
 			meta.append(name, uuid);
 
 			const tag = document.createElement('span');
@@ -466,6 +396,8 @@ function renderAccounts() {
 	$('#session-badge').textContent = selected
 		? (selected.type === 'offline' ? 'offline session' : 'microsoft session')
 		: 'no account selected';
+
+	renderDock();
 }
 
 function renderAccountTable() {
@@ -490,7 +422,7 @@ function renderAccountTable() {
 
 		const avatar = document.createElement('div');
 		avatar.className = 'avatar';
-		avatar.style.background = avatarColor(account.username);
+		paintAvatar(avatar, account.username);
 		avatar.textContent = account.username.charAt(0);
 
 		const meta = document.createElement('div');
@@ -500,7 +432,8 @@ function renderAccountTable() {
 		name.textContent = account.username;
 		const uuid = document.createElement('div');
 		uuid.className = 'account-uuid';
-		uuid.textContent = account.uuid;
+		uuid.textContent = account.uuid.slice(0, 8);
+		uuid.title = account.uuid;
 		meta.append(name, uuid);
 
 		const tag = document.createElement('span');
@@ -838,7 +771,7 @@ function renderServers() {
 		const actions = document.createElement('div');
 		actions.className = 'row-actions';
 
-		const join = rowButton('Join', 'btn--primary', () => launch(entry.address));
+		const join = rowButton('Join', 'btn--ghost', () => launch(entry.address));
 		const test = rowButton('Test', 'btn--ghost', async () => {
 			test.disabled = true;
 			await testAddress(entry.address);
@@ -1500,14 +1433,50 @@ function offlineAccountModal() {
 	}, 'Create');
 
 	const input = $('#offline-name');
+	const preview = $('#offline-preview');
 	input.focus();
+
+	// Every keystroke restarts the wait: Mojang is asked once the name has settled, not sixteen
+	// times. The answer of an older name is dropped when a newer one is already on its way.
+	let waiting = 0;
+	let asked = 0;
+
+	const describe = (value, valid) => {
+		if (!valid) {
+			preview.textContent = '3 to 16 characters, only letters, digits and underscores.';
+			preview.style.color = 'var(--text-muted)';
+			return;
+		}
+
+		preview.textContent = `Ready to play as ${value}.`;
+		preview.style.color = 'var(--color-success-text)';
+
+		const ticket = ++asked;
+		api.accounts.checkName(value).then((status) => {
+			if (ticket !== asked || !status || !status.ok || !status.premium) return;
+
+			preview.textContent =
+				`${status.name} belongs to a Mojang account: cracked servers such as JartexNetwork ` +
+				`refuse that name ("Unauthorized: You cannot join the server"). Pick a name nobody ` +
+				`owns, for example ${value}9281.`;
+			preview.style.color = 'var(--color-warning-text)';
+		});
+	};
+
 	input.addEventListener('input', () => {
 		const value = input.value.trim();
 		const valid = /^[A-Za-z0-9_]{3,16}$/.test(value);
-		$('#offline-preview').textContent = valid
-			? `Ready to play as ${value}.`
-			: '3 to 16 characters, only letters, digits and underscores.';
-		$('#offline-preview').style.color = valid ? 'var(--success)' : 'var(--text-muted)';
+
+		clearTimeout(waiting);
+		if (!valid) {
+			describe(value, false);
+			return;
+		}
+
+		// The name is valid immediately, the check itself waits for a pause.
+		preview.textContent = `Ready to play as ${value}.`;
+		preview.style.color = 'var(--color-success-text)';
+		waiting = setTimeout(() => describe(value, true), 450);
 	});
 }
 
@@ -1709,11 +1678,63 @@ async function showInstallReport(problem) {
 	});
 }
 
-async function launch(server) {
+/**
+ * Tells whether an address points at a server of this computer.
+ *
+ * A hosted server accepts any name: the protection of the premium names only exists on public
+ * servers, so warning about a loopback address would warn about nothing.
+ */
+function isLocalServer(address) {
+	const host = String(address || '').split(':')[0].toLowerCase();
+
+	return host === 'localhost' || host === '127.0.0.1' || host === '::1' || host === '0.0.0.0';
+}
+
+/**
+ * Warns before joining a public server with a name Mojang already owns.
+ *
+ * A cracked server refuses such a name to protect its owner, and the only thing the game shows is
+ * "Unauthorized: You cannot join the server", which says nothing about the name. The launcher
+ * therefore asks Mojang first, so the player can pick another name instead of guessing.
+ *
+ * @return false when the launch has to wait for the player to choose.
+ */
+async function offlineNameIsAccepted(server) {
+	const account = state.accounts.accounts.find((entry) => entry.id === state.accounts.selected);
+	if (!account || account.type !== 'offline') return true;
+
+	const status = await api.accounts.checkName(account.username);
+	// A lookup that failed is not a refusal: the game stays the judge, the launch goes on.
+	if (!status || !status.ok || !status.premium) return true;
+
+	openModal('This name belongs to a Mojang account', `
+		<p><strong>${status.name}</strong> is registered by a Mojang account. Cracked servers
+		protect those names: they refuse a cracked client that presents one, and the game only
+		shows <em>“Unauthorized: You cannot join the server”</em>.</p>
+		<p class="muted">Create an offline account with a name nobody owns — for example
+		<strong>${status.name}9281</strong> — then join ${server} again. Single player and the
+		servers you host accept any name.</p>
+		<p><button class="btn btn--ghost btn--small" id="premium-continue">Join anyway</button></p>
+	`, () => offlineAccountModal(), 'Choose another name');
+
+	$('#premium-continue').onclick = () => {
+		closeModal();
+		launch(server, true);
+	};
+
+	return false;
+}
+
+async function launch(server, skipNameCheck = false) {
 	if (state.launching) return;
 	if (!state.accounts.selected) {
 		toast('Add an account first.', 'error');
 		return;
+	}
+
+	if (server && !skipNameCheck && !isLocalServer(server)) {
+		const accepted = await offlineNameIsAccepted(server);
+		if (!accepted) return;
 	}
 
 	state.launching = true;
@@ -1913,10 +1934,11 @@ let themeCache = null;
 function themeColors() {
 	if (!themeCache) {
 		const styles = getComputedStyle(document.documentElement);
-		themeCache = {
-			graph: styles.getPropertyValue('--accent').trim() || '#3b82f6',
-			glow: styles.getPropertyValue('--accent-soft').trim() || 'rgba(59, 130, 246, 0.3)',
-		};
+					themeCache = {
+				// The curve is data, not an action: it stays graphite so the accent keeps meaning
+				// "primary action" on the page.
+				graph: styles.getPropertyValue('--color-text-primary').trim() || '#f2f4f6',
+			};
 	}
 
 	return themeCache;
@@ -1931,7 +1953,7 @@ function themeColors() {
  * settings file that still carries one of them was never a choice, and it must not freeze the
  * interface on the old palette.
  */
-const LEGACY_ACCENT_DEFAULTS = new Set(['#6c5ce7', '#7c5cfc']);
+const LEGACY_ACCENT_DEFAULTS = new Set(['#6c5ce7', '#7c5cfc', '#3b82f6']);
 
 function applyAccent(color) {
 	const value = String(color ?? '').trim();
@@ -1950,23 +1972,25 @@ function applyAccent(color) {
 }
 
 /**
- * The ink of a label sitting on the accent.
- *
- * The decision is taken on the fill (`--accent-fill` is the accent mixed with black at 82%), not on
- * the accent: white as long as the fill still clears the 4.5:1 floor of the WCAG, black below it.
+ * The ink that stays readable on a given colour: white while it clears the 4.5:1 floor of the WCAG,
+ * black below it. Every coloured label of the launcher reads its ink here.
  */
-function inkFor(hex) {
-	const digits = String(hex).trim().replace('#', '');
-	if (!/^[0-9a-f]{6}$/i.test(digits)) return '#ffffff';
-
-	const fill = [0, 2, 4].map((offset) => parseInt(digits.slice(offset, offset + 2), 16) * 0.82);
+function contrastInk([red, green, blue]) {
 	const linear = (value) => {
 		const unit = value / 255;
 		return unit <= 0.03928 ? unit / 12.92 : ((unit + 0.055) / 1.055) ** 2.4;
 	};
-	const luminance = 0.2126 * linear(fill[0]) + 0.7152 * linear(fill[1]) + 0.0722 * linear(fill[2]);
+	const luminance = 0.2126 * linear(red) + 0.7152 * linear(green) + 0.0722 * linear(blue);
 
 	return 1.05 / (luminance + 0.05) >= 4.5 ? '#ffffff' : '#000000';
+}
+
+/** The ink of a label sitting on the accent, read on the fill that `--accent-fill` paints. */
+function inkFor(hex) {
+	const digits = String(hex).trim().replace('#', '');
+	if (!/^[0-9a-f]{6}$/i.test(digits)) return '#ffffff';
+
+	return contrastInk([0, 2, 4].map((offset) => parseInt(digits.slice(offset, offset + 2), 16) * 0.82));
 }
 
 async function loadLoaders(gameVersion) {
@@ -2053,6 +2077,35 @@ function currentProfile() {
 }
 
 /** Selects a value, adding the option when the list does not offer it yet. */
+/**
+ * The dock is the only place that launches the game: it shows the account and the profile the
+ * button will use, whatever page is open.
+ */
+function renderDock() {
+	const account = state.accounts.accounts.find((entry) => entry.id === state.accounts.selected);
+	const profile = currentProfile();
+
+	const avatar = $('#dock-avatar');
+	if (avatar) {
+		avatar.textContent = account ? account.username.charAt(0).toUpperCase() : '?';
+		avatar.style.backgroundImage = '';
+		if (account) paintAvatar(avatar, account.username);
+	}
+
+	const name = $('#dock-account-name');
+	if (name) name.textContent = account ? account.username : 'No account';
+
+	const version = $('#dock-version');
+	if (version) {
+		version.textContent = profile.loaderVersion
+			? `${profile.gameVersion} · Fabric ${profile.loaderVersion}`
+			: profile.gameVersion;
+	}
+
+	const memory = $('#dock-memory');
+	if (memory) memory.textContent = `${profile.maxMemory} MB`;
+}
+
 function selectOption(select, value) {
 	if (!value) return;
 
@@ -2079,6 +2132,7 @@ function applyProfile(profile) {
 	selectOption($('#select-loader'), profile.loaderVersion);
 
 	paintRanges();
+	renderDock();
 }
 
 /**
@@ -2158,9 +2212,6 @@ function showPage(name) {
 	if (name === 'performance') {
 		loadPerformance();
 		setTimeout(initFpsSplineGraph, 50);
-	}
-	if (name === 'play') {
-		setTimeout(init3DSkinViewer, 50);
 	}
 }
 
