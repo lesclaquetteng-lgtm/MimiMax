@@ -86,7 +86,7 @@ test('the dashboard provides saved-server quick play and real Java diagnostics',
 
 test('the installed mod library and version list can be searched and filtered', () => {
 	for (const id of ['mods-search', 'mods-filter', 'versions-search', 'versions-filter']) {
-		assert.match(html, new RegExp('\\\\bid="' + id + '"'));
+		assert.match(html, new RegExp('\\bid="' + id + '"'));
 	}
 	assert.match(app, /function renderMods\(\)/);
 	assert.match(app, /function renderVersions\(\)/);
