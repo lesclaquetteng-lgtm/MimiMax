@@ -12,6 +12,7 @@ use aether_launcher::game;
 use aether_launcher::logs;
 use aether_launcher::installer::{InstallError, InstallProgress};
 use aether_launcher::minecraft;
+use aether_launcher::mods;
 use aether_launcher::settings::{self, Profile};
 use aether_launcher::Launcher;
 
@@ -518,6 +519,10 @@ fn command_stop() -> Result<(), String> {
 fn command_mods(arguments: &[String]) -> Result<(), String> {
     let launcher = Launcher::open();
     let flags = Flags::parse(arguments);
+    let game_version = flags
+        .get("game-version")
+        .map(|value| value.to_string())
+        .unwrap_or_else(|| launcher.active_profile().game_version);
 
     match flags.positional.first().map(|value| value.as_str()) {
         Some("list") | None => {
@@ -546,7 +551,38 @@ fn command_mods(arguments: &[String]) -> Result<(), String> {
             }));
             Ok(())
         }
-        Some(other) => Err(format!("usage: mods <list|toggle> (got {})", other)),
+        Some("search") => {
+            let query = flags.positional.iter().skip(1).cloned().collect::<Vec<_>>().join(" ");
+            let projects = mods::search_catalog(&query, &game_version)?;
+            emit(&serde_json::json!({
+                "ok": true,
+                "gameVersion": game_version,
+                "projects": projects,
+            }));
+            Ok(())
+        }
+        Some("install") => {
+            let project_id = flags.positional.get(1).ok_or_else(|| {
+                "usage: mods install <project-id> [--game-version <version>]".to_string()
+            })?;
+            let installed = mods::install_catalog_project(
+                &launcher.paths.mods,
+                project_id,
+                &game_version,
+            )?;
+            emit(&serde_json::json!({
+                "ok": true,
+                "gameVersion": game_version,
+                "installed": installed,
+                "folder": launcher.paths.mods.to_string_lossy(),
+                "mods": launcher.mods(),
+            }));
+            Ok(())
+        }
+        Some(other) => Err(format!(
+            "usage: mods <list|toggle|search|install> (got {})",
+            other
+        )),
     }
 }
 
