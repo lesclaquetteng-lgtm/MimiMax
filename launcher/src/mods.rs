@@ -140,7 +140,7 @@ const MAX_DEPENDENCY_DEPTH: usize = 8;
 
 /// One Fabric mod in the Modrinth search results.
 #[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all(serialize = "camelCase", deserialize = "snake_case"))]
 pub struct CatalogProject {
     pub project_id: String,
     pub slug: String,
@@ -680,6 +680,27 @@ mod tests {
         assert!(safe_filename_component("1.21.11-0.6.0+fabric").is_ok());
         assert!(safe_filename_component("../escape").is_err());
         assert!(safe_filename_component(".hidden").is_err());
+    }
+
+    #[test]
+    fn modrinth_search_hits_deserialize_snake_case_and_serialize_camel_case() {
+        let hit: CatalogProject = serde_json::from_str(r#"{
+            "project_id": "A1b2C3d4",
+            "slug": "sodium",
+            "title": "Sodium",
+            "description": "A rendering optimization mod.",
+            "author": "JellySquid",
+            "downloads": 1200000,
+            "icon_url": "https://cdn.modrinth.com/data/A1b2C3d4/icon.png",
+            "latest_version": "mc1.21.11-0.6.0",
+            "versions": ["mc1.21.11-0.6.0"]
+        }"#).unwrap();
+
+        assert_eq!(hit.project_id, "A1b2C3d4");
+        let rendered = serde_json::to_value(hit).unwrap();
+        assert_eq!(rendered["projectId"], "A1b2C3d4");
+        assert_eq!(rendered["iconUrl"], "https://cdn.modrinth.com/data/A1b2C3d4/icon.png");
+        assert_eq!(rendered["latestVersion"], "mc1.21.11-0.6.0");
     }
 
     #[test]
