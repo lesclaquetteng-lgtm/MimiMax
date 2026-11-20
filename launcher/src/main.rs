@@ -319,7 +319,7 @@ fn command_profiles(arguments: &[String]) -> Result<(), String> {
                 .profile(&name)
                 .map(|profile| profile.name.clone())
                 .ok_or_else(|| format!("unknown profile: {}", name))?;
-            launcher.save();
+            launcher.save()?;
         }
         "assign" => {
             let account = argument(1, "profiles assign needs an account")?;
@@ -336,7 +336,7 @@ fn command_profiles(arguments: &[String]) -> Result<(), String> {
                 .accounts
                 .set_profile(&account, name)
                 .ok_or_else(|| format!("unknown account: {}", account))?;
-            launcher.save();
+            launcher.save()?;
         }
         "update" => {
             let name = argument(1, "profiles update needs a name")?;
@@ -359,7 +359,7 @@ fn command_profiles(arguments: &[String]) -> Result<(), String> {
             profile.window_width = number("width", profile.window_width);
             profile.window_height = number("height", profile.window_height);
 
-            launcher.add_profile(profile);
+            launcher.add_profile(profile)?;
         }
         "remove" => {
             let name = argument(1, "profiles remove needs a name")?;
@@ -786,7 +786,7 @@ fn command_performance(arguments: &[String]) -> Result<(), String> {
             }
 
             launcher.settings.jvm_preset = preset;
-            launcher.save();
+            launcher.save()?;
             emit(&serde_json::json!({
                 "ok": true,
                 "state": performance_state(&launcher),
