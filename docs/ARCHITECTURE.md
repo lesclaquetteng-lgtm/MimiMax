@@ -37,7 +37,7 @@ JSON lines/events for the interface.
 | `main.rs` | CLI parsing/dispatch, JSON output, streaming wrappers for install/launch/auth flows. |
 | `lib.rs` | High-level `Launcher` API tying paths, settings, accounts, install, launch and the game record together. |
 | `paths.rs` | Resolution/creation of launcher and game directories (`AETHER_HOME`, `AETHER_SHARED_DIR`). |
-| `settings.rs` | Persistent settings, Java detection, mod jar discovery (`AETHER_MOD_JAR`). |
+| `settings.rs` | Persistent settings (including the Identity Studio colourway, custom accent, surface, density and navigation choices), Java detection, mod jar discovery (`AETHER_MOD_JAR`). |
 | `accounts.rs` | Account store, offline accounts, Microsoft device-code login flow, session mapping, and the Mojang name lookup that tells a premium name from a free one. |
 | `credentials.rs` | Separate Microsoft access/refresh token vault: Windows DPAPI protection, legacy account-file migration, and no token serialization into JSON/renderer IPC. |
 | `offline.rs` | Offline username validation and deterministic Minecraft-compatible offline UUID generation. |
@@ -76,6 +76,12 @@ are the same ones the previous Electron shell loaded.
 
 The interface (`launcher/gui/src/ui/`) is plain HTML/CSS/JavaScript. `bridge.js` exposes
 `window.aether` over Tauri's `invoke`, so `app.js` never learned that the shell changed.
+
+The Settings page is **Identity Studio**: app.js applies persisted workspace choices to root-level
+palette aliases, surface, density and navigation attributes; tokens.css is the single source for
+all four material colourways; styles.css renders those choices across the actual shell and the
+live workspace preview. Appearance writes are serialized so rapid changes cannot overwrite one
+another with stale settings snapshots.
 
 The WebView policy is set in `tauri.conf.json`, not only in an HTML meta tag: scripts are self-hosted,
 objects are disabled, the base URL and form targets are restricted to the local origin, and
