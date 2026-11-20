@@ -2273,6 +2273,189 @@ function showPage(name) {
 	if (name === 'performance') loadPerformance();
 }
 
+
+/* ---------------------------------------------------------------- command palette */
+
+const launcherPages = [
+	{ id: 'play', label: 'Play', description: 'Select your account and launch Minecraft', icon: '▶' },
+	{ id: 'accounts', label: 'Accounts', description: 'Manage offline and Microsoft accounts', icon: '◎' },
+	{ id: 'versions', label: 'Versions', description: 'Browse Minecraft releases and snapshots', icon: '▱' },
+	{ id: 'mods', label: 'Mods', description: 'Search and enable installed Fabric mods', icon: '⌘' },
+	{ id: 'servers', label: 'Servers', description: 'Saved servers, ping and hosting', icon: '⌁' },
+	{ id: 'performance', label: 'Performance', description: 'Optimization pack and JVM settings', icon: '↗' },
+	{ id: 'logs', label: 'Logs', description: 'Game sessions and installation output', icon: '≡' },
+	{ id: 'settings', label: 'Settings', description: 'Java runtime, memory and appearance', icon: '⚙' }
+];
+
+let commandItemsFiltered = [];
+let commandSelectedIndex = 0;
+let commandReturnFocus = null;
+
+function getCommandItems() {
+	return [
+		...launcherPages.map((page) => ({ ...page, kind: 'page' })),
+		{ id: 'launch', label: 'Launch Minecraft', description: 'Start the selected profile', icon: '▶', kind: 'action' },
+		{ id: 'install', label: 'Install / repair', description: 'Download or repair game files', icon: '↓', kind: 'action' },
+		{ id: 'add-account', label: 'Add offline account', description: 'Create a local player account', icon: '+', kind: 'action' },
+		{ id: 'mods-folder', label: 'Open mods folder', description: 'View the local Fabric mods directory', icon: '▣', kind: 'action' },
+		{ id: 'stop-game', label: 'Stop Minecraft', description: 'Stop the running game process', icon: '■', kind: 'action' },
+		...(state.servers.servers || []).map((server) => ({
+			id: 'join:' + server.address,
+			label: 'Join ' + server.name,
+			description: server.address,
+			icon: '↗',
+			kind: 'join',
+			value: server.address
+		}))
+	];
+}
+
+function renderCommandResults() {
+	const query = ($('#command-search-input').value || '').trim().toLocaleLowerCase();
+	commandItemsFiltered = getCommandItems().filter((item) =>
+		(item.label + ' ' + item.description + ' ' + item.id).toLocaleLowerCase().includes(query)
+	);
+	commandSelectedIndex = Math.min(commandSelectedIndex, Math.max(0, commandItemsFiltered.length - 1));
+
+	const results = $('#command-results');
+	results.replaceChildren();
+
+	if (commandItemsFiltered.length === 0) {
+		const empty = document.createElement('div');
+		empty.className = 'command-empty';
+		empty.textContent = 'No matching pages, actions or saved servers.';
+		results.appendChild(empty);
+		return;
+	}
+
+	commandItemsFiltered.forEach((item, index) => {
+		const button = document.createElement('button');
+		button.type = 'button';
+		button.className = 'command-result' + (index === commandSelectedIndex ? ' is-selected' : '');
+		button.setAttribute('role', 'option');
+		button.setAttribute('aria-selected', String(index === commandSelectedIndex));
+
+		const icon = document.createElement('span');
+		icon.className = 'command-result-icon';
+		icon.textContent = item.icon;
+
+		const copy = document.createElement('span');
+		copy.className = 'command-result-copy';
+		const label = document.createElement('strong');
+		label.textContent = item.label;
+		const description = document.createElement('small');
+		description.textContent = item.description;
+		copy.append(label, description);
+
+		button.append(icon, copy);
+		button.addEventListener('mouseenter', () => {
+			commandSelectedIndex = index;
+			updateCommandSelection();
+		});
+		button.addEventListener('click', () => runCommand(item));
+		results.appendChild(button);
+	});
+}
+
+function updateCommandSelection() {
+	$('.command-result').forEach((button, index) => {
+		const selected = index === commandSelectedIndex;
+		button.classList.toggle('is-selected', selected);
+		button.setAttribute('aria-selected', String(selected));
+		if (selected) button.scrollIntoView({ block: 'nearest' });
+	});
+}
+
+function openCommandPalette() {
+	const palette = $('#command-palette');
+	if (!palette || !palette.hidden || !$('#modal').hidden) return;
+
+	commandReturnFocus = document.activeElement;
+	palette.hidden = false;
+	$('#command-search-input').value = '';
+	commandSelectedIndex = 0;
+	renderCommandResults();
+	$('#command-search-input').focus({ preventScroll: true });
+}
+
+function closeCommandPalette() {
+	const palette = $('#command-palette');
+	if (!palette || palette.hidden) return;
+	palette.hidden = true;
+	if (commandReturnFocus?.isConnected) commandReturnFocus.focus();
+}
+
+function runCommand(item) {
+	closeCommandPalette();
+
+	if (item.kind === 'page') {
+		showPage(item.id);
+		return;
+	}
+	if (item.kind === 'join') {
+		launch(item.value);
+		return;
+	}
+
+	switch (item.id) {
+		case 'launch': launch(); break;
+		case 'install': install(); break;
+		case 'add-account': showPage('accounts'); offlineAccountModal(); break;
+		case 'mods-folder': openModsFolder(); break;
+		case 'stop-game': stopGame(); break;
+		default: break;
+	}
+}
+
+function bindCommandPalette() {
+	$('#command-open')?.addEventListener('click', openCommandPalette);
+	$('#command-search-input')?.addEventListener('input', () => {
+		commandSelectedIndex = 0;
+		renderCommandResults();
+	});
+	$('#command-palette')?.addEventListener('click', (event) => {
+		if (event.target === $('#command-palette')) closeCommandPalette();
+	});
+
+	document.addEventListener('keydown', (event) => {
+		const palette = $('#command-palette');
+		const modalOpen = !$('#modal').hidden;
+
+		if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k' && !modalOpen) {
+			event.preventDefault();
+			openCommandPalette();
+			return;
+		}
+
+		if (!palette.hidden) {
+			if (event.key === 'Escape') {
+				event.preventDefault();
+				closeCommandPalette();
+			} else if (event.key === 'ArrowDown' && commandItemsFiltered.length) {
+				event.preventDefault();
+				commandSelectedIndex = (commandSelectedIndex + 1) % commandItemsFiltered.length;
+				updateCommandSelection();
+			} else if (event.key === 'ArrowUp' && commandItemsFiltered.length) {
+				event.preventDefault();
+				commandSelectedIndex = (commandSelectedIndex - 1 + commandItemsFiltered.length) % commandItemsFiltered.length;
+				updateCommandSelection();
+			} else if (event.key === 'Enter' && commandItemsFiltered[commandSelectedIndex]) {
+				event.preventDefault();
+				runCommand(commandItemsFiltered[commandSelectedIndex]);
+			}
+			return;
+		}
+
+		if (modalOpen || !(event.ctrlKey || event.metaKey) || !/^[1-8]$/.test(event.key)) return;
+		const target = event.target;
+		if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement) return;
+
+		event.preventDefault();
+		const page = launcherPages[Number(event.key) - 1];
+		if (page) showPage(page.id);
+	});
+}
+
 async function init() {
 	// Window controls.
 	$$('[data-window]').forEach((button) => {
@@ -2395,6 +2578,7 @@ async function init() {
 	$('#btn-profile-delete').addEventListener('click', deleteProfile);
 
 	bindSettings();
+	bindCommandPalette();
 
 	// Interactive preset cards on Performance page
 	$$('.preset-card').forEach((card) => {
