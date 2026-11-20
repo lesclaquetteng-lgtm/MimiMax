@@ -455,7 +455,14 @@ pub async fn performance_jvm(app: AppHandle, preset: String) -> Value {
 }
 
 #[tauri::command(rename_all = "snake_case")]
-pub async fn performance_install(app: AppHandle, slugs: Option<Value>) -> Value {
+pub async fn performance_install(
+	app: AppHandle,
+	state: State<'_, RunState>,
+	slugs: Option<Value>,
+) -> Value {
+	let Some(_operation) = state.acquire_install() else {
+		return failure("An installation or optimisation operation is already running.");
+	};
 	let mut args = vec!["performance".to_string(), "install".to_string()];
 
 	if let Some(Value::Array(entries)) = slugs {
@@ -513,7 +520,14 @@ async fn blocking_stream(app: AppHandle, args: Vec<String>, kind: StreamKind) ->
 }
 
 #[tauri::command(rename_all = "snake_case")]
-pub async fn install_start(app: AppHandle, profile: Option<Value>) -> Value {
+pub async fn install_start(
+	app: AppHandle,
+	state: State<'_, RunState>,
+	profile: Option<Value>,
+) -> Value {
+	let Some(_operation) = state.acquire_install() else {
+		return failure("An installation or optimisation operation is already running.");
+	};
 	let mut args = vec!["install".to_string()];
 	if let Some(version) = profile
 		.as_ref()
@@ -611,7 +625,14 @@ pub fn install_stop(state: State<'_, RunState>) -> Value {
 }
 
 #[tauri::command(rename_all = "snake_case")]
-pub async fn game_launch(app: AppHandle, options: Option<Value>) -> Value {
+pub async fn game_launch(
+	app: AppHandle,
+	state: State<'_, RunState>,
+	options: Option<Value>,
+) -> Value {
+	let Some(_operation) = state.acquire_game() else {
+		return failure("Minecraft is already starting or running.");
+	};
 	let mut args = vec!["launch".to_string()];
 
 	if let Some(account) = options
