@@ -326,6 +326,35 @@ pub fn parse_maven_coordinate(coordinate: &str) -> MavenCoordinate {
     }
 }
 
+/// Accepts a single path component that is safe to use as a local directory/file name.
+pub fn is_safe_path_component(value: &str) -> bool {
+    !value.is_empty()
+        && value != "."
+        && value != ".."
+        && value.len() <= 128
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-' | b'+'))
+}
+
+/// Accepts only a non-empty relative path made of ordinary forward-slash-separated components.
+pub fn is_safe_relative_path(value: &str) -> bool {
+    !value.is_empty()
+        && !value.starts_with('/')
+        && !value.starts_with('\\')
+        && !value.contains('\\')
+        && !value.contains(':')
+        && !value.contains('\0')
+        && value
+            .split('/')
+            .all(is_safe_path_component)
+}
+
+/// Minecraft asset object names are SHA-1 digests.
+pub fn is_sha1_hash(value: &str) -> bool {
+    value.len() == 40 && value.bytes().all(|byte| byte.is_ascii_hexdigit())
+}
+
 /// Converts a maven coordinate into the relative path inside the libraries folder.
 pub fn maven_path(coordinate: &str) -> String {
     let parts = parse_maven_coordinate(coordinate);
@@ -385,7 +414,7 @@ pub fn released_versions(manifest: &Manifest, limit: usize) -> Vec<VersionEntry>
     manifest
         .versions
         .iter()
-        .filter(|entry| entry.kind == "release")
+        .filter(|entry| entry.kind == "release" && is_safe_path_component(&entry.id))
         .take(limit)
         .cloned()
         .collect()
@@ -393,6 +422,9 @@ pub fn released_versions(manifest: &Manifest, limit: usize) -> Vec<VersionEntry>
 
 /// Downloads the description of a version.
 pub fn fetch_version_json(version_id: &str) -> Result<VersionJson, HttpError> {
+    if !is_safe_path_component(version_id) {
+        return Err(HttpError::Uri(format!("invalid Minecraft version identifier: {}", version_id)));
+    }
     let manifest = fetch_manifest()?;
     let entry = manifest
         .versions
@@ -408,6 +440,9 @@ pub fn fetch_fabric_profile(
     game_version: &str,
     loader_version: &str,
 ) -> Result<VersionJson, HttpError> {
+    if !is_safe_path_component(game_version) || !is_safe_path_component(loader_version) {
+        return Err(HttpError::Uri("invalid Minecraft or Fabric version identifier".to_string()));
+    }
     let url = format!(
         "{}/versions/loader/{}/{}/profile/json",
         FABRIC_META_URL, game_version, loader_version
@@ -429,6 +464,9 @@ pub struct FabricLoader {
 
 /// Lists the loaders of a version.
 pub fn fetch_fabric_loaders(game_version: &str) -> Result<Vec<String>, HttpError> {
+    if !is_safe_path_component(game_version) {
+        return Err(HttpError::Uri(format!("invalid Minecraft version identifier: {}", game_version)));
+    }
     let url = format!("{}/versions/loader/{}", FABRIC_META_URL, game_version);
     let entries: Vec<FabricLoaderEntry> = get_json(&url)?;
     Ok(entries
@@ -725,6 +763,26 @@ mod tests {
         assert_eq!(parts.version, "9.10.1");
         assert!(parts.classifier.is_none());
         assert_eq!(parts.extension, "jar");
+    }
+
+    #[test]
+    fn rejects_path_components_that_could_escape_launcher_directories() {
+        for invalid in ["", ".", "..", "../outside", "C:\\outside", "/outside", "folder\\file", "a:b"] {
+            assert!(!is_safe_path_component(invalid), "accepted component: {invalid}");
+        }
+        assert!(is_safe_path_component("1.21.11"));
+        assert!(is_safe_path_component("0.141.6+1.21.11"));
+    }
+
+    #[test]
+    fn validates_library_paths_and_asset_hashes() {
+        assert!(is_safe_relative_path("org/ow2/asm/asm/9.10.1/asm-9.10.1.jar"));
+        assert!(!is_safe_relative_path("../outside.jar"));
+        assert!(!is_safe_relative_path("org/../../outside.jar"));
+        assert!(!is_safe_relative_path("/absolute/file.jar"));
+        assert!(!is_safe_relative_path("org\\outside.jar"));
+        assert!(is_sha1_hash("0123456789abcdef0123456789abcdef01234567"));
+        assert!(!is_sha1_hash("../etc/passwd"));
     }
 
     #[test]
