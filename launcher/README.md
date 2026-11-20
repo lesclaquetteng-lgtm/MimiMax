@@ -81,11 +81,34 @@ Available commands:
 | `profiles [list|add|update|assign|remove]` | Manage named game profiles |
 | `install [--version X] [--loader Y]` | Install/repair Minecraft, libraries, assets and Fabric |
 | `launch [--version X] [--account ID] [--server ADDRESS]` | Start Minecraft and stream game output |
-| `mods [list|toggle]` | Manage local mod jars |
+| `mods [list|toggle|search|install]` | Manage local mod jars and discover/install Fabric mods from Modrinth |
 | `servers [list|add|remove|ping|probe]` | Saved servers and offline-mode checks |
 | `hosts [list|create|start|stop]` | Local Fabric server hosting |
 | `performance [list|install|tune|jvm]` | Verified optimisation pack and reversible presets |
 | `logs [read]` | Installation and game-session logs |
+
+## Modrinth mod library
+
+The Mods page has two views: **Installed** for local JARs and **Discover** for compatible Fabric mods.
+Search results are filtered for the Minecraft version of the active profile. Installing a project
+resolves its required dependencies, downloads the published JARs from the Modrinth CDN and verifies
+their SHA-1 hashes before adding them to the game.
+
+Aether stores its managed project/version/file/checksum records in
+`<launcher-data>/modrinth-mods.json`. When updating a project it only removes older files whose
+hash still matches that manifest; manually placed JARs are left untouched. Mod changes are blocked
+while Minecraft is starting or running.
+
+CLI examples:
+
+```powershell
+# Search compatible Fabric mods for the active profile (or pass --version explicitly)
+aether-launcher mods search sodium
+aether-launcher mods search minimap --version 1.21.11
+
+# Install a Modrinth project by its project ID; required dependencies are included
+aether-launcher mods install AANobbMI
+```
 
 ## Data and environment variables
 
