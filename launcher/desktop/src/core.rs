@@ -292,6 +292,7 @@ pub enum StreamKind {
 	Game,
 	Microsoft,
 	Optimisation,
+	Modrinth,
 }
 
 fn emit_event(app: &AppHandle, kind: StreamKind, value: &Value) {
@@ -300,6 +301,7 @@ fn emit_event(app: &AppHandle, kind: StreamKind, value: &Value) {
 		StreamKind::Game => "game:output",
 		StreamKind::Microsoft => "microsoft:deviceCode",
 		StreamKind::Optimisation => "optimisation:progress",
+		StreamKind::Modrinth => "mods:progress",
 	};
 
 	// The interface of the game only needs the text of the line, the other panels want the whole
