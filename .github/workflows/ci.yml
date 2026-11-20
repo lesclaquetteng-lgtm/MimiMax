@@ -47,7 +47,7 @@ jobs:
         run: cargo build --release --locked
       - name: Build the embedded Fabric client jar
         working-directory: aether-client
-        run: .\\gradlew.bat --no-daemon build
+        run: .\gradlew.bat --no-daemon build
       - name: Build and test the shell
         working-directory: launcher/desktop
         run: |
