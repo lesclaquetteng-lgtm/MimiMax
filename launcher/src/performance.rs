@@ -209,9 +209,9 @@ fn jar_name(filename: &str) -> Result<String, String> {
     // depending on the host platform's Path parser.
     if filename.is_empty()
         || filename.contains('/')
-        || filename.contains('\\\\')
+        || filename.contains('\\')
         || filename.contains(':')
-        || filename.contains('\\0')
+        || filename.contains('\0')
         || filename.chars().any(char::is_control)
         || filename.contains('<')
         || filename.contains('>')
@@ -722,8 +722,8 @@ mod tests {
         assert!(jar_name("./mod.jar").is_err());
         assert!(jar_name("C:outside.jar").is_err());
         assert!(jar_name("evil:stream.jar").is_err());
-        assert!(jar_name("bad\\0name.jar").is_err());
-        assert!(jar_name("bad\\nname.jar").is_err());
+        assert!(jar_name("bad\0name.jar").is_err());
+        assert!(jar_name("bad\nname.jar").is_err());
         assert!(jar_name("bad?.jar").is_err());
         assert!(jar_name("NUL.jar").is_err());
         assert!(jar_name("COM1.jar").is_err());
