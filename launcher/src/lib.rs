@@ -4,6 +4,7 @@
 //! with an offline account or a Microsoft account.
 
 pub mod accounts;
+pub mod credentials;
 pub mod game;
 pub mod hosting;
 pub mod http;
@@ -41,11 +42,31 @@ fn login_error(error: accounts::LoginError) -> String {
     }
 }
 
+
+/// Clears in-memory session values after a vault cannot be loaded or migrated.
+fn clear_session_secrets(accounts: &mut AccountStore) {
+    for account in &mut accounts.accounts {
+        account.access_token.clear();
+        account.refresh_token = None;
+    }
+}
+
+/// Writes the non-secret account catalogue. The Account serializer intentionally omits session tokens.
+fn write_account_catalogue(path: &std::path::Path, accounts: &AccountStore) -> Result<(), String> {
+    let content = serde_json::to_string_pretty(accounts)
+        .map_err(|error| format!("could not encode the account catalogue: {error}"))?;
+    settings::write_atomic(path, &content)
+        .map_err(|error| format!("could not save the account catalogue: {error}"))
+}
+
 /// The launcher, it owns the settings, the accounts and the game.
 pub struct Launcher {
     pub paths: Paths,
     pub settings: Settings,
     pub accounts: AccountStore,
+    // A corrupt or foreign-user DPAPI blob must not be silently overwritten by an unrelated
+    // settings change. A new Microsoft login can replace it with a fresh protected vault.
+    secrets_unavailable: bool,
 }
 
 impl Launcher {
@@ -61,24 +82,57 @@ impl Launcher {
             }
         }
 
-        let accounts = match std::fs::read_to_string(&paths.accounts_file) {
+        let mut accounts = match std::fs::read_to_string(&paths.accounts_file) {
             Ok(content) => serde_json::from_str(&content).unwrap_or_default(),
             Err(_) => AccountStore::default(),
         };
 
-        Launcher {
+        let credentials_exist = credentials::file_path(&paths.accounts_file).is_file();
+        let mut secrets_unavailable = false;
+
+        if credentials_exist {
+            if let Err(error) = credentials::load(&paths.accounts_file, &mut accounts) {
+                eprintln!("Aether: {error}. Sign in to the Microsoft account again to restore it.");
+                secrets_unavailable = true;
+                clear_session_secrets(&mut accounts);
+                write_account_catalogue(&paths.accounts_file, &accounts).ok();
+            }
+        }
+
+        let legacy_secrets = !credentials_exist && credentials::has_secrets(&accounts);
+        let mut launcher = Launcher {
             paths,
             settings,
             accounts,
+            secrets_unavailable,
+        };
+
+        // Upgrade older accounts.json files that kept tokens in clear text. The DPAPI file is
+        // written first; only then is the public catalogue rewritten without the tokens.
+        if legacy_secrets {
+            if let Err(error) = launcher.save() {
+                eprintln!("Aether: could not migrate Microsoft credentials: {error}. Sign in again.");
+                clear_session_secrets(&mut launcher.accounts);
+                launcher.secrets_unavailable = true;
+                write_account_catalogue(&launcher.paths.accounts_file, &launcher.accounts).ok();
+            }
         }
+
+        launcher
     }
 
-    /// Writes the settings and the accounts to the disk.
-    pub fn save(&self) {
-        self.settings.save(&self.paths.settings_file).ok();
-        if let Ok(content) = serde_json::to_string_pretty(&self.accounts) {
-            settings::write_atomic(&self.paths.accounts_file, &content).ok();
+    /// Saves the account catalogue separately from the protected Microsoft session secrets.
+    pub fn save(&mut self) -> Result<(), String> {
+        let contains_secrets = credentials::has_secrets(&self.accounts);
+        if !self.secrets_unavailable || contains_secrets {
+            credentials::save(&self.paths.accounts_file, &self.accounts)?;
+            self.secrets_unavailable = false;
         }
+
+        self.settings
+            .save(&self.paths.settings_file)
+            .map_err(|error| format!("could not save settings: {error}"))?;
+        write_account_catalogue(&self.paths.accounts_file, &self.accounts)
     }
 
     /// The profile that applies to the selected account, the one the interface shows.
@@ -94,9 +148,9 @@ impl Launcher {
     }
 
     /// Adds a profile, it replaces one with the same name.
-    pub fn add_profile(&mut self, profile: settings::Profile) {
+    pub fn add_profile(&mut self, profile: settings::Profile) -> Result<(), String> {
         self.settings.put_profile(profile);
-        self.save();
+        self.save()
     }
 
     /// Removes a profile, the accounts that chose it fall back to the active one.
@@ -113,8 +167,7 @@ impl Launcher {
             }
         }
 
-        self.save();
-        Ok(())
+        self.save()
     }
 
     /// The jar of the Aether client.
@@ -251,7 +304,7 @@ impl Launcher {
     pub fn tune_options(&mut self, preset: &str) -> Result<performance::OptionsReport, String> {
         let report = performance::tune_options(&self.paths, preset)?;
         self.settings.options_preset = report.preset.clone();
-        self.save();
+        self.save()?;
         Ok(report)
     }
 
@@ -267,28 +320,28 @@ impl Launcher {
     }
 
     /// Adds an offline account.
-    pub fn add_offline_account(&mut self, username: &str) -> Result<Account, offline::OfflineError> {
-        let account = self.accounts.add_offline(username)?;
-        self.save();
+    pub fn add_offline_account(&mut self, username: &str) -> Result<Account, String> {
+        let account = self.accounts.add_offline(username).map_err(|error| error.to_string())?;
+        self.save()?;
         Ok(account)
     }
 
     /// Adds an account that was created somewhere else.
-    pub fn add_account(&mut self, account: Account) {
+    pub fn add_account(&mut self, account: Account) -> Result<(), String> {
         self.accounts.upsert(account);
-        self.save();
+        self.save()
     }
 
     /// Removes an account.
-    pub fn remove_account(&mut self, id: &str) {
+    pub fn remove_account(&mut self, id: &str) -> Result<(), String> {
         self.accounts.remove(id);
-        self.save();
+        self.save()
     }
 
     /// Selects the active account.
-    pub fn select_account(&mut self, id: &str) {
+    pub fn select_account(&mut self, id: &str) -> Result<(), String> {
         self.accounts.select(id);
-        self.save();
+        self.save()
     }
 
     /// Downloads the game, the libraries, the assets and the mods.
@@ -333,7 +386,9 @@ impl Launcher {
         self.settings.game_version = game_version.clone();
         self.settings.loader_version = loader_version.clone();
         self.settings.fabric_api_version = fabric_api_version.clone();
-        self.save();
+        self.save().map_err(|error| {
+            installer::InstallError::Io(std::io::Error::other(error))
+        })?;
 
         Ok((game_version, loader_version, fabric_api_version))
     }
@@ -373,7 +428,7 @@ impl Launcher {
         if accounts::needs_refresh(&account) {
             let refreshed = accounts::refresh_account(&account).map_err(login_error)?;
             self.accounts.replace(refreshed);
-            self.save();
+            self.save()?;
 
             account = self
                 .accounts
