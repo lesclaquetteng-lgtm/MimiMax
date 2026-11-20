@@ -79,6 +79,8 @@ Available commands:
 | `install [--version X] [--loader Y] [--fabric-api Z]` | Install game/libraries/assets/Fabric API/mod and emit progress events |
 | `launch [--version X] [--account ID]` | Launch Minecraft and stream game output/exit status |
 | `stop` | Stop the recorded game, even when the launcher that started it is gone |
+| `mods search <query> --game-version X` | Search Modrinth for Fabric mods compatible with a Minecraft version |
+| `mods install <project-id> --game-version X` | Install a mod and its required dependencies, checking the official CDN and SHA-1 |
 | `command [--version X] [--account ID]` | Print the resolved Java program, arguments and classpath |
 
 ### The record of the game
@@ -92,6 +94,18 @@ reads it and kills the tree instead of leaving an orphan that the next session c
 - Default profile values come from settings (e.g. `gameVersion`, `loaderVersion`, `fabricApiVersion`).
 - Installation requires the Aether client mod jar to be discoverable (see `AETHER_MOD_JAR` / `find_client_jar` logic in `src/settings.rs`).
 - Some long-running commands emit line-delimited JSON events (e.g. `type: "progress"`, `type: "output"`, `type: "deviceCode"`).
+
+Example:
+
+```powershell
+.\\target\\release\\aether-launcher.exe mods search Sodium --game-version 1.21.11
+.\\target\\release\\aether-launcher.exe mods install <project-id> --game-version 1.21.11
+```
+
+Modrinth results are filtered to Fabric projects for the selected Minecraft version. Installation is
+performed by the Rust core, installs dependencies marked `required`, verifies the official CDN and
+SHA-1, and never overwrites a different JAR. Mods are third-party executable code; review projects
+before installing them.
 
 ## Data & environment variables
 
