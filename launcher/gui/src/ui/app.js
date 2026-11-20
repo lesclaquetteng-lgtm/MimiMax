@@ -4,6 +4,7 @@ const state = {
 	page: 'play',
 	accounts: { accounts: [], selected: null },
 	settings: {},
+	javaRuntime: null,
 	versions: [],
 	loaders: [],
 	mods: [],
@@ -71,8 +72,8 @@ function applyTheme(theme, persist = true) {
 function renderDashboard() {
 	const account = state.accounts.accounts.find((entry) => entry.id === state.accounts.selected);
 	const profile = currentProfile();
-	const javaPath = state.settings.javaPath || '';
-	const requiredJava = Number(state.settings.requiredJavaVersion) || 21;
+	const runtime = state.javaRuntime;
+	const requiredJava = Number(runtime?.requiredMajor || state.settings.requiredJavaVersion) || 21;
 	const status = state.installing ? 'Installing…' : state.launching ? 'Starting Minecraft…' : (state.status || 'Ready');
 	const heroVersion = $('#hero-version');
 	if (heroVersion) heroVersion.textContent = (profile?.gameVersion || 'Minecraft') + ' · FABRIC';
@@ -84,11 +85,87 @@ function renderDashboard() {
 	$('#dashboard-profile-meta').textContent = profile
 		? 'Minecraft ' + (profile.gameVersion || '—') + ' · ' + (Math.round(profile.maxMemory / 1024 * 10) / 10) + ' GB RAM'
 		: 'Choose a profile';
-	$('#dashboard-java').textContent = javaPath ? 'Path configured' : 'Not detected';
-	$('#dashboard-java-meta').textContent = javaPath
-		? 'Java ' + requiredJava + ' required · Custom runtime path'
-		: 'Install Java ' + requiredJava + ' or select java.exe in Settings';
+	$('#dashboard-java').textContent = runtime?.compatible
+		? 'Java ' + runtime.majorVersion + ' · Ready'
+		: runtime?.available ? 'Java version too old' : 'Java not found';
+	$('#dashboard-java-meta').textContent = runtime?.compatible
+		? (runtime.source === 'custom' ? 'Custom runtime selected' : 'Automatically detected') + ' · ' + requiredJava + ' required'
+		: (runtime?.source === 'custom-invalid' ? 'Check your custom java.exe path' : 'Install Java ' + requiredJava + ' or configure it in Settings');
+	const runtimeStatus = $('#java-runtime-status');
+	if (runtimeStatus) {
+		runtimeStatus.textContent = runtime?.compatible
+			? 'Using Java ' + runtime.majorVersion + ' · ' + runtime.path
+			: runtime?.available
+				? 'Java ' + runtime.majorVersion + ' was found, but Java ' + requiredJava + ' or newer is required.'
+				: runtime?.source === 'custom-invalid'
+					? 'The selected Java executable is missing, invalid or too old. Clear the field to use automatic detection.'
+					: 'No compatible Java runtime was found. Install Java ' + requiredJava + ' or choose java.exe above.';
+	}
 	$('#dashboard-status').textContent = status;
+	renderQuickServers();
+}
+
+
+function renderQuickServers() {
+	const container = $('#quick-servers');
+	if (!container) return;
+	container.replaceChildren();
+	const servers = (state.servers.servers || []).slice(0, 4);
+
+	if (servers.length === 0) {
+		const empty = emptyState(
+			ICON_SERVER,
+			'No saved servers yet',
+			'Add a server once and it will be ready here next time.',
+			'Browse servers'
+		);
+		empty.querySelector('[data-empty-action]')?.addEventListener('click', () => showPage('servers'));
+		container.appendChild(empty);
+		return;
+	}
+
+	for (const server of servers) {
+		const ping = state.servers.pings[server.address];
+		const row = document.createElement('div');
+		row.className = 'quick-server-row';
+
+		const identity = document.createElement('div');
+		identity.className = 'quick-server-identity';
+		const indicator = document.createElement('span');
+		indicator.className = 'quick-server-indicator' + (ping?.online ? ' is-online' : '');
+		const copy = document.createElement('div');
+		copy.className = 'quick-server-copy';
+		const name = document.createElement('strong');
+		name.textContent = server.name;
+		const address = document.createElement('small');
+		address.textContent = server.address;
+		copy.append(name, address);
+		identity.append(indicator, copy);
+
+		const meta = document.createElement('small');
+		meta.className = 'quick-server-meta';
+		meta.textContent = pingSummary(ping) || 'Not checked yet';
+
+		const join = document.createElement('button');
+		join.type = 'button';
+		join.className = 'btn btn--primary btn--small';
+		join.textContent = 'Join';
+		join.disabled = !state.accounts.selected || state.launching || state.installing;
+		join.title = state.accounts.selected ? 'Join ' + server.name : 'Select an account before joining';
+		join.addEventListener('click', () => launch(server.address));
+
+		row.append(identity, meta, join);
+		container.appendChild(row);
+	}
+
+	if ((state.servers.servers || []).length > servers.length) {
+		const more = document.createElement('button');
+		more.type = 'button';
+		more.className = 'quick-server-more';
+		more.textContent = 'View all ' + state.servers.servers.length + ' saved servers';
+		more.addEventListener('click', () => showPage('servers'));
+		container.appendChild(more);
+	}
 }
 
 function renderSetupChecklist() {
@@ -662,6 +739,18 @@ function renderVersions() {
 	const table = $('#version-table');
 	table.innerHTML = '';
 
+	const query = ($('#versions-search')?.value || '').trim().toLocaleLowerCase();
+	const type = $('#versions-filter')?.value || 'all';
+	const filtered = state.versions.filter((version) => {
+		const matchesQuery = String(version.id || '').toLocaleLowerCase().includes(query);
+		const matchesType = type === 'all' || version.type === type;
+		return matchesQuery && matchesType;
+	});
+	const summary = $('#versions-summary');
+	if (summary) summary.textContent = state.versions.length
+		? `Showing ${filtered.length} of ${state.versions.length} Mojang versions`
+		: 'The Minecraft version list is not available yet.';
+
 	if (state.versions.length === 0) {
 		table.appendChild(emptyState(
 			ICON_STACK,
@@ -671,7 +760,16 @@ function renderVersions() {
 		return;
 	}
 
-	for (const version of state.versions) {
+	if (filtered.length === 0) {
+		table.appendChild(emptyState(
+			ICON_STACK,
+			'No matching versions',
+			'Try another version name or change the type filter.'
+		));
+		return;
+	}
+
+	for (const version of filtered) {
 		const row = document.createElement('div');
 		row.className = 'version-row';
 
@@ -681,7 +779,8 @@ function renderVersions() {
 		id.textContent = version.id;
 		const date = document.createElement('div');
 		date.className = 'version-date';
-		date.textContent = new Date(version.releaseTime).toLocaleDateString();
+		const releaseDate = version.releaseTime ? new Date(version.releaseTime).toLocaleDateString() : 'Release date unavailable';
+		date.textContent = releaseDate + (version.type ? ' · ' + version.type.replace('_', ' ') : '');
 		left.append(id, date);
 
 		const action = document.createElement('button');
@@ -778,9 +877,20 @@ function renderMods() {
 	table.innerHTML = '';
 
 	const enabled = state.mods.filter((entry) => entry.enabled).length;
+	const query = ($('#mods-search')?.value || '').trim().toLocaleLowerCase();
+	const mode = $('#mods-filter')?.value || 'all';
+	const filtered = state.mods.filter((entry) => {
+		const matchesQuery = (entry.modId + ' ' + entry.name).toLocaleLowerCase().includes(query);
+		const matchesMode = mode === 'all' || (mode === 'enabled' ? entry.enabled : !entry.enabled);
+		return matchesQuery && matchesMode;
+	});
 	$('#mods-count').textContent = state.mods.length === 0
 		? 'no mod'
-		: `${enabled}/${state.mods.length} on`;
+		: `${enabled}/${state.mods.length} enabled`;
+	const summary = $('#mods-summary');
+	if (summary) summary.textContent = query || mode !== 'all'
+		? `Showing ${filtered.length} of ${state.mods.length} installed mods`
+		: `${state.mods.length} installed · ${enabled} enabled · ${state.mods.length - enabled} disabled`;
 
 	if (state.mods.length === 0) {
 		const empty = emptyState(
@@ -794,7 +904,16 @@ function renderMods() {
 		return;
 	}
 
-	for (const entry of state.mods) {
+	if (filtered.length === 0) {
+		table.appendChild(emptyState(
+			ICON_MOD,
+			'No matching mods',
+			'Change the search or choose another filter.'
+		));
+		return;
+	}
+
+	for (const entry of filtered) {
 		const row = document.createElement('div');
 		row.className = `mod-row${entry.enabled ? '' : ' is-disabled'}`;
 		row.title = entry.path;
@@ -2008,8 +2127,13 @@ function bindSettings() {
 		updateProfile({ height: Number(event.target.value) });
 	});
 
-	$('#input-java').addEventListener('change', (event) => {
-		api.settings.update({ javaPath: event.target.value.trim() });
+	$('#input-java').addEventListener('change', async (event) => {
+		const result = await api.settings.update({ javaPath: event.target.value.trim() });
+		if (!result.ok) {
+			toast(result.error || 'The Java path could not be saved.', 'error');
+			return;
+		}
+		await refreshJavaRuntime();
 	});
 
 	$('#input-accent').addEventListener('input', (event) => {
@@ -2023,6 +2147,17 @@ function bindSettings() {
 	$('#input-fabric-api').addEventListener('change', (event) => {
 		api.settings.update({ fabricApiVersion: event.target.value.trim() });
 	});
+}
+
+async function refreshJavaRuntime() {
+	const info = await api.info();
+	if (!info?.ok) {
+		toast(info?.error || 'Java runtime information could not be refreshed.', 'error');
+		return;
+	}
+	state.javaRuntime = info.javaRuntime || null;
+	state.settings = info.settings;
+	renderDashboard();
 }
 
 function applySettings(settings) {
@@ -2302,7 +2437,12 @@ async function init() {
 	$('#btn-launch').addEventListener('click', () => launch());
 	$('#btn-stop').addEventListener('click', stopGame);
 	$('#btn-refresh-versions').addEventListener('click', loadVersions);
+	$('#versions-search').addEventListener('input', renderVersions);
+	$('#versions-filter').addEventListener('change', renderVersions);
 	$('#btn-mods-refresh').addEventListener('click', loadMods);
+	$('#mods-search').addEventListener('input', renderMods);
+	$('#mods-filter').addEventListener('change', renderMods);
+	$('#quick-servers-open').addEventListener('click', () => showPage('servers'));
 	$('#btn-mods-folder').addEventListener('click', openModsFolder);
 	$('#btn-logs-refresh').addEventListener('click', loadLogs);
 
@@ -2431,6 +2571,7 @@ async function init() {
 	}
 
 	applySettings(info.settings);
+	state.javaRuntime = info.javaRuntime || null;
 	applyTheme(info.settings.theme || 'dark', false);
 	$('#paths-output').textContent = [
 		`game   ${info.paths.game}`,
