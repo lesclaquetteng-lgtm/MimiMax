@@ -420,6 +420,13 @@ function renderAccounts() {
 			? `${selected.username} / ${selected.type === 'offline' ? 'OFFLINE' : 'MICROSOFT'}`
 			: 'NO ACCOUNT SELECTED';
 	}
+	const playerAction = $('.gate-player-change span');
+	if (playerAction) playerAction.textContent = selected ? 'SWITCH' : 'ADD PLAYER';
+	const launchButton = $('#btn-launch');
+	if (launchButton) {
+		launchButton.disabled = !selected;
+		launchButton.setAttribute('aria-disabled', String(!selected));
+	}
 
 	renderDock();
 }
