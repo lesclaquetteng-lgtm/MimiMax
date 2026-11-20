@@ -332,9 +332,11 @@ cargo test --release
 cargo clippy --release --all-targets
 ```
 
-163 tests: 134 unit, 6 download, 20 integration and 3 SHA-1. The three newest cover the premium-name
-lookup (a `200` with a profile, a `204`/`404` free name, and an error that must never be read as "the
-name is free").
+The 163-test count above is the previously measured baseline (134 unit, 6 download, 20 integration
+and 3 SHA-1 tests). This hardening branch adds further regression coverage for DPAPI secret wiping,
+archive/path traversal, duplicate asset downloads, symlink rejection, concurrent embedded-resource
+writes and single-flight install/game process handling. CI is the source of truth for the current
+branch revision.
 
 ### Launcher shell (Rust)
 ```powershell
