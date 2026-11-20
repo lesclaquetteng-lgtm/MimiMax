@@ -121,6 +121,22 @@ test('Modrinth project icons use only the official CDN and have a visual fallbac
 	assert.match(modsRust, /project\.icon_url\.filter\(\|url\| is_official_cdn_url\(url\)\)/);
 });
 
+test('Modrinth installs stream real dependency and byte progress into the UI', () => {
+	const core = fs.readFileSync(path.join(root, 'desktop/src/core.rs'), 'utf8');
+	const commands = fs.readFileSync(path.join(root, 'desktop/src/commands.rs'), 'utf8');
+	assert.match(modsRust, /pub fn install_catalog_project_with_progress/);
+	assert.match(modsRust, /state: "downloading"/);
+	assert.match(rust, /mods::install_catalog_project_with_progress/);
+	assert.match(rust, /"type".to_string\(\)[\s\S]{0,100}"modrinth"/);
+	assert.match(core, /StreamKind::Modrinth => "mods:progress"/);
+	assert.match(commands, /StreamKind::Modrinth/);
+	assert.match(bridge, /onModrinthProgress: \(callback\) => listen\('mods:progress'/);
+	assert.match(app, /function handleModCatalogProgress\(progress\)/);
+	assert.match(app, /api\.onModrinthProgress\(handleModCatalogProgress\)/);
+	assert.match(html, /id="mods-catalog-progress"/);
+	assert.match(css, /\.catalog-progress-track/);
+});
+
 test('the launcher never simulates FPS in its desktop UI', () => {
 	assert.doesNotMatch(app, /initFpsSplineGraph|fpsHistory|fps-spline-canvas/);
 	assert.doesNotMatch(html, /fps-spline-canvas|Live FPS curve|880\+ FPS peak target/i);
