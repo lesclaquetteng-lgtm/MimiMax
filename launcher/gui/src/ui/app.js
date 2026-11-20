@@ -8,6 +8,7 @@ const state = {
 	versions: [],
 	loaders: [],
 	mods: [],
+	modsCatalog: { projects: [], query: '', gameVersion: null, installing: null },
 	profiles: { profiles: [], activeFor: null },
 	servers: { servers: [], pings: {} },
 	hosts: [],
@@ -570,6 +571,158 @@ function renderMods() {
 	}
 }
 
+
+function isCatalogModInstalled(project) {
+	const prefix = String(project.projectId || '').toLowerCase() + '-';
+	return state.mods.some((entry) => String(entry.name || '').toLowerCase().startsWith(prefix));
+}
+
+function renderModCatalog() {
+	const container = $('#mods-catalog-results');
+	const status = $('#mods-catalog-status');
+	const versionLabel = $('#mods-catalog-version');
+	if (!container) return;
+
+	const activeVersion = currentProfile().gameVersion;
+	const versionMatches = !state.modsCatalog.gameVersion || state.modsCatalog.gameVersion === activeVersion;
+	if (versionLabel) {
+		versionLabel.textContent = 'Compatible with Minecraft ' + activeVersion + ' · Fabric';
+	}
+	if (state.modsCatalog.gameVersion && !versionMatches && status) {
+		status.textContent = 'Your active profile changed to Minecraft ' + activeVersion + '. Search again to refresh compatible results.';
+	}
+
+	container.replaceChildren();
+	const projects = state.modsCatalog.projects || [];
+	if (projects.length === 0) return;
+
+	for (const project of projects) {
+		const row = document.createElement('article');
+		row.className = 'catalog-project-card';
+
+		const icon = document.createElement('div');
+		icon.className = 'catalog-project-icon';
+		icon.textContent = (project.title || '?').trim().charAt(0).toUpperCase();
+
+		const copy = document.createElement('div');
+		copy.className = 'catalog-project-main';
+		const heading = document.createElement('div');
+		heading.className = 'catalog-project-heading';
+		const name = document.createElement('strong');
+		name.className = 'catalog-project-title';
+		name.textContent = project.title || project.slug;
+		const projectId = document.createElement('small');
+		projectId.className = 'catalog-project-id';
+		projectId.textContent = project.slug || project.projectId;
+		heading.append(name, projectId);
+
+		const description = document.createElement('p');
+		description.className = 'catalog-project-description';
+		description.textContent = project.description || 'No project description provided.';
+		const metadata = document.createElement('div');
+		metadata.className = 'catalog-project-meta';
+		metadata.textContent = 'by ' + (project.author || 'Unknown author')
+			+ ' · ' + Number(project.downloads || 0).toLocaleString() + ' downloads'
+			+ (project.latestVersion ? ' · ' + project.latestVersion : '');
+		copy.append(heading, description, metadata);
+
+		const installed = isCatalogModInstalled(project);
+		const action = document.createElement('button');
+		action.type = 'button';
+		action.className = 'btn ' + (installed ? 'btn--ghost' : 'btn--primary') + ' btn--small';
+		action.textContent = installed ? 'Installed' : state.modsCatalog.installing === project.projectId ? 'Installing…' : 'Install';
+		action.disabled = installed || Boolean(state.modsCatalog.installing) || !versionMatches;
+		if (!versionMatches) action.title = 'Search again for the active Minecraft version';
+		action.addEventListener('click', () => installCatalogMod(project));
+
+		row.append(icon, copy, action);
+		container.appendChild(row);
+	}
+}
+
+async function searchModCatalog() {
+	const query = $('#mods-catalog-search').value.trim();
+	if (query.length < 2) {
+		$('#mods-catalog-status').textContent = 'Enter at least two characters to search Modrinth.';
+		$('#mods-catalog-results').replaceChildren();
+		return;
+	}
+
+	const gameVersion = currentProfile().gameVersion;
+	const button = $('#mods-catalog-search-button');
+	button.disabled = true;
+	button.textContent = 'Searching…';
+	$('#mods-catalog-status').textContent = 'Searching Modrinth for Fabric mods compatible with Minecraft ' + gameVersion + '…';
+	$('#mods-catalog-results').replaceChildren();
+
+	try {
+		const result = await api.mods.search(query, gameVersion);
+		if (!result?.ok) {
+			state.modsCatalog.projects = [];
+			$('#mods-catalog-status').textContent = result?.error || 'The Modrinth catalog could not be reached.';
+			toast(result?.error || 'The Modrinth catalog could not be reached.', 'error');
+			return;
+		}
+
+		state.modsCatalog = {
+			...state.modsCatalog,
+			projects: result.projects || [],
+			query,
+			gameVersion,
+			installing: null
+		};
+		$('#mods-catalog-status').textContent = state.modsCatalog.projects.length
+			? state.modsCatalog.projects.length + ' Fabric projects found for Minecraft ' + gameVersion + ' · sorted by downloads'
+			: 'No compatible Fabric projects found. Try another search.';
+		renderModCatalog();
+	} catch (error) {
+		$('#mods-catalog-status').textContent = error.message || 'The Modrinth catalog could not be reached.';
+		toast(error.message || 'The Modrinth catalog could not be reached.', 'error');
+	} finally {
+		button.disabled = false;
+		button.textContent = 'Search';
+	}
+}
+
+async function installCatalogMod(project) {
+	const gameVersion = currentProfile().gameVersion;
+	if (state.modsCatalog.gameVersion !== gameVersion) {
+		toast('Your active Minecraft version changed. Search again before installing.', 'error');
+		return;
+	}
+	if (state.modsCatalog.installing) return;
+
+	state.modsCatalog.installing = project.projectId;
+	renderModCatalog();
+
+	try {
+		const result = await api.mods.install(project.projectId, gameVersion);
+		if (!result?.ok) {
+			toast(result?.error || 'The mod could not be installed.', 'error');
+			return;
+		}
+
+		state.mods = result.mods || (await api.mods.list()).mods || [];
+		renderMods();
+		const installedEntries = result.installed || [];
+		const addedCount = installedEntries.filter((entry) => !entry.alreadyInstalled).length;
+		const dependencyCount = Math.max(0, addedCount - 1);
+		toast(
+			addedCount === 0
+				? project.title + ' is already installed.'
+				: project.title + ' installed' + (dependencyCount ? ' with ' + dependencyCount + ' required dependenc' + (dependencyCount === 1 ? 'y' : 'ies') : '') + '. Restart Minecraft to load it.',
+			'success'
+		);
+		$('#mods-catalog-status').textContent = 'Installed ' + project.title + ' for Minecraft ' + gameVersion + '. Restart the game to load new mods.';
+	} catch (error) {
+		toast(error.message || 'The mod could not be installed.', 'error');
+	} finally {
+		state.modsCatalog.installing = null;
+		renderMods();
+		renderModCatalog();
+	}
+}
+
 async function loadMods() {
 	const result = await api.mods.list();
 	if (!result.ok) {
@@ -580,6 +733,7 @@ async function loadMods() {
 	state.mods = result.mods || [];
 	$('#mods-path').textContent = result.folder || '';
 	renderMods();
+	renderModCatalog();
 }
 
 async function openModsFolder() {
@@ -2230,6 +2384,7 @@ async function loadProfiles() {
 	}
 
 	applyProfile(result.activeFor);
+	renderModCatalog();
 }
 
 /**
@@ -2518,6 +2673,10 @@ async function init() {
 	$('#versions-filter').addEventListener('change', renderVersions);
 	$('#mods-search').addEventListener('input', renderMods);
 	$('#mods-filter').addEventListener('change', renderMods);
+	$('#mods-catalog-search-button').addEventListener('click', searchModCatalog);
+	$('#mods-catalog-search').addEventListener('keydown', (event) => {
+		if (event.key === 'Enter') searchModCatalog();
+	});
 	$('#quick-servers-open').addEventListener('click', () => showPage('servers'));
 	$('#java-runtime-settings').addEventListener('click', () => showPage('settings'));
 
