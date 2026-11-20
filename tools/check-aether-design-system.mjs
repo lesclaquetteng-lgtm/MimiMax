@@ -14,8 +14,10 @@ function cssColor(name){
 function javaValues(id){
  const start=java.indexOf(`${id.toUpperCase()}("${id}"`);
  assert.notEqual(start,-1,`Missing Java palette ${id}`);
- let end=java.indexOf(")),",start);
- if(end===-1)end=java.indexOf("));",start);
+ const commaEnd=java.indexOf(")),",start);
+ const semicolonEnd=java.indexOf("));",start);
+ const candidates=[commaEnd,semicolonEnd].filter(value=>value!==-1);
+ const end=candidates.length?Math.min(...candidates):-1;
  assert.notEqual(end,-1,`Palette ${id} is not closed`);
  return [...java.slice(start,end).matchAll(/0xFF([0-9A-Fa-f]{6})/g)].map(m=>`#${m[1]}`.toUpperCase());
 }
