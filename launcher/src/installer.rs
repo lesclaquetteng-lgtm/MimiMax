@@ -299,10 +299,14 @@ fn unique_asset_objects(
     let mut sizes = std::collections::HashMap::<String, u64>::new();
     let mut unique = Vec::new();
 
-    for object in objects {
+    for mut object in objects {
         if !crate::minecraft::is_sha1_hash(&object.hash) {
             return Err(invalid_path("asset object SHA-1", &object.hash));
         }
+
+        // SHA-1 is case-insensitive. Canonicalizing prevents duplicate paths/checksum mismatches
+        // when an index repeats one digest with different hexadecimal letter casing.
+        object.hash.make_ascii_lowercase();
 
         match sizes.get(&object.hash) {
             Some(size) if *size != object.size => {
@@ -796,6 +800,21 @@ mod tests {
 
         assert_eq!(unique.len(), 2);
         assert_eq!(unique.iter().map(|object| object.size).sum::<u64>(), 192);
+    }
+
+    #[test]
+    fn asset_hashes_with_different_hex_case_are_canonicalized_and_deduplicated() {
+        let lower = "abcdef0123456789abcdef0123456789abcdef01".to_string();
+        let upper = lower.to_ascii_uppercase();
+        let objects = vec![
+            AssetObject { hash: lower.clone(), size: 64 },
+            AssetObject { hash: upper, size: 64 },
+        ];
+
+        let unique = unique_asset_objects(objects).unwrap();
+
+        assert_eq!(unique.len(), 1);
+        assert_eq!(unique[0].hash, lower);
     }
 
     #[test]
