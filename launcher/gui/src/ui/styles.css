@@ -1123,7 +1123,7 @@ html[data-surface="draft"] body::before {
 html[data-surface="plain"] body::before { display: none; }
 
 .titlebar { position: relative; z-index: 100; }
-.shell { position: relative; z-index: 1; }
+.shell { position: relative; z-index: auto; }
 .content { background: transparent; }
 
 /* Compact mode changes the actual workspace rhythm, not just a label in the settings page. */
@@ -1220,6 +1220,27 @@ html[data-navigation="rail"] .status-pill { justify-content: center; }
 		linear-gradient(145deg, color-mix(in srgb, var(--surface) 96%, var(--accent) 4%), var(--color-bg-elevated));
 	box-shadow: 0 18px 46px rgba(0,0,0,0.18);
 }
+.studio-preview-frame::before {
+	content: "";
+	position: absolute;
+	inset: 0;
+	z-index: 0;
+	pointer-events: none;
+	opacity: 0.48;
+}
+html[data-surface="contour"] .studio-preview-frame::before {
+	background-image: repeating-radial-gradient(ellipse at 74% 20%, transparent 0 13px, color-mix(in srgb, var(--accent) 13%, transparent) 14px 15px, transparent 16px 28px);
+}
+html[data-surface="draft"] .studio-preview-frame::before {
+	background-image: linear-gradient(color-mix(in srgb, var(--accent) 9%, transparent) 1px, transparent 1px), linear-gradient(90deg, color-mix(in srgb, var(--accent) 9%, transparent) 1px, transparent 1px);
+	background-size: 20px 20px;
+}
+html[data-surface="plain"] .studio-preview-frame::before { display: none; }
+html[data-navigation="rail"] .studio-preview-frame { grid-template-columns: 54px minmax(0, 1fr); }
+html[data-navigation="rail"] .studio-preview-rail-item span { display: none; }
+html[data-density="compact"] .studio-preview-rail { gap: 6px; padding-top: 12px; }
+html[data-density="compact"] .studio-preview-content { padding-top: 14px; padding-bottom: 12px; }
+
 .studio-preview-rail {
 	position: relative;
 	z-index: 2;
