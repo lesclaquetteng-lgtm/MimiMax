@@ -2061,31 +2061,38 @@ function applyAppearance(settings = {}) {
 	}
 }
 
-/** Saves an appearance change, keeping the live preview and persisted settings in sync. */
-async function saveAppearance(patch) {
-	const previous = { ...state.settings };
-	const optimistic = { ...previous, ...patch };
-	applyAppearance(optimistic);
+/** Saves appearance changes sequentially so fast clicks cannot overwrite each other's settings. */
+let appearanceSaveQueue = Promise.resolve();
 
-	try {
-		const result = await api.settings.update(patch);
-		if (!result || !result.ok) {
+function saveAppearance(patch) {
+	const commit = async () => {
+		const previous = { ...state.settings };
+		const optimistic = { ...previous, ...patch };
+		applyAppearance(optimistic);
+
+		try {
+			const result = await api.settings.update(patch);
+			if (!result || !result.ok) {
+				state.settings = previous;
+				applyAppearance(previous);
+				toast(result?.error || 'The appearance could not be saved.', 'error');
+				return false;
+			}
+			state.settings = { ...optimistic, ...(result.settings || {}) };
+			applyAppearance(state.settings);
+			return true;
+		} catch (error) {
 			state.settings = previous;
 			applyAppearance(previous);
-			toast(result?.error || 'The appearance could not be saved.', 'error');
+			toast(`The appearance could not be saved: ${error.message}`, 'error');
 			return false;
 		}
-		state.settings = { ...optimistic, ...(result.settings || {}) };
-		applyAppearance(state.settings);
-		return true;
-	} catch (error) {
-		state.settings = previous;
-		applyAppearance(previous);
-		toast(`The appearance could not be saved: ${error.message}`, 'error');
-		return false;
-	}
-}
+	};
 
+	const operation = appearanceSaveQueue.then(commit, commit);
+	appearanceSaveQueue = operation.then(() => undefined, () => undefined);
+	return operation;
+}
 /**
  * The ink that stays readable on a given colour: white while it clears the 4.5:1 floor of the WCAG,
  * black below it. Every coloured label of the launcher reads its ink here.
