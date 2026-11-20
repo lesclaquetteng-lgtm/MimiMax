@@ -1,3 +1,8 @@
+
+:root {
+	/* Default Voxel Aurora accent; a saved player accent set inline by app.js still takes precedence. */
+	--accent-user: #8bf0a5;
+}
 /* ------------------------------------------------------------------ theme --
  *
  * Aether Client — graphite editorial.
