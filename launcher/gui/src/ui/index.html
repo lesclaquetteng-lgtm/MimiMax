@@ -464,63 +464,159 @@
 			</section>
 
 			<!-- ========================== SETTINGS ========================== -->
-			<section class="page" data-page="settings">
-				<header class="page-header">
+			<section class="page studio-page" data-page="settings">
+				<header class="page-header studio-header">
 					<div>
-						<h1>Settings</h1>
-						<p>The runtime, the memory and the appearance of the launcher.</p>
+						<p class="studio-kicker">AETHER / WORKSPACE DESIGN</p>
+						<h1>Identity Studio</h1>
+						<p>Shape the atmosphere, surface and rhythm of your launcher. Changes are previewed live and saved to this machine.</p>
+					</div>
+					<div class="studio-edition">
+						<span class="studio-live-dot"></span>
+						<span>LIVE COMPOSITION</span>
 					</div>
 				</header>
 
-				<div class="grid grid--two">
+				<div class="studio-layout">
+					<section class="studio-preview-column" aria-label="Live appearance preview">
+						<div class="studio-preview-meta">
+							<span>01 — YOUR WORKSPACE</span>
+							<span id="studio-theme-name">GRAPHITE / CONTOUR</span>
+						</div>
+						<div class="studio-preview-frame" id="studio-preview">
+							<div class="studio-preview-rail">
+								<div class="studio-preview-mark"><span></span><span></span><span></span></div>
+								<div class="studio-preview-rail-rule"></div>
+								<div class="studio-preview-rail-item is-active"><i>01</i><span>PLAY</span></div>
+								<div class="studio-preview-rail-item"><i>02</i><span>VAULT</span></div>
+								<div class="studio-preview-rail-item"><i>03</i><span>MODS</span></div>
+								<div class="studio-preview-rail-item"><i>04</i><span>NETWORK</span></div>
+								<div class="studio-preview-rail-bottom"><span class="studio-preview-status"></span><span>LOCAL</span></div>
+							</div>
+							<div class="studio-preview-content">
+								<div class="studio-preview-top">
+									<span>AETHER <b>/</b> CLIENT</span>
+									<span>FIELD NOTE 001</span>
+								</div>
+								<div class="studio-preview-main">
+									<div class="studio-preview-overline"><span></span> SESSION READY <small>01.21.11</small></div>
+									<h2>Build your<br /><em>own</em> atmosphere.</h2>
+									<p>A personal space for the way you play. Precise, quiet and entirely yours.</p>
+									<div class="studio-preview-metrics">
+										<div><small>MEMORY</small><strong id="studio-preview-memory">4096 <i>MB</i></strong></div>
+										<div><small>PROFILE</small><strong>DEFAULT</strong></div>
+										<div><small>CHANNEL</small><strong>STABLE</strong></div>
+									</div>
+									<div class="studio-preview-action"><span>ENTER WORLD</span><b>↗</b></div>
+								</div>
+								<div class="studio-preview-footer">
+									<span>DESIGNED TO DISAPPEAR INTO YOUR FLOW</span>
+									<span id="studio-preview-accent">SIGNAL / 01</span>
+								</div>
+							</div>
+							<div class="studio-preview-orbit" aria-hidden="true"><span></span><span></span><span></span></div>
+						</div>
+						<div class="studio-preview-caption">
+							<span>THE PREVIEW USES YOUR CURRENT SETTINGS</span>
+							<span id="studio-preview-density">ROOMY · WIDE NAVIGATION</span>
+						</div>
+					</section>
+
+					<div class="studio-controls">
+						<section class="studio-control-section">
+							<div class="studio-section-head">
+								<div><span class="studio-index">A</span><h2>Colourway</h2></div>
+								<span>CHOOSE A MATERIAL</span>
+							</div>
+							<div class="studio-theme-choices" id="theme-choices">
+								<button type="button" class="studio-theme-choice is-active" data-theme="graphite" aria-pressed="true">
+									<span class="studio-theme-swatch swatch-graphite"><i></i><i></i><i></i></span>
+									<span><strong>Graphite</strong><small>Quiet / neutral</small></span><b>01</b>
+								</button>
+								<button type="button" class="studio-theme-choice" data-theme="oxide" aria-pressed="false">
+									<span class="studio-theme-swatch swatch-oxide"><i></i><i></i><i></i></span>
+									<span><strong>Oxide</strong><small>Warm / industrial</small></span><b>02</b>
+								</button>
+								<button type="button" class="studio-theme-choice" data-theme="field" aria-pressed="false">
+									<span class="studio-theme-swatch swatch-field"><i></i><i></i><i></i></span>
+									<span><strong>Field</strong><small>Organic / technical</small></span><b>03</b>
+								</button>
+								<button type="button" class="studio-theme-choice" data-theme="blueprint" aria-pressed="false">
+									<span class="studio-theme-swatch swatch-blueprint"><i></i><i></i><i></i></span>
+									<span><strong>Blueprint</strong><small>Cool / precise</small></span><b>04</b>
+								</button>
+							</div>
+							<label class="studio-accent-field">
+								<span><strong>Personal signal</strong><small>Override the signature accent</small></span>
+								<span class="studio-accent-input"><input type="color" id="input-accent" value="#e7e9ec" aria-label="Custom accent colour" /><output id="output-accent">#E7E9EC</output></span>
+							</label>
+						</section>
+
+						<section class="studio-control-section">
+							<div class="studio-section-head">
+								<div><span class="studio-index">B</span><h2>Surface</h2></div>
+								<span>BACKGROUND LINEWORK</span>
+							</div>
+							<div class="studio-segmented" id="surface-choices">
+								<button type="button" data-surface="contour" class="is-active" aria-pressed="true"><span class="surface-glyph surface-contour"></span><strong>Contour</strong><small>Topographic</small></button>
+								<button type="button" data-surface="draft" aria-pressed="false"><span class="surface-glyph surface-draft"></span><strong>Draft</strong><small>Grid / technical</small></button>
+								<button type="button" data-surface="plain" aria-pressed="false"><span class="surface-glyph surface-plain"></span><strong>Quiet</strong><small>No linework</small></button>
+							</div>
+						</section>
+
+						<section class="studio-control-section">
+							<div class="studio-section-head">
+								<div><span class="studio-index">C</span><h2>Workspace rhythm</h2></div>
+								<span>LAYOUT / DENSITY</span>
+							</div>
+							<div class="studio-choice-row">
+								<div class="studio-choice-block"><span class="studio-choice-label">SPACING</span><div class="studio-pill-choices" id="density-choices">
+									<button type="button" data-density="roomy" class="is-active" aria-pressed="true">Roomy</button>
+									<button type="button" data-density="compact" aria-pressed="false">Compact</button>
+								</div></div>
+								<div class="studio-choice-block"><span class="studio-choice-label">NAVIGATION</span><div class="studio-pill-choices" id="navigation-choices">
+									<button type="button" data-navigation="wide" class="is-active" aria-pressed="true">Expanded</button>
+									<button type="button" data-navigation="rail" aria-pressed="false">Icon rail</button>
+								</div></div>
+							</div>
+						</section>
+
+						<div class="studio-reset-row">
+							<span>Every choice is stored locally. No account or cloud sync.</span>
+							<button type="button" class="btn btn--ghost btn--small" id="appearance-reset">Reset studio</button>
+						</div>
+					</div>
+				</div>
+
+				<div class="studio-secondary-grid">
 					<div class="block">
-						<div class="block-head"><h2 class="block-title">Runtime</h2></div>
+						<div class="block-head"><h2 class="block-title">Runtime</h2><span class="block-subtitle">JAVA / MEMORY</span></div>
 						<div class="block-body">
 							<label class="field">
 								<span class="field-label">Java path</span>
 								<input type="text" id="input-java" class="input" placeholder="Auto detected" />
 							</label>
-							<label class="field">
-								<span class="field-label">Maximum memory</span>
-								<div class="range-row">
-									<input type="range" id="range-max-memory" min="1024" max="16384" step="256" value="4096" aria-label="Maximum memory" />
-									<output id="output-max-memory">4096 MB</output>
-								</div>
-							</label>
-							<label class="field">
-								<span class="field-label">Initial memory</span>
-								<div class="range-row">
-									<input type="range" id="range-min-memory" min="256" max="8192" step="256" value="1024" aria-label="Initial memory" />
-									<output id="output-min-memory">1024 MB</output>
-								</div>
-							</label>
-							<label class="field--inline">
-								<input type="checkbox" id="check-g1" checked />
-								<span>Use the G1 garbage collector</span>
-							</label>
+							<div class="grid grid--two">
+								<label class="field"><span class="field-label">Maximum memory</span><div class="range-row"><input type="range" id="range-max-memory" min="1024" max="16384" step="256" value="4096" aria-label="Maximum memory" /><output id="output-max-memory">4096 MB</output></div></label>
+								<label class="field"><span class="field-label">Initial memory</span><div class="range-row"><input type="range" id="range-min-memory" min="256" max="8192" step="256" value="1024" aria-label="Initial memory" /><output id="output-min-memory">1024 MB</output></div></label>
+							</div>
+							<label class="field--inline"><input type="checkbox" id="check-g1" checked /><span>Use the G1 garbage collector</span></label>
 						</div>
 					</div>
-
 					<div class="block">
-						<div class="block-head"><h2 class="block-title">Appearance</h2></div>
+						<div class="block-head"><h2 class="block-title">Fabric</h2><span class="block-subtitle">CLIENT DEPENDENCY</span></div>
 						<div class="block-body">
-							<label class="field">
-								<span class="field-label">Accent colour</span>
-								<div class="range-row">
-									<input type="color" id="input-accent" class="input" value="#e7e9ec" />
-									<output id="output-accent">#E7E9EC</output>
-								</div>
-							</label>
 							<label class="field">
 								<span class="field-label">Fabric API version</span>
 								<input type="text" id="input-fabric-api" class="input" />
 							</label>
+							<p class="muted">The version used for the next repair or installation. Existing profiles keep their selected Minecraft and Fabric loader versions.</p>
 						</div>
 					</div>
 				</div>
 
 				<div class="block">
-					<div class="block-head"><h2 class="block-title">Paths</h2></div>
+					<div class="block-head"><h2 class="block-title">Installation paths</h2><span class="block-subtitle">LOCAL STORAGE</span></div>
 					<pre class="console console--static" id="paths-output"></pre>
 				</div>
 			</section>
