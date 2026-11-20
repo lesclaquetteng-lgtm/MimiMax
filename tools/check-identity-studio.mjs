@@ -51,8 +51,14 @@ for (const id of ids) {
   requireExactlyOnce('html', `id="${id}"`, `Identity Studio control #${id} must exist exactly once`);
 }
 
-for (const theme of ['graphite', 'oxide', 'field', 'blueprint']) {
+for (const [theme, accent] of Object.entries({
+  graphite: '#E7E9EC',
+  oxide: '#D99A69',
+  field: '#C0D18A',
+  blueprint: '#83C5DF'
+})) {
   requireText('app', `${theme}:`, `Missing ${theme} colourway in the controller`);
+  requireText('app', `${theme}: '${accent}'`, `Missing signature accent for ${theme}`);
   requireText('html', `data-theme="${theme}"`, `Missing ${theme} colourway choice`);
 
   for (const channel of [
@@ -100,6 +106,8 @@ for (const [key, value] of [
   requireText('settings', `${key}: "${value}".to_string()`, `Missing default for ${key}`);
 }
 requireText('settings', 'appearance_settings_are_patched_and_survive_serialization', 'Missing settings round-trip regression test');
+requireText('settings', 'self.theme.eq_ignore_ascii_case("dark")', 'Legacy dark theme must migrate to graphite');
+requireText('settings', 'a_legacy_dark_theme_is_migrated_to_graphite_and_saved', 'Missing legacy theme migration regression test');
 
 if (failures.length) {
   for (const failure of failures) console.error(`FAIL ${failure}`);
