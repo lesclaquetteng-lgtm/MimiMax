@@ -11,6 +11,7 @@ pub mod installer;
 pub mod logs;
 pub mod minecraft;
 pub mod mods;
+pub mod modrinth;
 pub mod offline;
 pub mod paths;
 pub mod performance;
