@@ -39,7 +39,7 @@ public final class HudManager {
 			if (measure) {
 				element.updateSize();
 			}
-			element.render(graphics, partialTick);
+			element.invokeSafely("onRender", () -> element.render(graphics, partialTick));
 		}
 	}
 

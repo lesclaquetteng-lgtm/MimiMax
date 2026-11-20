@@ -80,7 +80,7 @@ public final class ModuleManager {
 	public void tick() {
 		for (Module module : modules.values()) {
 			if (module.isEnabled()) {
-				module.onTick();
+				module.invokeSafely("onTick", module::onTick);
 			}
 		}
 	}
@@ -96,7 +96,7 @@ public final class ModuleManager {
 	public void render(GuiGraphics graphics, float partialTick) {
 		for (Module module : modules.values()) {
 			if (module.isEnabled() && !(module instanceof HudElement)) {
-				module.onRender(graphics, partialTick);
+				module.invokeSafely("onRender", () -> module.onRender(graphics, partialTick));
 			}
 		}
 	}
@@ -107,6 +107,16 @@ public final class ModuleManager {
 	public void updateAnimations(long deltaMillis) {
 		for (Module module : modules.values()) {
 			module.updateAnimations(deltaMillis);
+		}
+	}
+
+	/**
+	 * Disables every module for the current runtime. Safe-mode callers deliberately avoid capturing
+	 * this temporary state back into persisted preferences.
+	 */
+	public void disableAll() {
+		for (Module module : modules.values()) {
+			module.setEnabled(false);
 		}
 	}
 

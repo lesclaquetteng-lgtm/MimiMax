@@ -140,3 +140,12 @@ Prints the version of the client and the type of the session.
 
 The page also prints the wear of the pack (`11/11`), the folder of the mods and the preset that was
 applied last.
+
+
+### Safe recovery after repeated abnormal shutdowns
+
+After two consecutive sessions that do not reach Fabric's normal stopping callback, Aether offers
+a title-screen choice: start with Aether modules disabled for this session, or continue normally.
+The notice explains that abnormal shutdowns are not proof that Aether caused a crash. The optional
+`/aether safe-mode` command is also available in-game. Saved module preferences are preserved and
+return on the next normal launch.
