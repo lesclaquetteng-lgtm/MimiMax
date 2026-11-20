@@ -168,7 +168,7 @@ See [`docs/FEATURES.md`](docs/FEATURES.md) for the detailed list.
   interface warns before a cracked server can reject the connection.
 - Performance page: optimisation pack from Modrinth, reversible game options and JVM presets, with an installation/configuration status instead of a simulated FPS benchmark.
 - Quick Connect: join a saved server from the Play page without opening the full server manager.
-- Searchable version and mod lists: filter releases/snapshots and enable/disable local Fabric mods.
+- Searchable version and mod libraries: filter releases/snapshots, discover/install Fabric mods from Modrinth, and enable/disable local JARs. The Rust core installs required dependencies and verifies downloads with SHA-1.
 - Java runtime diagnostics: the Rust core checks compatible installations in common folders and on `PATH`, and explains missing or incompatible versions before launch.
 - Ctrl+K command palette for pages, actions and saved servers, plus Ctrl+1…8 page shortcuts.
 - Records the process of the game, so a game left behind by a closed launcher can still be stopped
