@@ -65,6 +65,18 @@ Covered by the suite: settings and accounts, path resolution, metadata and rule 
 and argument resolution, download/checksum primitives, the installer pipeline, the server list, the
 login probe parsing, the hosting properties/RCON helpers, and the options presets.
 
+Microsoft credential handling is covered by the account serialization and credential-vault tests:
+
+- The public account catalogue does not serialize access or refresh tokens, so account-list JSON and
+  the renderer IPC response cannot expose those fields.
+- On Windows, the DPAPI round-trip test writes protected ciphertext, reloads it for the same user and
+  restores the session fields in memory.
+- Legacy plaintext account files are migrated by writing the protected vault before replacing the
+  public account catalogue. A failed migration scrubs the legacy fields from the catalogue and asks
+  the player to sign in again.
+- The diagnostic command masks the access token before printing launch arguments.
+
+
 Two tests were added during this run because the code had a real defect:
 
 - `the_pack_lists_unique_slugs_and_carries_its_libraries` — the pack must ship Cloth Config,
