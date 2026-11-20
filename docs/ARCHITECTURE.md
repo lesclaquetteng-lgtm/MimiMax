@@ -53,6 +53,12 @@ Key properties:
 - **Single source of truth for launch/install logic** in Rust; the interface does not duplicate it.
 - **JSON CLI contract** enables scripting and decouples the interface from the core.
 - **Checksum-verified downloads** (SHA-1 where provided/expected) to avoid corrupted/cached-bad files.
+- **Untrusted metadata stays inside its namespace**: version IDs, library-relative paths, asset hashes,
+  hosted-server version identifiers and remote JAR filenames are validated before local path joins.
+- **Content-addressed asset scheduling**: duplicate SHA-1 objects are collapsed before parallel
+  downloads, preventing workers from racing over a shared object destination or partial file.
+- **Managed file boundaries**: mod and session-log operations reject symbolic links instead of
+  following them outside their managed folders.
 
 ### Native shell (`launcher/desktop`)
 
@@ -64,12 +70,16 @@ are the same ones the previous Electron shell loaded.
 | --- | --- |
 | `src/main.rs` | Window creation (shown only once the first frame is ready), single-instance lock, command registration, kill of the running processes on exit. |
 | `src/commands.rs` | One `#[tauri::command]` per call of the interface: same names, same arguments and same answers as the old IPC handlers. |
-| `src/core.rs` | Finds, embeds and runs the core; turns its JSON lines into events (`install:progress`, `game:output`, …); enforces a per-command timeout; exposes `kill_tree`. |
-| `src/state.rs` | The processes the window can stop while they run (installation, game). |
-| `tauri.conf.json` | Window size/behaviour, CSP, NSIS packaging (French), icons and licence. |
+| `src/core.rs` | Finds, embeds and runs the core; turns its JSON lines into events (`install:progress`, `game:output`, …); enforces a per-command timeout; atomically extracts embedded binaries/JARs with unique temporary siblings; exposes `kill_tree`. |
+| `src/state.rs` | The processes the window can stop while they run (installation, game), with atomic single-operation guards so concurrent commands cannot overwrite the tracked PID. |
+| `tauri.conf.json` | Window size/behaviour, injected CSP and JavaScript prototype freeze, NSIS packaging (French), icons and licence. |
 
 The interface (`launcher/gui/src/ui/`) is plain HTML/CSS/JavaScript. `bridge.js` exposes
 `window.aether` over Tauri's `invoke`, so `app.js` never learned that the shell changed.
+
+The WebView policy is set in `tauri.conf.json`, not only in an HTML meta tag: scripts are self-hosted,
+objects are disabled, the base URL and form targets are restricted to the local origin, and
+`freezePrototype` prevents page scripts from modifying built-in JavaScript prototypes.
 
 **Why the shell is native and not Electron.** The Electron build shipped a whole Chromium for a
 launcher: ~150 MB installed against one ~8.75 MB executable, and it added a Node runtime next to the
