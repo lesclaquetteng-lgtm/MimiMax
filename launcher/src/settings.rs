@@ -17,6 +17,9 @@ pub const DEFAULT_PROFILE: &str = "Default";
 #[serde(rename_all = "camelCase")]
 pub struct Profile {
     pub name: String,
+    /// A short note explaining when this configuration should be used.
+    #[serde(default)]
+    pub description: String,
     pub game_version: String,
     pub loader_version: String,
     pub max_memory: u32,
@@ -35,6 +38,7 @@ impl Profile {
     pub fn named(name: &str, settings: &Settings) -> Profile {
         Profile {
             name: name.to_string(),
+            description: String::new(),
             game_version: settings.game_version.clone(),
             loader_version: settings.loader_version.clone(),
             max_memory: settings.max_memory,
@@ -381,6 +385,18 @@ pub fn detect_java(preferred: &str, required_major: u32) -> Option<PathBuf> {
         "java"
     };
 
+    // Honour JAVA_HOME before scanning the standard vendor folders and PATH.
+    if let Some(home) = std::env::var_os("JAVA_HOME") {
+        let candidate = PathBuf::from(home).join("bin").join(executable_name);
+        if candidate.is_file() {
+            if let Some(major) = read_java_major_version(&candidate) {
+                if major >= required_major {
+                    return Some(candidate);
+                }
+            }
+        }
+    }
+
     let mut usable: Vec<(PathBuf, u32)> = Vec::new();
 
     for root in java_roots() {
@@ -396,6 +412,24 @@ pub fn detect_java(preferred: &str, required_major: u32) -> Option<PathBuf> {
             }
             if let Some(major) = read_java_major_version(&candidate) {
                 if major >= required_major && !usable.iter().any(|(_, seen)| *seen == major) {
+                    usable.push((candidate, major));
+                }
+            }
+        }
+    }
+
+    // Also inspect PATH: users frequently install Java through Scoop, Chocolatey,
+    // SDKMAN or a custom package manager instead of the standard vendor directories.
+    if let Some(path_value) = std::env::var_os("PATH") {
+        for directory in std::env::split_paths(&path_value) {
+            let candidate = directory.join(executable_name);
+            if !candidate.is_file() {
+                continue;
+            }
+            if let Some(major) = read_java_major_version(&candidate) {
+                if major >= required_major
+                    && !usable.iter().any(|(seen_path, _)| seen_path == &candidate)
+                {
                     usable.push((candidate, major));
                 }
             }
@@ -651,6 +685,7 @@ mod tests {
         let mut settings = Settings::default();
         settings.profiles.push(Profile {
             name: "Hardcore".to_string(),
+            description: "Long-form survival with a stable mod set.".to_string(),
             game_version: "1.20.1".to_string(),
             loader_version: "0.15.11".to_string(),
             max_memory: 8192,
@@ -667,6 +702,14 @@ mod tests {
         assert_eq!(settings.profile_for(None).name, "Hardcore");
         // The account still decides when it names a profile itself.
         assert_eq!(settings.profile_for(Some("Default")).name, DEFAULT_PROFILE);
+    }
+
+    #[test]
+    fn profiles_from_older_settings_files_default_the_description() {
+        let settings: Settings = serde_json::from_str(
+            r#"{"profiles":[{"name":"PvP","gameVersion":"1.8.9","loaderVersion":"0.15.11","maxMemory":4096,"minMemory":1024,"windowWidth":854,"windowHeight":480}]}"#
+        ).expect("older profile JSON remains readable");
+        assert_eq!(settings.profile("PvP").unwrap().description, "");
     }
 
     #[test]

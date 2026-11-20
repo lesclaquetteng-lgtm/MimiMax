@@ -208,6 +208,7 @@ pub async fn profiles_add(app: AppHandle, name: String, source: Value) -> Value 
 	let mut args = vec!["profiles".to_string(), "add".to_string(), name];
 
 	for (key, flag) in [
+		("description", "--description"),
 		("version", "--version"),
 		("loader", "--loader"),
 		("memory", "--memory"),
@@ -229,6 +230,7 @@ pub async fn profiles_update(app: AppHandle, name: String, patch: Value) -> Valu
 	let mut args = vec!["profiles".to_string(), "update".to_string(), name];
 
 	for (key, flag) in [
+		("description", "--description"),
 		("version", "--version"),
 		("loader", "--loader"),
 		("memory", "--memory"),
@@ -262,7 +264,55 @@ pub async fn mods_list(app: AppHandle) -> Value {
 }
 
 #[tauri::command(rename_all = "snake_case")]
-pub async fn mods_toggle(app: AppHandle, name: String, enabled: bool) -> Value {
+pub async fn mods_search(app: AppHandle, query: String, game_version: String) -> Value {
+	core::run_core(
+		app,
+		vec![
+			"mods".to_string(),
+			"search".to_string(),
+			query,
+			"--game-version".to_string(),
+			game_version,
+		],
+	)
+	.await
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn mods_install(
+	app: AppHandle,
+	state: State<'_, RunState>,
+	project_id: String,
+	game_version: String,
+) -> Value {
+	let Some(_operation) = state.acquire_install() else {
+		return failure("Mods cannot be installed while Minecraft is starting, running or another install is active.");
+	};
+	blocking_stream_tracked(
+		app,
+		&state,
+		vec![
+			"mods".to_string(),
+			"install".to_string(),
+			project_id,
+			"--game-version".to_string(),
+			game_version,
+		],
+		StreamKind::Modrinth,
+	)
+	.await
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn mods_toggle(
+	app: AppHandle,
+	state: State<'_, RunState>,
+	name: String,
+	enabled: bool,
+) -> Value {
+	let Some(_operation) = state.acquire_install() else {
+		return failure("Mods cannot be changed while Minecraft is starting, running or another install is active.");
+	};
 	core::run_core(
 		app,
 		vec![
@@ -437,7 +487,14 @@ pub async fn performance_list(app: AppHandle) -> Value {
 }
 
 #[tauri::command(rename_all = "snake_case")]
-pub async fn performance_tune(app: AppHandle, preset: String) -> Value {
+pub async fn performance_tune(
+	app: AppHandle,
+	state: State<'_, RunState>,
+	preset: String,
+) -> Value {
+	let Some(_operation) = state.acquire_install() else {
+		return failure("Game options cannot be changed while Minecraft is starting, running or installing.");
+	};
 	core::run_core(
 		app,
 		vec![
@@ -464,7 +521,14 @@ pub async fn performance_jvm(app: AppHandle, preset: String) -> Value {
 }
 
 #[tauri::command(rename_all = "snake_case")]
-pub async fn performance_install(app: AppHandle, slugs: Option<Value>) -> Value {
+pub async fn performance_install(
+	app: AppHandle,
+	state: State<'_, RunState>,
+	slugs: Option<Value>,
+) -> Value {
+	let Some(_operation) = state.acquire_install() else {
+		return failure("The optimization pack cannot be installed while Minecraft is starting, running or another install is active.");
+	};
 	let mut args = vec!["performance".to_string(), "install".to_string()];
 
 	if let Some(Value::Array(entries)) = slugs {
@@ -479,7 +543,7 @@ pub async fn performance_install(app: AppHandle, slugs: Option<Value>) -> Value 
 		}
 	}
 
-	blocking_stream(app, args, StreamKind::Optimisation).await
+	blocking_stream_tracked(app, &state, args, StreamKind::Optimisation).await
 }
 
 /* ------------------------------------------------------------------- logs */
@@ -521,8 +585,51 @@ async fn blocking_stream(app: AppHandle, args: Vec<String>, kind: StreamKind) ->
 		.unwrap_or_else(|| failure("The launcher core stopped unexpectedly."))
 }
 
+/// Runs a long operation while recording its child process so closing the shell cannot orphan it.
+async fn blocking_stream_tracked(
+	app: AppHandle,
+	state: &RunState,
+	args: Vec<String>,
+	kind: StreamKind,
+) -> Value {
+	let slot = state.install.clone();
+	let cleanup = state.install.clone();
+	let cancelled = Arc::new(AtomicBool::new(false));
+	let stopped = Arc::new(AtomicBool::new(false));
+	let active_cancelled = cancelled.clone();
+	let active_stopped = stopped.clone();
+	let application = app.clone();
+
+	let result = core::blocking(move || {
+		core::run_core_streaming(&application, &args, kind, move |pid, stdin| {
+			if let Ok(mut guard) = slot.lock() {
+				*guard = Some(Active {
+					pid,
+					stdin,
+					cancelled: active_cancelled,
+					stopped: active_stopped,
+				});
+			}
+		})
+	})
+	.await
+	.unwrap_or_else(|| failure("The launcher core stopped unexpectedly."));
+
+	if let Ok(mut guard) = cleanup.lock() {
+		*guard = None;
+	}
+	result
+}
+
 #[tauri::command(rename_all = "snake_case")]
-pub async fn install_start(app: AppHandle, profile: Option<Value>) -> Value {
+pub async fn install_start(
+	app: AppHandle,
+	state: State<'_, RunState>,
+	profile: Option<Value>,
+) -> Value {
+	let Some(_operation) = state.acquire_install() else {
+		return failure("Minecraft cannot be installed or repaired while the game is starting or running.");
+	};
 	let mut args = vec!["install".to_string()];
 	if let Some(version) = profile
 		.as_ref()
@@ -620,7 +727,14 @@ pub fn install_stop(state: State<'_, RunState>) -> Value {
 }
 
 #[tauri::command(rename_all = "snake_case")]
-pub async fn game_launch(app: AppHandle, options: Option<Value>) -> Value {
+pub async fn game_launch(
+	app: AppHandle,
+	state: State<'_, RunState>,
+	options: Option<Value>,
+) -> Value {
+	let Some(_operation) = state.acquire_game() else {
+		return failure("Minecraft is already running or the game files are being changed.");
+	};
 	let mut args = vec!["launch".to_string()];
 
 	if let Some(account) = options

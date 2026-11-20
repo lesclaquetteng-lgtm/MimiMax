@@ -34,8 +34,16 @@ fn main() {
 	// The installer carries the versions of the core and of the mod it was built with.
 	println!("cargo:rerun-if-changed={}", core.display());
 	println!("cargo:rerun-if-changed={}", client.display());
-	println!("cargo:rerun-if-changed=tauri.conf.json");
-	println!("cargo:rerun-if-changed=../gui/src/ui/index.html");
+	for asset in [
+		"tauri.conf.json",
+		"../gui/src/ui/index.html",
+		"../gui/src/ui/app.js",
+		"../gui/src/ui/bridge.js",
+		"../gui/src/ui/styles.css",
+		"../gui/src/ui/tokens.css",
+	] {
+		println!("cargo:rerun-if-changed={asset}");
+	}
 
 	tauri_build::build();
 }

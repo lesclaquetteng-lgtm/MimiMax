@@ -47,6 +47,8 @@ fn main() {
 			commands::profiles_update,
 			commands::profiles_remove,
 			commands::mods_list,
+			commands::mods_search,
+			commands::mods_install,
 			commands::mods_toggle,
 			commands::mods_open_folder,
 			commands::servers_list,

@@ -12,7 +12,8 @@ use aether_launcher::game;
 use aether_launcher::logs;
 use aether_launcher::installer::{InstallError, InstallProgress};
 use aether_launcher::minecraft;
-use aether_launcher::settings::Profile;
+use aether_launcher::mods;
+use aether_launcher::settings::{self, Profile};
 use aether_launcher::Launcher;
 
 fn main() {
@@ -107,6 +108,33 @@ impl Flags {
 fn command_info() -> Result<(), String> {
     let launcher = Launcher::open();
 
+    // Resolve the runtime in the Rust core so the desktop can explain exactly which
+    // executable will be used, or why launching is currently unavailable.
+    let required_java = launcher.settings.required_java_version;
+    let custom_java = !launcher.settings.java_path.trim().is_empty();
+    let java_runtime = match settings::detect_java(&launcher.settings.java_path, required_java) {
+        Some(path) => {
+            let major = settings::read_java_major_version(&path);
+            let selected_custom = custom_java && path == std::path::PathBuf::from(&launcher.settings.java_path);
+            serde_json::json!({
+                "available": true,
+                "compatible": major.map(|value| value >= required_java).unwrap_or(false),
+                "path": path.to_string_lossy(),
+                "majorVersion": major,
+                "requiredMajor": required_java,
+                "source": if selected_custom { "custom" } else { "detected" },
+            })
+        }
+        None => serde_json::json!({
+            "available": false,
+            "compatible": false,
+            "path": null,
+            "majorVersion": null,
+            "requiredMajor": required_java,
+            "source": if custom_java { "custom-invalid" } else { "not-found" },
+        }),
+    };
+
     let paths = serde_json::json!({
         "home": launcher.paths.home.to_string_lossy(),
         "data": launcher.paths.data.to_string_lossy(),
@@ -126,6 +154,7 @@ fn command_info() -> Result<(), String> {
         "version": env!("CARGO_PKG_VERSION"),
         "paths": paths,
         "settings": launcher.settings,
+        "javaRuntime": java_runtime,
         // The profile that applies to the selected account, the one a launch would use.
         "profile": launcher.active_profile(),
     }));
@@ -269,7 +298,7 @@ fn command_loaders(arguments: &[String]) -> Result<(), String> {
 
 /// The named profiles: the command lists them and changes them.
 ///
-/// `add NAME [--version] [--loader] [--memory] [--min-memory] [--width] [--height]`,
+/// `add NAME [--description] [--version] [--loader] [--memory] [--min-memory] [--width] [--height]`,
 /// `use NAME`, `assign ACCOUNT [NAME]` and `remove NAME`.
 fn command_profiles(arguments: &[String]) -> Result<(), String> {
     let mut launcher = Launcher::open();
@@ -303,6 +332,9 @@ fn command_profiles(arguments: &[String]) -> Result<(), String> {
             }
             if let Some(value) = flags.get("loader") {
                 profile.loader_version = value.to_string();
+            }
+            if let Some(value) = flags.get("description") {
+                profile.description = value.to_string();
             }
 
             profile.max_memory = number("memory", profile.max_memory);
@@ -490,6 +522,10 @@ fn command_stop() -> Result<(), String> {
 fn command_mods(arguments: &[String]) -> Result<(), String> {
     let launcher = Launcher::open();
     let flags = Flags::parse(arguments);
+    let game_version = flags
+        .get("game-version")
+        .map(|value| value.to_string())
+        .unwrap_or_else(|| launcher.active_profile().game_version);
 
     match flags.positional.first().map(|value| value.as_str()) {
         Some("list") | None => {
@@ -518,7 +554,49 @@ fn command_mods(arguments: &[String]) -> Result<(), String> {
             }));
             Ok(())
         }
-        Some(other) => Err(format!("usage: mods <list|toggle> (got {})", other)),
+        Some("search") => {
+            let query = flags.positional.iter().skip(1).cloned().collect::<Vec<_>>().join(" ");
+            let projects = mods::search_catalog(&query, &game_version)?;
+            emit(&serde_json::json!({
+                "ok": true,
+                "gameVersion": game_version,
+                "projects": projects,
+            }));
+            Ok(())
+        }
+        Some("install") => {
+            let project_id = flags.positional.get(1).ok_or_else(|| {
+                "usage: mods install <project-id> [--game-version <version>]".to_string()
+            })?;
+            let installed = mods::install_catalog_project_with_progress(
+                &launcher.paths.mods,
+                project_id,
+                &game_version,
+                |progress| {
+                    let mut event = serde_json::to_value(progress)
+                        .unwrap_or_else(|_| serde_json::json!({}));
+                    if let Some(object) = event.as_object_mut() {
+                        object.insert(
+                            "type".to_string(),
+                            serde_json::Value::String("modrinth".to_string()),
+                        );
+                    }
+                    emit(&event);
+                },
+            )?;
+            emit(&serde_json::json!({
+                "ok": true,
+                "gameVersion": game_version,
+                "installed": installed,
+                "folder": launcher.paths.mods.to_string_lossy(),
+                "mods": launcher.mods(),
+            }));
+            Ok(())
+        }
+        Some(other) => Err(format!(
+            "usage: mods <list|toggle|search|install> (got {})",
+            other
+        )),
     }
 }
 
@@ -835,6 +913,8 @@ fn print_help() {
         "  launch [--account ID]         start Minecraft",
         "  stop                          stop the game, even after a crashed launcher",
         "  mods list                     list the jars of the mods folder",
+        "  mods search <query>           search compatible Fabric mods on Modrinth",
+        "  mods install <project-id>     install a mod and its required dependencies",
         "  mods toggle <file>            enable or disable a mod (--enabled false to disable)",
         "  logs [--lines N]              print the installation log and the last sessions",
         "  profiles [list|add|update|use|assign|remove]  the named profiles of the player",
@@ -848,6 +928,7 @@ fn print_help() {
         "  --version <id>     the Minecraft version (default 1.21.11)",
         "  --loader <id>      the Fabric loader version (default 0.20.1)",
         "  --account <id>     the account, the selected one by default",
+        "  --game-version <id>  the Minecraft version used for Modrinth mod compatibility",
         "  --limit <n>        the number of versions",
         "  --key K --value V  change a setting, the value may be JSON (numbers, booleans)",
     ]

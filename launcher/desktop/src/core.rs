@@ -205,6 +205,9 @@ fn write_embedded_mod(directory: &std::path::Path, bytes: &[u8]) -> Result<PathB
 fn timeout_for(args: &[String]) -> u64 {
 	match args.first().map(String::as_str) {
 		Some("versions") | Some("loaders") => 45,
+		Some("mods") if args.get(1).map(String::as_str) == Some("search") => 45,
+		// A mod may pull several required dependencies, each with a verified resumable download.
+		Some("mods") if args.get(1).map(String::as_str) == Some("install") => 900,
 		Some("servers") => 30,
 		// The first start of a hosted server installs Fabric and the vanilla server.
 		Some("hosts") if args.get(1).map(String::as_str) == Some("start") => 900,
@@ -344,6 +347,7 @@ pub enum StreamKind {
 	Game,
 	Microsoft,
 	Optimisation,
+	Modrinth,
 }
 
 fn emit_event(app: &AppHandle, kind: StreamKind, value: &Value) {
@@ -352,6 +356,7 @@ fn emit_event(app: &AppHandle, kind: StreamKind, value: &Value) {
 		StreamKind::Game => "game:output",
 		StreamKind::Microsoft => "microsoft:deviceCode",
 		StreamKind::Optimisation => "optimisation:progress",
+		StreamKind::Modrinth => "mods:progress",
 	};
 
 	// The interface of the game only needs the text of the line, the other panels want the whole
@@ -538,6 +543,7 @@ mod tests {
 		// Only the first start of a server downloads and installs, the list is local.
 		assert_eq!(timeout_for(&args(&["hosts", "start", "Local Test"])), 900);
 		assert_eq!(timeout_for(&args(&["hosts", "list"])), 20);
+		assert_eq!(timeout_for(&args(&["mods", "install", "sodium", "--game-version", "1.21.11"])), 900);
 		assert_eq!(timeout_for(&args(&["performance", "install"])), 900);
 		assert_eq!(timeout_for(&args(&["performance", "list"])), 20);
 		assert_eq!(timeout_for(&args(&["info"])), 20);

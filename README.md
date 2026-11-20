@@ -143,9 +143,11 @@ game options and the JVM flags.
 | `performance tune --preset restore` | Puts the original `options.txt` back from the backup taken on the first tuning. |
 | `performance jvm ultra` | G1 flags tuned for a client: larger young generation, no biased locking, `AlwaysPreTouch` off. |
 
-The mod adds an **FPS Graph** HUD element (three seconds of history, green/orange/red bars) and the
-launcher reports the frame rate reached in game — see
-[`docs/images/fps-offline-hud.png`](docs/images/fps-offline-hud.png).
+The mod adds an **FPS Graph** HUD element (three seconds of history, green/orange/red bars),
+measured in-game from Minecraft's own frame updates — see
+[`docs/images/fps-offline-hud.png`](docs/images/fps-offline-hud.png). The desktop Performance page
+does not invent or estimate an FPS value: it reports the installed optimization mods, the selected
+JVM preset and the rendering options written to the game configuration.
 
 ## Features
 
@@ -164,7 +166,11 @@ See [`docs/FEATURES.md`](docs/FEATURES.md) for the detailed list.
 - Servers page: server list, ping, offline-account probe, one-click hosting of an offline server.
 - Premium-name guard: `account check` asks Mojang whether a name belongs to a Mojang account, and the
   interface warns before a cracked server can reject the connection.
-- Performance page: optimisation pack from Modrinth, options and JVM presets.
+- Performance page: optimisation pack from Modrinth, reversible game options and JVM presets, with an installation/configuration status instead of a simulated FPS benchmark.
+- Quick Connect: join a saved server from the Play page without opening the full server manager.
+- Searchable version and mod libraries: filter releases/snapshots, discover/install Fabric mods from Modrinth, and enable/disable local JARs. The Rust core installs required dependencies and verifies downloads with SHA-1.
+- Java runtime diagnostics: the Rust core checks compatible installations in common folders and on `PATH`, and explains missing or incompatible versions before launch.
+- Ctrl+K command palette for pages, actions and saved servers, plus Ctrl+1…8 page shortcuts.
 - Records the process of the game, so a game left behind by a closed launcher can still be stopped
   (`aether-launcher stop`, or the Stop button of the next session).
 - Stores settings/accounts/game data under an Aether-managed home (configurable).
@@ -188,34 +194,28 @@ See [`docs/FEATURES.md`](docs/FEATURES.md) for the detailed list.
 ### Fabric mod
 ```powershell
 cd aether-client
-# Use your installed Gradle, the Gradle wrapper if present, or the local toolchain in ../tools
-gradle build
+.\\gradlew.bat --no-daemon build
 ```
 
-Outputs:
+Output:
 - `aether-client/build/libs/aether-client-1.0.0.jar`
 
-### Launcher core (Rust)
+### Native launcher (Rust + Tauri)
+The native shell embeds **both** the Rust core executable and the Fabric client JAR. Build these
+prerequisites before compiling the shell:
+
 ```powershell
 cd launcher
 cargo build --release
-```
-
-Binary:
-- `launcher/target/release/aether-launcher` (or `.exe` on Windows)
-
-### Launcher shell (Tauri)
-```powershell
-cd launcher
 cargo build --release --manifest-path desktop/Cargo.toml
-# or, from the same folder: npm run shell
 ```
 
-Binary:
-- `launcher/desktop/target/release/aether-desktop.exe` (~8.75 MB, the core, the mod and the interface are embedded)
+Binaries:
+- `launcher/target/release/aether-launcher.exe` — game-management core
+- `launcher/desktop/target/release/aether-desktop.exe` — native Tauri shell with the core, mod and interface embedded
 
-The shell embeds the core binary at compile time, so the core is always built first:
-`npm run core && npm run shell`. `npm start` runs the shell from the build directory.
+Run `build.bat` from the repository root to produce `MimiMax.exe` and `Aether-Launcher.exe`.
+It builds the Fabric mod, Rust core, Tauri shell and the small Rust runner in the required order.
 
 The root `MimiMax.exe` / `Aether-Launcher.exe` (`tools/launcher-runner.rs`) only looks for the shell
 and starts it; `build.bat` compiles the core, the shell, the mod and that runner in order.
