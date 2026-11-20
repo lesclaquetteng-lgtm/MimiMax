@@ -32,25 +32,40 @@ public final class RenderUtil {
 	public static final int SHADOW = 0x55000000;
 
 	private static volatile AetherDesignSystem.Palette cachedTheme=AetherDesignSystem.Colorway.GRAPHITE.palette();
-	private static volatile String cachedThemeKey="";
+	private static volatile String cachedColorway;
+	private static volatile String cachedSurfaceTreatment;
+	private static volatile String cachedAccentColor;
+	private static volatile boolean cachedCustomAccent;
 
 	private RenderUtil() {}
 
-	/** Current palette, cached so resolving the design tokens does not allocate on HUD frames. */
+	/** Current immutable palette, refreshed only when a stored appearance preference changes. */
 	public static AetherDesignSystem.Palette theme(){
 		Aether aether=Aether.getOrNull();
 		if(aether==null)return AetherDesignSystem.Colorway.GRAPHITE.palette();
 		var config=aether.getConfig();
-		String key=config.colorway+"|"+config.surfaceTreatment+"|"+config.customAccent+"|"+config.accentColor;
-		if(!key.equals(cachedThemeKey)){
+		if(!same(config.colorway,cachedColorway)
+				||!same(config.surfaceTreatment,cachedSurfaceTreatment)
+				||config.customAccent!=cachedCustomAccent
+				||!same(config.accentColor,cachedAccentColor)){
 			synchronized(RenderUtil.class){
-				if(!key.equals(cachedThemeKey)){
+				if(!same(config.colorway,cachedColorway)
+						||!same(config.surfaceTreatment,cachedSurfaceTreatment)
+						||config.customAccent!=cachedCustomAccent
+						||!same(config.accentColor,cachedAccentColor)){
 					cachedTheme=AetherDesignSystem.resolve(config);
-					cachedThemeKey=key;
+					cachedColorway=config.colorway;
+					cachedSurfaceTreatment=config.surfaceTreatment;
+					cachedCustomAccent=config.customAccent;
+					cachedAccentColor=config.accentColor;
 				}
 			}
 		}
 		return cachedTheme;
+	}
+
+	private static boolean same(String left,String right){
+		return left==right||(left!=null&&left.equals(right));
 	}
 
 	/**
