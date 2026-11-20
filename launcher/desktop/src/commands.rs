@@ -208,6 +208,7 @@ pub async fn profiles_add(app: AppHandle, name: String, source: Value) -> Value 
 	let mut args = vec!["profiles".to_string(), "add".to_string(), name];
 
 	for (key, flag) in [
+		("description", "--description"),
 		("version", "--version"),
 		("loader", "--loader"),
 		("memory", "--memory"),
@@ -229,6 +230,7 @@ pub async fn profiles_update(app: AppHandle, name: String, patch: Value) -> Valu
 	let mut args = vec!["profiles".to_string(), "update".to_string(), name];
 
 	for (key, flag) in [
+		("description", "--description"),
 		("version", "--version"),
 		("loader", "--loader"),
 		("memory", "--memory"),
