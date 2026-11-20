@@ -220,7 +220,7 @@ pub struct CatalogInstallEntry {
 }
 
 /// Progress of a Modrinth project or one of its required dependencies.
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CatalogProgress {
     pub project_id: String,
