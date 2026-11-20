@@ -436,6 +436,23 @@ function registerHandlers() {
 
 	handleIpc('mods:list', async () => runCore(['mods', 'list']));
 
+	handleIpc('mods:search', async (_event, query, gameVersion) =>
+		runCore([
+			'mods', 'search', String(query || ''),
+			'--version', String(gameVersion || '1.21.11'),
+			'--limit', '24'
+		]));
+
+	handleIpc('mods:install', async (_event, projectId, gameVersion) =>
+		operationGate.run('install', async () => runCoreStreaming(
+			['mods', 'install', String(projectId), '--version', String(gameVersion || '1.21.11')],
+			(line) => {
+				if (line.type === 'modrinth') {
+					mainWindow?.webContents.send('mods:progress', line);
+				}
+			}
+		)));
+
 	handleIpc('mods:toggle', async (_event, name, enabled) =>
 		runCore(['mods', 'toggle', String(name), '--enabled', String(Boolean(enabled))]));
 
