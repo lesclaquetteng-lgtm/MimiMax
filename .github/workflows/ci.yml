@@ -37,7 +37,15 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install stable Rust
         run: rustup toolchain install stable --profile minimal && rustup default stable
-      # The shell embeds the core binary, so the core is built first.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+      # The shell embeds both build products, so generate each one before compiling Tauri.
+      - name: Build the Fabric client
+        working-directory: aether-client
+        run: .\\gradlew.bat --no-daemon build
       - name: Build the launcher core
         working-directory: launcher
         run: cargo build --release --locked
