@@ -208,10 +208,19 @@ fn jar_name(filename: &str) -> Result<String, String> {
     // directory. Reject separators and Windows alternate data streams explicitly instead of
     // depending on the host platform's Path parser.
     if filename.is_empty()
-        || filename.contains(['/', '\\\\', ':', '\\0'])
+        || filename.contains('/')
+        || filename.contains('\\\\')
+        || filename.contains(':')
+        || filename.contains('\\0')
         || filename.chars().any(char::is_control)
-        || filename.contains(['<', '>', '"', '|', '?', '*'])
-        || filename.ends_with([' ', '.'])
+        || filename.contains('<')
+        || filename.contains('>')
+        || filename.contains('"')
+        || filename.contains('|')
+        || filename.contains('?')
+        || filename.contains('*')
+        || filename.ends_with(' ')
+        || filename.ends_with('.')
     {
         return Err(format!("{:?} is not a safe file name", filename));
     }
@@ -227,7 +236,12 @@ fn jar_name(filename: &str) -> Result<String, String> {
 
     // Windows reserves these device names even when an extension is present (for example,
     // CON.jar). Such names do not behave like ordinary files on the supported target.
-    let device = name.split('.').next().unwrap_or_default().trim_end_matches(' ').to_ascii_uppercase();
+    let device = name
+        .split('.')
+        .next()
+        .unwrap_or_default()
+        .trim_end_matches(' ')
+        .to_ascii_uppercase();
     if matches!(device.as_str(), "CON" | "PRN" | "AUX" | "NUL")
         || (device.len() == 4
             && (device.starts_with("COM") || device.starts_with("LPT"))
