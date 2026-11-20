@@ -109,7 +109,8 @@ Prints the version of the client and the type of the session.
 | Microsoft accounts | The device code flow, the session is refreshed automatically. |
 | Versions | Every released Minecraft version, the Fabric loaders are resolved per version. |
 | Installation | Downloads the game, the libraries, the assets, the Fabric loader, the Fabric API and the Aether mod. |
-| Settings | The Java runtime, the memory, the window size, the accent colour. |
+| Identity Studio | A live workspace preview with four material colourways, custom accent, contour/drafting/plain surfaces, roomy/compact density and expanded/icon-rail navigation. All choices persist locally. |
+| Runtime settings | Java path, memory allocation, garbage collector and Fabric API version. |
 | Servers | Ping, offline-account probe, saved list, one-click join. |
 | Hosting | Creates and runs a local Fabric server with `online-mode=false`, saves the world before stopping. |
 | Performance | Installs and verifies the optimisation pack, writes the game options and the JVM flags. |
