@@ -251,6 +251,11 @@ pub fn search_catalog(query: &str, game_version: &str) -> Result<Vec<CatalogProj
                 && valid_project_component(&project.slug)
                 && !project.title.trim().is_empty()
         })
+        .map(|mut project| {
+            // The renderer is allowed to load images only from this same official CDN host.
+            project.icon_url = project.icon_url.filter(|url| is_official_cdn_url(url));
+            project
+        })
         .collect())
 }
 
