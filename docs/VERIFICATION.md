@@ -76,6 +76,14 @@ Microsoft credential handling is covered by the account serialization and creden
   the player to sign in again.
 - The diagnostic command masks the access token before printing launch arguments.
 
+- Remote version identifiers, Fabric versions, Maven artifact paths, asset index identifiers and
+  asset SHA-1 names are checked before they are used in local paths.
+- Modrinth JAR filenames reject directory separators, NTFS alternate data streams, control
+  characters and reserved Windows device names.
+- Native ZIP extraction rejects entries that are not enclosed by the extraction root.
+- Atomic file writes use unique sibling temporary files; concurrent writes of accounts.json and
+  accounts.credentials are covered by a regression test.
+
 
 Two tests were added during this run because the code had a real defect:
 
