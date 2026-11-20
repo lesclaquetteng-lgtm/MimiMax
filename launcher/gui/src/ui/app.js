@@ -2027,6 +2027,12 @@ const APPEARANCE_THEMES = Object.freeze({
 	blueprint: 'BLUEPRINT'
 });
 
+const PALETTE_CHANNELS = Object.freeze([
+	'bg', 'bg-elevated', 'surface', 'surface-hover', 'surface-active',
+	'border', 'border-strong', 'accent',
+	'text-primary', 'text-secondary', 'text-muted', 'text-dim'
+]);
+
 function setChoiceState(selector, attribute, selected) {
 	$$(selector).forEach((button) => {
 		const active = button.dataset[attribute] === selected;
@@ -2047,6 +2053,11 @@ function applyAppearance(settings = {}) {
 	root.dataset.density = density;
 	root.dataset.surface = surface;
 	root.dataset.navigation = navigation;
+
+	// One alias per design token keeps the central token audit strict while switching materials.
+	PALETTE_CHANNELS.forEach((channel) => {
+		root.style.setProperty(`--palette-${channel}`, `var(--palette-${theme}-${channel})`);
+	});
 
 	setChoiceState('#theme-choices [data-theme]', 'theme', theme);
 	setChoiceState('#surface-choices [data-surface]', 'surface', surface);
