@@ -2,6 +2,7 @@ package dev.aether.client.gui;
 
 import com.mojang.blaze3d.platform.InputConstants;
 import dev.aether.client.Aether;
+import dev.aether.client.design.AetherDesignSystem;
 import dev.aether.client.module.Module;
 import dev.aether.client.module.ModuleCategory;
 import dev.aether.client.setting.BooleanSetting;
@@ -287,17 +288,27 @@ public class ClickGuiScreen extends Screen {
 	}
 
 	private void renderBackdrop(GuiGraphics graphics) {
-		graphics.fill(0, 0, width, height, fade(0xCC07080A));
+		AetherDesignSystem.Palette palette = RenderUtil.theme();
+		graphics.fill(0, 0, width, height, ColorUtil.withAlpha(palette.background(), 0.90f));
+		int line = ColorUtil.withAlpha(palette.borderStrong(), 0.17f);
+		AetherDesignSystem.SurfaceTreatment treatment = AetherDesignSystem.surfaceTreatment(Aether.get().getConfig());
+		if (treatment == AetherDesignSystem.SurfaceTreatment.DRAFT) {
+			for (int x = 16; x < width; x += 64) graphics.fill(x, 0, x + 1, height, line);
+			for (int y = 16; y < height; y += 64) graphics.fill(0, y, width, y + 1, line);
+		} else if (treatment == AetherDesignSystem.SurfaceTreatment.CONTOUR) {
+			for (int inset = 28; inset < Math.min(width, height) / 2; inset += 38) {
+				int w = width - inset * 2, h = height - inset * 2;
+				if (w > 0 && h > 0) RenderUtil.outline(graphics, inset, inset, w, h, line);
+			}
+		}
 	}
 
 	private void renderPanel(GuiGraphics graphics, int accent) {
 		RenderUtil.shadow(graphics, panelX, panelY, panelWidth, panelHeight, 12);
+		AetherDesignSystem.Palette palette = RenderUtil.theme();
 		RenderUtil.bordered(graphics, panelX, panelY, panelWidth, panelHeight, 8,
-				fade(0xFA101216), fade(0xFF21252B));
-
-		// The rail sits on its own surface, one shade darker than the list. A hairline separates
-		// them: no gradient, no glow, the same language as the launcher.
-		RenderUtil.roundedRect(graphics, railX, railY, railWidth, panelHeight - 24, 8, fade(0xFF0A0C0F));
+				fade(palette.elevatedBackground()), fade(palette.border()));
+		RenderUtil.roundedRect(graphics, railX, railY, railWidth, panelHeight - 24, 8, fade(palette.background()));
 		graphics.fill(railX + railWidth - 1, railY + 12, railX + railWidth, railY + panelHeight - 36,
 				fade(0x1AFFFFFF));
 	}
@@ -307,9 +318,9 @@ public class ClickGuiScreen extends Screen {
 		int y = railY + (compact ? 10 : 18);
 
 		RenderUtil.roundedRect(graphics, x, y + 3, 6, 6, 3, ColorUtil.withAlpha(accent, opacity));
-		RenderUtil.text(graphics, font, "AETHER", x + 12, y, fade(RenderUtil.TEXT_PRIMARY));
+		RenderUtil.text(graphics, font, "AETHER", x + 12, y, fade(RenderUtil.theme().textPrimary()));
 		if (!compact) {
-			RenderUtil.text(graphics, font, "v" + Aether.VERSION, x, y + 14, fade(RenderUtil.TEXT_DIM));
+			RenderUtil.text(graphics, font, "v" + Aether.VERSION, x, y + 14, fade(RenderUtil.theme().textDim()));
 		}
 
 		ModuleCategory[] categories = ModuleCategory.values();
@@ -351,38 +362,38 @@ public class ClickGuiScreen extends Screen {
 			int count = Aether.get().getModuleManager().getByCategory(category).size();
 			String label = category.getDisplayName();
 			int textColour = active ? ColorUtil.withAlpha(accent, opacity)
-					: hovered ? fade(RenderUtil.TEXT_PRIMARY) : fade(RenderUtil.TEXT_MUTED);
+					: hovered ? fade(RenderUtil.theme().textPrimary()) : fade(RenderUtil.theme().textSecondary());
 			int labelY = itemY + (categoryHeight - 9) / 2;
 			RenderUtil.text(graphics, font, label, itemX + 12, labelY, textColour);
 			String badge = String.valueOf(count);
 			RenderUtil.text(graphics, font, badge, itemX + itemWidth - 12 - font.width(badge), labelY,
-					fade(RenderUtil.TEXT_DIM));
+					fade(RenderUtil.theme().textDim()));
 		}
 
 		if (panelHeight > 320) {
 			RenderUtil.text(graphics, font, "ESC  close", railX + 16, railY + panelHeight - 40,
-					fade(RenderUtil.TEXT_DIM));
+					fade(RenderUtil.theme().textDim()));
 		}
 	}
 
 	private void renderHeader(GuiGraphics graphics, Font font, int mouseX, int mouseY, int accent) {
 		int headerY = panelY + 20;
 		RenderUtil.text(graphics, font, selectedCategory.getDisplayName().toUpperCase(Locale.ROOT),
-				listX, headerY, fade(RenderUtil.TEXT_PRIMARY));
+				listX, headerY, fade(RenderUtil.theme().textPrimary()));
 
 		int titleWidth = font.width(selectedCategory.getDisplayName().toUpperCase(Locale.ROOT));
 		String count = visible.size() + (visible.size() == 1 ? " module" : " modules");
 		if (searchX() - (listX + titleWidth + 10) > font.width(count) + 12) {
-			RenderUtil.text(graphics, font, count, listX + titleWidth + 10, headerY, fade(RenderUtil.TEXT_DIM));
+			RenderUtil.text(graphics, font, count, listX + titleWidth + 10, headerY, fade(RenderUtil.theme().textDim()));
 		}
 
 		int searchX = searchX();
 		boolean hovered = inside(mouseX, mouseY, searchX, searchTop(), searchWidth, SEARCH_HEIGHT);
 		RenderUtil.bordered(graphics, searchX, searchTop(), searchWidth, SEARCH_HEIGHT, 6,
-				fade(0xFF0A0A0E), searchFocused ? accent : fade(hovered ? 0x44FFFFFF : 0x22FFFFFF));
+				fade(RenderUtil.theme().background()), searchFocused ? accent : fade(hovered ? 0x44FFFFFF : 0x22FFFFFF));
 
 		String text = search.isEmpty() ? "Search" : search;
-		int colour = search.isEmpty() ? fade(RenderUtil.TEXT_DIM) : fade(RenderUtil.TEXT_PRIMARY);
+		int colour = search.isEmpty() ? fade(RenderUtil.theme().textDim()) : fade(RenderUtil.theme().textPrimary());
 		RenderUtil.text(graphics, font, RenderUtil.truncate(font, text, searchWidth - 16), searchX + 8,
 				searchTop() + 7, colour);
 	}
@@ -402,7 +413,7 @@ public class ClickGuiScreen extends Screen {
 		if (visible.isEmpty()) {
 			String message = search.isEmpty() ? "No module in this category" : "Nothing matches \"" + search + "\"";
 			RenderUtil.centeredText(graphics, font, message, listX + listWidth / 2, listY + 40,
-					fade(RenderUtil.TEXT_DIM));
+					fade(RenderUtil.theme().textDim()));
 		}
 	}
 
@@ -413,8 +424,9 @@ public class ClickGuiScreen extends Screen {
 
 		// The accent tints the surface instead of being mixed with its alpha: blending a
 		// translucent accent into an opaque surface produced a saturated block of colour.
-		int tint = ColorUtil.lerp(0xFF14161A, 0xFF000000 | (accent & 0xFFFFFF), 0.14f);
-		int background = enabled ? fade(tint) : fade(hovered ? 0xFF191C21 : 0xFF14161A);
+		int tint = ColorUtil.lerp(RenderUtil.theme().surface(), accent | 0xFF000000, 0.14f);
+		int background = enabled ? fade(tint)
+				: fade(hovered ? RenderUtil.theme().surfaceHover() : RenderUtil.theme().surface());
 		int border = enabled ? ColorUtil.withAlpha(accent, 0.38f * opacity)
 				: fade(hovered ? 0x33FFFFFF : 0x1AFFFFFF);
 
@@ -425,13 +437,13 @@ public class ClickGuiScreen extends Screen {
 		}
 
 		int nameColour = enabled ? fade(0xFFFFFFFF)
-				: hovered ? fade(RenderUtil.TEXT_PRIMARY) : fade(RenderUtil.TEXT_MUTED);
+				: hovered ? fade(RenderUtil.theme().textPrimary()) : fade(RenderUtil.theme().textSecondary());
 		int nameY = row.y + (compact ? (rowHeight - 9) / 2 : 9);
 		RenderUtil.text(graphics, font, module.getName(), row.x + 14, nameY, nameColour);
 
 		if (!compact && row.width > 300) {
 			RenderUtil.text(graphics, font, RenderUtil.truncate(font, module.getDescription(), row.width - 200),
-					row.x + 14, row.y + 26, fade(RenderUtil.TEXT_DIM));
+					row.x + 14, row.y + 26, fade(RenderUtil.theme().textDim()));
 		}
 
 		// Keybind chip, left of the chevron.
@@ -444,13 +456,13 @@ public class ClickGuiScreen extends Screen {
 			RenderUtil.roundedRect(graphics, chipX, chipTop(row), chipWidth, CHIP_HEIGHT, 4,
 					capturing ? ColorUtil.withAlpha(accent, 0.5f * opacity) : fade(0x14FFFFFF));
 			RenderUtil.text(graphics, font, label, chipX + 5, chipTop(row) + 5,
-					capturing ? fade(0xFFFFFFFF) : fade(RenderUtil.TEXT_DIM));
+					capturing ? fade(0xFFFFFFFF) : fade(RenderUtil.theme().textDim()));
 		}
 
 		// Chevron: opens the settings of the row.
 		if (!module.getSettings().isEmpty()) {
 			String chevron = row.expanded ? "\u25B4" : "\u25BE";
-			int chevronColour = hovered ? fade(RenderUtil.TEXT_PRIMARY) : fade(RenderUtil.TEXT_DIM);
+			int chevronColour = hovered ? fade(RenderUtil.theme().textPrimary()) : fade(RenderUtil.theme().textDim());
 			RenderUtil.centeredText(graphics, font, chevron, chevronX(row) + 6, row.y + (rowHeight - 9) / 2,
 					chevronColour);
 		}
@@ -488,7 +500,7 @@ public class ClickGuiScreen extends Screen {
 		}
 
 		RenderUtil.text(graphics, font, setting.getName(), x + 4, y + 6,
-				hovered ? fade(RenderUtil.TEXT_PRIMARY) : fade(RenderUtil.TEXT_MUTED));
+				hovered ? fade(RenderUtil.theme().textPrimary()) : fade(RenderUtil.theme().textSecondary()));
 
 		if (setting instanceof BooleanSetting toggle) {
 			drawSwitch(graphics, x + w - SWITCH_WIDTH, y + 3, toggle.isEnabled() ? 1.0f : 0.0f, accent);
@@ -499,7 +511,7 @@ public class ClickGuiScreen extends Screen {
 					fade(0x26FFFFFF), ColorUtil.withAlpha(accent, opacity));
 			String value = String.valueOf(number.get());
 			RenderUtil.text(graphics, font, value, x + w - font.width(value), y + 6,
-					fade(RenderUtil.TEXT_PRIMARY));
+					fade(RenderUtil.theme().textPrimary()));
 		} else if (setting instanceof DoubleSetting number) {
 			float ratio = (float) ((number.get() - number.getMin())
 					/ Math.max(0.0001, number.getMax() - number.getMin()));
@@ -507,7 +519,7 @@ public class ClickGuiScreen extends Screen {
 					fade(0x26FFFFFF), ColorUtil.withAlpha(accent, opacity));
 			String value = String.format(Locale.ROOT, "%.2f", number.get());
 			RenderUtil.text(graphics, font, value, x + w - font.width(value), y + 6,
-					fade(RenderUtil.TEXT_PRIMARY));
+					fade(RenderUtil.theme().textPrimary()));
 		} else if (setting instanceof ModeSetting mode) {
 			String value = mode.get();
 			int chipWidth = font.width(value) + 16;

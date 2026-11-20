@@ -1,5 +1,6 @@
 package dev.aether.client.config;
 
+import com.google.gson.JsonParser;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -93,7 +94,9 @@ class AetherConfigRecoveryTest {
 		assertEquals(AetherConfig.CURRENT_SCHEMA_VERSION, loaded.schemaVersion);
 		assertEquals(AetherConfig.LoadStatus.MIGRATED, loaded.getLoadStatus());
 		assertEquals("#2ECC8F", loaded.accentColor);
-		assertTrue(Files.readString(file).contains("\"schemaVersion\": 1"));
+		String migratedJson = Files.readString(file, StandardCharsets.UTF_8);
+		assertEquals(AetherConfig.CURRENT_SCHEMA_VERSION,
+				JsonParser.parseString(migratedJson).getAsJsonObject().get("schemaVersion").getAsInt());
 		assertEquals(legacy, Files.readString(Path.of(file + AetherConfig.BACKUP_SUFFIX)));
 	}
 

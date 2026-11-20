@@ -2,6 +2,7 @@ package dev.aether.client.gui;
 
 import com.mojang.blaze3d.platform.InputConstants;
 import dev.aether.client.Aether;
+import dev.aether.client.design.AetherDesignSystem;
 import dev.aether.client.module.Module;
 import dev.aether.client.util.ColorUtil;
 import dev.aether.client.util.RenderUtil;
@@ -51,7 +52,7 @@ public class ConfigScreen extends Screen {
 
 	private static final int ROW_H = 24;
 	private static final int SWATCH = 22;
-	private static final int SWATCH_GAP = 6;
+	private static final int SWATCH_GAP = 4;
 	private static final int SWATCH_COLUMNS = 4;
 	private static final int BTN_H = 26;
 
@@ -65,6 +66,8 @@ public class ConfigScreen extends Screen {
 	private int rightW;
 	private int bodyTop;
 	private int bodyBottom;
+	private int colorwayTop;
+	private int surfaceTop;
 	private int accentTop;
 	private int swatchSize = SWATCH;
 
@@ -113,10 +116,11 @@ public class ConfigScreen extends Screen {
 
 		// The session block and the grid of accents share the left column: on a short window the
 		// swatches shrink rather than run under the footer.
-		accentTop = bodyTop + 14 + 40 + 14 + 14;
+		colorwayTop = bodyTop + 62;
+		surfaceTop = colorwayTop + 58;
+		accentTop = surfaceTop + 58;
 		int room = bodyBottom - accentTop;
-		swatchSize = Math.max(12,
-			Math.min(SWATCH, (room - (3 - 1) * SWATCH_GAP) / 3));
+		swatchSize = Math.max(12, Math.min(18, (room - (3 - 1) * SWATCH_GAP) / 3));
 
 		listTop = bodyTop + 18;
 		listBottom = bodyBottom;
@@ -151,38 +155,38 @@ public class ConfigScreen extends Screen {
 		Minecraft minecraft = Minecraft.getInstance();
 		Font font = minecraft.font;
 		int accent = Aether.get().getConfig().getAccentColor();
-
-		graphics.fill(0, 0, width, height, 0xCC07080A);
-
+		AetherDesignSystem.Palette palette = RenderUtil.theme();
+		graphics.fill(0, 0, width, height, ColorUtil.withAlpha(palette.background(), 0.82f));
 		RenderUtil.bordered(graphics, panelX, panelY, panelW, panelH, 8,
-			RenderUtil.PANEL_BACKGROUND, RenderUtil.BORDER);
-
+				palette.elevatedBackground(), palette.border());
 		renderHeader(graphics, font);
 		renderSession(graphics, font, accent);
+		renderColorways(graphics, font, mouseX, mouseY, accent);
+		renderSurfaceTreatments(graphics, font, mouseX, mouseY, accent);
 		renderAccent(graphics, font, mouseX, mouseY, accent);
 		renderModules(graphics, font, mouseX, mouseY, accent);
 		renderFooter(graphics, font, mouseX, mouseY, accent);
 
 		// The vertical hairline that makes the two columns two columns.
 		graphics.fill(leftX + leftW + COL_GAP / 2, bodyTop, leftX + leftW + COL_GAP / 2 + 1, bodyBottom,
-			RenderUtil.BORDER);
+			RenderUtil.theme().border());
 	}
 
 	private void renderHeader(GuiGraphics graphics, Font font) {
-		RenderUtil.text(graphics, font, "Configuration", leftX, panelY + 14, RenderUtil.TEXT_PRIMARY);
+		RenderUtil.text(graphics, font, "Configuration", leftX, panelY + 14, RenderUtil.theme().textPrimary());
 		String version = "v1.0";
 		RenderUtil.text(graphics, font, version, panelX + panelW - PAD - font.width(version), panelY + 14,
-			RenderUtil.TEXT_DIM);
+			RenderUtil.theme().textDim());
 		hairline(graphics, panelY + HEADER_H);
 	}
 
 	private void hairline(GuiGraphics graphics, int y) {
-		graphics.fill(leftX, y, panelX + panelW - PAD, y + 1, RenderUtil.BORDER);
+		graphics.fill(leftX, y, panelX + panelW - PAD, y + 1, RenderUtil.theme().border());
 	}
 
 	/** Avatar, name and the one bit that matters about the session: offline or Microsoft. */
 	private void renderSession(GuiGraphics graphics, Font font, int accent) {
-		RenderUtil.text(graphics, font, "Session", leftX, bodyTop, RenderUtil.TEXT_DIM);
+		RenderUtil.text(graphics, font, "Session", leftX, bodyTop, RenderUtil.theme().textDim());
 
 		int y = bodyTop + 14;
 		String username = SessionUtil.getUsername();
@@ -191,15 +195,30 @@ public class ConfigScreen extends Screen {
 		RenderUtil.roundedRect(graphics, leftX, y, 26, 26, 4, ColorUtil.withAlpha(accent, 0.18f));
 		RenderUtil.text(graphics, font, initials, leftX + (26 - font.width(initials)) / 2, y + 8, accent);
 
-		RenderUtil.text(graphics, font, username, leftX + 34, y + 2, RenderUtil.TEXT_PRIMARY);
+		RenderUtil.text(graphics, font, username, leftX + 34, y + 2, RenderUtil.theme().textPrimary());
 
 		boolean offline = SessionUtil.isOffline();
 		int dot = offline ? 0xFFD9A441 : 0xFF46C98B;
 		String state = offline ? "Offline" : "Microsoft";
 		graphics.fill(leftX + 34, y + 17, leftX + 38, y + 21, dot);
-		RenderUtil.text(graphics, font, state, leftX + 43, y + 14, RenderUtil.TEXT_MUTED);
+		RenderUtil.text(graphics, font, state, leftX + 43, y + 14, RenderUtil.theme().textSecondary());
 
 		hairline(graphics, y + 40);
+	}
+
+	private int[] colorwayRect(int index) {
+		int gap = 6, cardWidth = (leftW - gap) / 2;
+		return new int[] { leftX + (index % 2) * (cardWidth + gap),
+				colorwayTop + 13 + (index / 2) * 22, cardWidth, 18 };
+	}
+
+	private int[] surfaceRect(int index) {
+		int gap = 4, buttonWidth = (leftW - gap * 2) / 3;
+		return new int[] { leftX + index * (buttonWidth + gap), surfaceTop + 13, buttonWidth, 18 };
+	}
+
+	private int[] accentResetRect() {
+		return new int[] { leftX + leftW - 44, accentTop - 15, 44, 13 };
 	}
 
 	private int[] swatchRect(int index) {
@@ -208,34 +227,68 @@ public class ConfigScreen extends Screen {
 		return new int[] { x, y, swatchSize, swatchSize };
 	}
 
-	private void renderAccent(GuiGraphics graphics, Font font, int mouseX, int mouseY, int accent) {
-		RenderUtil.text(graphics, font, "Accent", leftX, accentTop - 14, RenderUtil.TEXT_DIM);
+	private void renderColorways(GuiGraphics graphics, Font font, int mouseX, int mouseY, int accent) {
+		AetherDesignSystem.Palette palette = RenderUtil.theme();
+		AetherDesignSystem.Colorway selected = AetherDesignSystem.Colorway.fromId(Aether.get().getConfig().colorway);
+		RenderUtil.text(graphics, font, "Material", leftX, colorwayTop, palette.textDim());
+		AetherDesignSystem.Colorway[] colorways = AetherDesignSystem.Colorway.values();
+		for (int index = 0; index < colorways.length; index++) {
+			AetherDesignSystem.Colorway colorway = colorways[index];
+			int[] rect = colorwayRect(index);
+			boolean chosen = colorway == selected, hovered = inside(mouseX, mouseY, rect);
+			int fill = chosen ? palette.surfaceActive() : hovered ? palette.surfaceHover() : palette.surface();
+			RenderUtil.bordered(graphics, rect[0], rect[1], rect[2], rect[3], 4, fill,
+					chosen ? accent : palette.border());
+			RenderUtil.roundedRect(graphics, rect[0] + 5, rect[1] + 5, 8, 8, 3, colorway.palette().accent());
+			RenderUtil.text(graphics, font, colorway.label(), rect[0] + 17, rect[1] + 5,
+					chosen ? palette.textPrimary() : palette.textSecondary());
+		}
+	}
 
+	private void renderSurfaceTreatments(GuiGraphics graphics, Font font, int mouseX, int mouseY, int accent) {
+		AetherDesignSystem.Palette palette = RenderUtil.theme();
+		AetherDesignSystem.SurfaceTreatment selected = AetherDesignSystem.surfaceTreatment(Aether.get().getConfig());
+		RenderUtil.text(graphics, font, "Surface", leftX, surfaceTop, palette.textDim());
+		AetherDesignSystem.SurfaceTreatment[] treatments = AetherDesignSystem.SurfaceTreatment.values();
+		for (int index = 0; index < treatments.length; index++) {
+			AetherDesignSystem.SurfaceTreatment treatment = treatments[index];
+			int[] rect = surfaceRect(index);
+			boolean chosen = treatment == selected, hovered = inside(mouseX, mouseY, rect);
+			int fill = chosen ? palette.surfaceActive() : hovered ? palette.surfaceHover() : palette.surface();
+			RenderUtil.bordered(graphics, rect[0], rect[1], rect[2], rect[3], 4, fill,
+					chosen ? accent : palette.border());
+			RenderUtil.centeredText(graphics, font, treatment.label(), rect[0] + rect[2] / 2,
+					rect[1] + 5, chosen ? palette.textPrimary() : palette.textSecondary());
+		}
+	}
+
+	private void renderAccent(GuiGraphics graphics, Font font, int mouseX, int mouseY, int accent) {
+		AetherDesignSystem.Palette palette = RenderUtil.theme();
+		RenderUtil.text(graphics, font, "Accent", leftX, accentTop - 14, palette.textDim());
+		int[] reset = accentResetRect();
+		boolean custom = Aether.get().getConfig().customAccent;
+		RenderUtil.text(graphics, font, "Reset", reset[0] + 12, reset[1] + 2,
+				custom ? palette.accent() : palette.textDim());
 		for (int i = 0; i < PRESETS.length; i++) {
 			int[] rect = swatchRect(i);
 			RenderUtil.roundedRect(graphics, rect[0], rect[1], rect[2], rect[3], 3, PRESETS[i]);
-
-			boolean selected = PRESETS[i] == accent;
+			boolean selected = custom && PRESETS[i] == accent;
 			boolean hovered = inside(mouseX, mouseY, rect);
-			// Outlines drawn around the swatch, never over it: a filled rectangle would repaint the
-			// colour the player is choosing.
 			if (selected) {
-				RenderUtil.outline(graphics, rect[0] - 2, rect[1] - 2, rect[2] + 4, rect[3] + 4, 0xFFFFFFFF);
-				RenderUtil.outline(graphics, rect[0] - 1, rect[1] - 1, rect[2] + 2, rect[3] + 2, 0xFFFFFFFF);
+				RenderUtil.outline(graphics, rect[0] - 2, rect[1] - 2, rect[2] + 4, rect[3] + 4, palette.textPrimary());
 			} else if (hovered) {
-				RenderUtil.outline(graphics, rect[0] - 1, rect[1] - 1, rect[2] + 2, rect[3] + 2,
-					RenderUtil.BORDER_STRONG);
+				RenderUtil.outline(graphics, rect[0] - 1, rect[1] - 1, rect[2] + 2, rect[3] + 2, palette.borderStrong());
 			}
 		}
 	}
 
 	private void renderModules(GuiGraphics graphics, Font font, int mouseX, int mouseY, int accent) {
-		RenderUtil.text(graphics, font, "Keys", rightX, bodyTop, RenderUtil.TEXT_DIM);
+		RenderUtil.text(graphics, font, "Keys", rightX, bodyTop, RenderUtil.theme().textDim());
 		String hint = rebinding == null ? "Click a module, then press a key" : "Press a key, Esc to cancel";
 		// On a narrow window the hint would land on the label: it is the first thing to go.
 		if (rightW - font.width("Keys") - 12 >= font.width(hint)) {
 			RenderUtil.text(graphics, font, hint, rightX + rightW - font.width(hint), bodyTop,
-				rebinding == null ? RenderUtil.TEXT_DIM : accent);
+				rebinding == null ? RenderUtil.theme().textDim() : accent);
 		}
 
 		int contentH = listBottom - listTop;
@@ -253,10 +306,10 @@ public class ConfigScreen extends Screen {
 						ColorUtil.withAlpha(accent, 0.10f));
 					graphics.fill(rightX, cursor, rightX + 2, cursor + ROW_H, accent);
 				} else if (hovered) {
-					graphics.fill(rightX, cursor, rightX + rightW, cursor + ROW_H, RenderUtil.SURFACE_HOVER);
+					graphics.fill(rightX, cursor, rightX + rightW, cursor + ROW_H, RenderUtil.theme().surfaceHover());
 				}
 
-				int nameColour = module.isEnabled() ? RenderUtil.TEXT_PRIMARY : RenderUtil.TEXT_MUTED;
+				int nameColour = module.isEnabled() ? RenderUtil.theme().textPrimary() : RenderUtil.theme().textSecondary();
 				String name = RenderUtil.truncate(font, module.getName(), rightW - 70);
 				RenderUtil.text(graphics, font, name, rightX + 8, cursor + 7, nameColour);
 
@@ -285,9 +338,9 @@ public class ConfigScreen extends Screen {
 		int x = rightX + rightW - w - 8;
 		int y = rowY + (ROW_H - 15) / 2;
 		boolean armed = module == rebinding;
-		RenderUtil.bordered(graphics, x, y, w, 15, 3, RenderUtil.SURFACE_RAISED,
-			armed ? accent : RenderUtil.BORDER_STRONG);
-		RenderUtil.text(graphics, font, key, x + 5, y + 3, armed ? accent : RenderUtil.TEXT_DIM);
+		RenderUtil.bordered(graphics, x, y, w, 15, 3, RenderUtil.theme().surfaceHover(),
+			armed ? accent : RenderUtil.theme().borderStrong());
+		RenderUtil.text(graphics, font, key, x + 5, y + 3, armed ? accent : RenderUtil.theme().textDim());
 	}
 
 	private void renderFooter(GuiGraphics graphics, Font font, int mouseX, int mouseY, int accent) {
@@ -299,11 +352,11 @@ public class ConfigScreen extends Screen {
 			// transparent fill would let it show through as a solid slab.
 			int fill = button.primary()
 				? (hovered ? ColorUtil.lerp(accent, 0xFFFFFFFF, 0.12f) : accent)
-				: (hovered ? RenderUtil.SURFACE_HOVER : RenderUtil.SURFACE);
+				: (hovered ? RenderUtil.theme().surfaceHover() : RenderUtil.theme().surface());
 			RenderUtil.bordered(graphics, button.x(), button.y(), button.w(), button.h(), 4, fill,
-				button.primary() ? accent : RenderUtil.BORDER_STRONG);
+				button.primary() ? accent : RenderUtil.theme().borderStrong());
 			RenderUtil.centeredText(graphics, font, button.label(), button.x() + button.w() / 2,
-				button.y() + 9, button.primary() ? 0xFF0A0B0D : RenderUtil.TEXT_MUTED);
+				button.y() + 9, button.primary() ? 0xFF0A0B0D : RenderUtil.theme().textSecondary());
 		}
 	}
 
@@ -314,9 +367,31 @@ public class ConfigScreen extends Screen {
 		double mouseX = event.x();
 		double mouseY = event.y();
 
+		AetherDesignSystem.Colorway[] colorways = AetherDesignSystem.Colorway.values();
+		for (int i = 0; i < colorways.length; i++) {
+			if (inside(mouseX, mouseY, colorwayRect(i))) {
+				Aether.get().getConfig().colorway = colorways[i].id();
+				Aether.get().save();
+				return true;
+			}
+		}
+		AetherDesignSystem.SurfaceTreatment[] treatments = AetherDesignSystem.SurfaceTreatment.values();
+		for (int i = 0; i < treatments.length; i++) {
+			if (inside(mouseX, mouseY, surfaceRect(i))) {
+				Aether.get().getConfig().surfaceTreatment = treatments[i].id();
+				Aether.get().save();
+				return true;
+			}
+		}
+		if (inside(mouseX, mouseY, accentResetRect())) {
+			Aether.get().getConfig().customAccent = false;
+			Aether.get().save();
+			return true;
+		}
 		for (int i = 0; i < PRESETS.length; i++) {
 			if (inside(mouseX, mouseY, swatchRect(i))) {
 				Aether.get().getConfig().accentColor = ColorUtil.toHex(PRESETS[i]);
+				Aether.get().getConfig().customAccent = true;
 				Aether.get().save();
 				return true;
 			}

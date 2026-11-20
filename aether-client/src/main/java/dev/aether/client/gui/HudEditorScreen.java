@@ -1,6 +1,7 @@
 package dev.aether.client.gui;
 
 import dev.aether.client.Aether;
+import dev.aether.client.design.AetherDesignSystem;
 import dev.aether.client.module.HudElement;
 import dev.aether.client.module.Module;
 import dev.aether.client.module.ModuleManager;
@@ -143,7 +144,9 @@ public class HudEditorScreen extends Screen {
 		Font font = minecraft.font;
 		int accent = Aether.get().getConfig().getAccentColor();
 
-		graphics.fill(0, 0, width, height, 0xCC07080A);
+		AetherDesignSystem.Palette palette = RenderUtil.theme();
+		graphics.fill(0, 0, width, height, ColorUtil.withAlpha(palette.background(), 0.82f));
+		drawSurfaceTreatment(graphics, palette);
 
 		for (HudElement element : elements) {
 			if (!element.isEnabled()) {
@@ -166,25 +169,39 @@ public class HudEditorScreen extends Screen {
 		renderShelf(graphics, font, mouseX, mouseY, accent);
 	}
 
+	private void drawSurfaceTreatment(GuiGraphics graphics, AetherDesignSystem.Palette palette) {
+		int line = ColorUtil.withAlpha(palette.borderStrong(), 0.14f);
+		AetherDesignSystem.SurfaceTreatment treatment = AetherDesignSystem.surfaceTreatment(Aether.get().getConfig());
+		if (treatment == AetherDesignSystem.SurfaceTreatment.DRAFT) {
+			for (int x=16; x<width; x+=64) graphics.fill(x,BAR_H,x+1,height-shelfH,line);
+			for (int y=BAR_H+16; y<height-shelfH; y+=64) graphics.fill(0,y,width,y+1,line);
+		} else if (treatment == AetherDesignSystem.SurfaceTreatment.CONTOUR) {
+			for (int inset=28; inset<Math.min(width,height-shelfH)/2; inset+=38) {
+				int w=width-inset*2, h=height-shelfH-BAR_H-inset*2;
+				if(w>0&&h>0) RenderUtil.outline(graphics,inset,BAR_H+inset,w,h,line);
+			}
+		}
+	}
+
 	/** Title on the left, the three gestures on the right, a hairline under both. */
 	private void renderBar(GuiGraphics graphics, Font font) {
-		graphics.fill(0, 0, width, BAR_H, 0xFF0D0F12);
-		graphics.fill(0, BAR_H - 1, width, BAR_H, RenderUtil.BORDER);
+		graphics.fill(0, 0, width, BAR_H, RenderUtil.theme().elevatedBackground());
+		graphics.fill(0, BAR_H - 1, width, BAR_H, RenderUtil.theme().border());
 
-		RenderUtil.text(graphics, font, "HUD editor", 16, 12, RenderUtil.TEXT_PRIMARY);
+		RenderUtil.text(graphics, font, "HUD editor", 16, 12, RenderUtil.theme().textPrimary());
 
 		String hint = "Drag to move \u00b7 double-click to reset \u00b7 Esc to return";
-		RenderUtil.text(graphics, font, hint, width - 16 - font.width(hint), 12, RenderUtil.TEXT_DIM);
+		RenderUtil.text(graphics, font, hint, width - 16 - font.width(hint), 12, RenderUtil.theme().textDim());
 	}
 
 	private void renderShelf(GuiGraphics graphics, Font font, int mouseX, int mouseY, int accent) {
 		int shelfY = height - shelfH;
-		graphics.fill(0, shelfY, width, height, 0xFF0D0F12);
-		graphics.fill(0, shelfY, width, shelfY + 1, RenderUtil.BORDER);
+		graphics.fill(0, shelfY, width, height, RenderUtil.theme().elevatedBackground());
+		graphics.fill(0, shelfY, width, shelfY + 1, RenderUtil.theme().border());
 
 		if (pills.isEmpty()) {
 			String empty = "No HUD element to place";
-			RenderUtil.centeredText(graphics, font, empty, width / 2, shelfY + 16, RenderUtil.TEXT_DIM);
+			RenderUtil.centeredText(graphics, font, empty, width / 2, shelfY + 16, RenderUtil.theme().textDim());
 			return;
 		}
 
@@ -198,12 +215,12 @@ public class HudEditorScreen extends Screen {
 			// `bordered` paints its border as a full rectangle, so the fill is always opaque: a
 			// transparent fill would leave a solid slab of border colour where an empty chip should be.
 			int fill = active
-				? (hovered ? RenderUtil.SURFACE_RAISED : RenderUtil.SURFACE_ACTIVE)
-				: (hovered ? RenderUtil.SURFACE_HOVER : RenderUtil.SURFACE);
+				? (hovered ? RenderUtil.theme().surfaceHover() : RenderUtil.theme().surfaceActive())
+				: (hovered ? RenderUtil.theme().surfaceHover() : RenderUtil.theme().surface());
 			RenderUtil.bordered(graphics, pill.x(), pill.y(), pill.w(), pill.h(), 4, fill,
-				active ? accent : RenderUtil.BORDER);
+				active ? accent : RenderUtil.theme().border());
 
-			int textColour = active ? RenderUtil.TEXT_PRIMARY : RenderUtil.TEXT_MUTED;
+			int textColour = active ? RenderUtil.theme().textPrimary() : RenderUtil.theme().textSecondary();
 			RenderUtil.centeredText(graphics, font, pill.element().getName(), pill.x() + pill.w() / 2,
 				pill.y() + 6, textColour);
 		}
