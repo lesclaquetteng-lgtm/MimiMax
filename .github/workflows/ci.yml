@@ -80,8 +80,6 @@ jobs:
           node --check launcher/gui/src/ui/bridge.js
       - name: Verify Identity Studio contracts
         run: node tools/check-identity-studio.mjs
-      - name: Verify in-game design-system parity
-        run: node tools/check-aether-design-system.mjs
 
   fabric-mod:
     name: Fabric client

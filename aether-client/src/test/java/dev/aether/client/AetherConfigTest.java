@@ -101,11 +101,8 @@ class AetherConfigTest {
 		Path file = directory.resolve("config.json");
 
 		AetherConfig config = new AetherConfig();
-		config.accentColor="#2ECC8F";
-		config.customAccent=true;
-		config.colorway="oxide";
-		config.surfaceTreatment="draft";
-		config.showNotifications=false;
+		config.accentColor = "#2ECC8F";
+		config.showNotifications = false;
 		config.modules.put("test", true);
 		Map<String, Object> settings = new LinkedHashMap<>();
 		settings.put("Flag", false);
@@ -116,11 +113,7 @@ class AetherConfigTest {
 		config.save(file);
 
 		AetherConfig loaded = AetherConfig.load(file);
-		assertEquals("#2ECC8F",loaded.accentColor);
-		assertTrue(loaded.customAccent);
-		assertEquals("oxide",loaded.colorway);
-		assertEquals("draft",loaded.surfaceTreatment);
-		assertEquals(0xFF2ECC8F,loaded.getAccentColor());
+		assertEquals("#2ECC8F", loaded.accentColor);
 		assertFalse(loaded.showNotifications);
 		assertTrue(loaded.modules.get("test"));
 		assertEquals(10, loaded.hudPositions.get("fps")[0]);
@@ -178,31 +171,6 @@ class AetherConfigTest {
 		assertEquals(false, config.settings.get("test").get("Flag"));
 		assertEquals(7, config.settings.get("test").get("Amount"));
 		assertEquals("B", config.settings.get("test").get("Mode"));
-	}
-
-	@Test
-	@DisplayName("schema v1 migrates explicit accent preferences")
-	void schemaOnePreservesCustomAccentDuringDesignSystemMigration(@TempDir Path directory) throws Exception {
-		Path file=directory.resolve("config.json");
-		java.nio.file.Files.writeString(file,
-				"{\"schemaVersion\":1,\"accentColor\":\"#12AB34\",\"modules\":{\"fps\":true}}");
-		AetherConfig loaded=AetherConfig.load(file);
-		assertEquals(2,loaded.schemaVersion);
-		assertEquals("graphite",loaded.colorway);
-		assertEquals("contour",loaded.surfaceTreatment);
-		assertTrue(loaded.customAccent);
-		assertEquals(0xFF12AB34,loaded.getAccentColor());
-		assertTrue(loaded.modules.get("fps"));
-	}
-
-	@Test
-	@DisplayName("legacy built-in accents inherit the material signature")
-	void legacyAccentBecomesMaterialSignature(@TempDir Path directory) throws Exception {
-		Path file=directory.resolve("config.json");
-		java.nio.file.Files.writeString(file,"{\"schemaVersion\":1,\"accentColor\":\"#6C5CE7\"}");
-		AetherConfig loaded=AetherConfig.load(file);
-		assertFalse(loaded.customAccent);
-		assertEquals(0xFFE7E9EC,loaded.getAccentColor());
 	}
 
 	@Test

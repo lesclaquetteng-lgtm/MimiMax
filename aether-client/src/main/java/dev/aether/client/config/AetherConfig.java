@@ -5,7 +5,6 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import dev.aether.client.design.AetherDesignSystem;
 import dev.aether.client.module.Module;
 import dev.aether.client.module.ModuleManager;
 import dev.aether.client.setting.Setting;
@@ -37,7 +36,7 @@ import java.util.concurrent.locks.ReentrantLock;
  */
 public final class AetherConfig {
 	public static final String DEFAULT_ACCENT = "#E7E9EC";
-	public static final int CURRENT_SCHEMA_VERSION = 2;
+	public static final int CURRENT_SCHEMA_VERSION = 1;
 	public static final String BACKUP_SUFFIX = ".bak";
 
 	private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
@@ -63,12 +62,6 @@ public final class AetherConfig {
 
 	/** The accent colour used by the interface. */
 	public String accentColor = DEFAULT_ACCENT;
-	/** Material colourway shared with the launcher Identity Studio. */
-	public String colorway = "graphite";
-	/** Decorative treatment behind the in-game workspaces. */
-	public String surfaceTreatment = "contour";
-	/** True only when the player deliberately chose a personal accent override. */
-	public boolean customAccent = false;
 
 	/** Whether the client shows a notification when it joins or leaves a world. */
 	public boolean showNotifications = true;
@@ -173,25 +166,20 @@ public final class AetherConfig {
 			throw new IOException("The configuration is empty: " + path);
 		}
 		config.schemaVersion = storedVersion;
-		config.migrate(root);
+		config.migrate();
 		config.sanitize();
 		config.loadStatus = storedVersion == CURRENT_SCHEMA_VERSION ? LoadStatus.LOADED : LoadStatus.MIGRATED;
 		return config;
 	}
 
-	private void migrate(JsonObject root) {
-		if (schemaVersion >= CURRENT_SCHEMA_VERSION) return;
-		// Keep genuine user colours but let former built-in defaults inherit the material accent.
-		if (!root.has("customAccent")) customAccent = isExplicitAccent(accentColor);
-		if (!root.has("colorway")) colorway = "graphite";
-		if (!root.has("surfaceTreatment")) surfaceTreatment = "contour";
+	private boolean migrate() {
+		if (schemaVersion >= CURRENT_SCHEMA_VERSION) {
+			return false;
+		}
+		// Version 0 is the original unversioned Aether JSON layout. Its fields are unchanged;
+		// assigning version 1 makes subsequent migrations explicit and testable.
 		schemaVersion = CURRENT_SCHEMA_VERSION;
-	}
-
-	private static boolean isExplicitAccent(String value) {
-		if (value == null || value.isBlank()) return false;
-		String normalized=value.trim().toUpperCase(java.util.Locale.ROOT);
-		return !DEFAULT_ACCENT.equals(normalized) && !LEGACY_ACCENTS.contains(normalized);
+		return true;
 	}
 
 	private static String stripByteOrderMark(String json) {
@@ -204,14 +192,10 @@ public final class AetherConfig {
 	private void sanitize() {
 		if (accentColor == null || accentColor.isBlank()
 				|| LEGACY_ACCENTS.contains(accentColor.trim().toUpperCase(java.util.Locale.ROOT))) {
-			accentColor=DEFAULT_ACCENT;
-			customAccent=false;
+			accentColor = DEFAULT_ACCENT;
 		} else {
-			accentColor=accentColor.trim();
-			if(ColorUtil.fromHex(accentColor,0)==0){accentColor=DEFAULT_ACCENT;customAccent=false;}
+			accentColor = accentColor.trim();
 		}
-		colorway=AetherDesignSystem.Colorway.fromId(colorway).id();
-		surfaceTreatment=AetherDesignSystem.SurfaceTreatment.fromId(surfaceTreatment).id();
 		if (modules == null) {
 			modules = new LinkedHashMap<>();
 		}
@@ -412,7 +396,7 @@ public final class AetherConfig {
 	}
 
 	public int getAccentColor() {
-		return AetherDesignSystem.resolve(this).accent();
+		return ColorUtil.fromHex(accentColor, ColorUtil.fromHex(DEFAULT_ACCENT, 0xFF6C5CE7));
 	}
 
 	public void resetSettings(ModuleManager manager) {
