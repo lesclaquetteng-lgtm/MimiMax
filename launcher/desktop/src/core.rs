@@ -9,7 +9,7 @@ use serde_json::{json, Value};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::path::PathBuf;
 use std::process::{ChildStdin, Command, Stdio};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, Manager};
@@ -143,23 +143,8 @@ fn extract_core(app: &AppHandle) -> Result<PathBuf, String> {
 		.join("bin");
 	std::fs::create_dir_all(&directory).map_err(|error| error.to_string())?;
 
-	let path = directory.join(CORE_NAME);
-	let current = std::fs::read(&path).unwrap_or_default();
-	if current != EMBEDDED_CORE {
-		let temporary = directory.join(format!("{CORE_NAME}.new"));
-		std::fs::write(&temporary, EMBEDDED_CORE).map_err(|error| error.to_string())?;
-
-		if std::fs::rename(&temporary, &path).is_err() {
-			// An older core is still running and Windows locks the file. It works, so it is better
-			// to start with it than to refuse to open the launcher.
-			let _ = std::fs::remove_file(&temporary);
-			if !path.is_file() {
-				return Err("the launcher core could not be written to the disk.".to_string());
-			}
-		}
-	}
-
-	Ok(path)
+	write_embedded_file(&directory, CORE_NAME, EMBEDDED_CORE)
+		.map_err(|error| format!("the launcher core could not be written to the disk: {error}"))
 }
 
 /// Writes the embedded client mod into the data directory of the launcher.
@@ -178,25 +163,110 @@ fn extract_mod(app: &AppHandle) -> Result<PathBuf, String> {
 fn write_embedded_mod(directory: &std::path::Path, bytes: &[u8]) -> Result<PathBuf, String> {
 	std::fs::create_dir_all(directory).map_err(|error| error.to_string())?;
 
-	let path = directory.join(MOD_NAME);
-	let current = std::fs::read(&path).unwrap_or_default();
-	if current == bytes {
-		return Ok(path);
+	write_embedded_file(directory, MOD_NAME, bytes).map_err(|error| error.to_string())
+}
+
+/// Creates collision-resistant temporary siblings for embedded resources.
+static NEXT_EMBEDDED_TEMP: AtomicU64 = AtomicU64::new(0);
+
+/// Replaces a file atomically, including when its destination already exists on Windows.
+fn replace_embedded_file(temporary: &std::path::Path, destination: &std::path::Path) -> std::io::Result<()> {
+	#[cfg(windows)]
+	{
+		use std::os::windows::ffi::OsStrExt;
+
+		let source: Vec<u16> = temporary.as_os_str().encode_wide().chain(Some(0)).collect();
+		let target: Vec<u16> = destination.as_os_str().encode_wide().chain(Some(0)).collect();
+
+		#[link(name = "Kernel32")]
+		extern "system" {
+			fn MoveFileExW(existing_name: *const u16, new_name: *const u16, flags: u32) -> i32;
+		}
+
+		// MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH
+		let replaced = unsafe { MoveFileExW(source.as_ptr(), target.as_ptr(), 0x1 | 0x8) };
+		if replaced == 0 {
+			return Err(std::io::Error::last_os_error());
+		}
+		Ok(())
 	}
 
-	let temporary = directory.join(format!("{MOD_NAME}.new"));
-	std::fs::write(&temporary, bytes).map_err(|error| error.to_string())?;
+	#[cfg(not(windows))]
+	{
+		std::fs::rename(temporary, destination)
+	}
+}
 
-	// Unlike the core, the archive is not a running executable: nothing locks it, and the rename
-	// replaces the previous version in one step. The rewrite below only covers a file system that
-	// refuses the rename, for instance when the archive is open in a file manager.
-	if std::fs::rename(&temporary, &path).is_err() {
+/// Writes an embedded executable or JAR without exposing a partially-written destination.
+/// If Windows keeps an older executable locked, its existing complete copy remains usable.
+fn write_embedded_file(
+	directory: &std::path::Path,
+	filename: &str,
+	bytes: &[u8],
+) -> std::io::Result<PathBuf> {
+	use std::fs::OpenOptions;
+
+	std::fs::create_dir_all(directory)?;
+	let destination = directory.join(filename);
+	if std::fs::read(&destination).ok().as_deref() == Some(bytes) {
+		return Ok(destination);
+	}
+
+	let mut temporary = None;
+	let mut file = None;
+	for _ in 0..32 {
+		let sequence = NEXT_EMBEDDED_TEMP.fetch_add(1, Ordering::Relaxed);
+		let candidate = directory.join(format!(
+			".{filename}.{}.{}.tmp",
+			std::process::id(),
+			sequence
+		));
+		match OpenOptions::new().write(true).create_new(true).open(&candidate) {
+			Ok(created) => {
+				temporary = Some(candidate);
+				file = Some(created);
+				break;
+			}
+			Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+			Err(error) => return Err(error),
+		}
+	}
+
+	let temporary = temporary.ok_or_else(|| {
+		std::io::Error::new(
+			std::io::ErrorKind::AlreadyExists,
+			"could not allocate a unique embedded-resource temporary file",
+		)
+	})?;
+
+	let write_result = (|| {
+		let mut file = file.expect("a temporary embedded-resource file was created");
+		file.write_all(bytes)?;
+		file.sync_all()
+	})();
+
+	if let Err(error) = write_result {
 		let _ = std::fs::remove_file(&temporary);
-		let _ = std::fs::remove_file(&path);
-		std::fs::write(&path, bytes).map_err(|error| error.to_string())?;
+		return Err(error);
 	}
 
-	Ok(path)
+	if let Err(error) = replace_embedded_file(&temporary, &destination) {
+		let _ = std::fs::remove_file(&temporary);
+		// The previous executable may be mapped by the current process or another launcher.
+		// Keep a complete old copy rather than deleting it or writing a truncated replacement.
+		if destination.is_file() {
+			return Ok(destination);
+		}
+		return Err(error);
+	}
+
+	Ok(destination)
+}
+
+/// Writes the embedded client mod into the data directory of the launcher.
+/// Kept separate from the app handle so the replacement can be tested without a window.
+fn write_embedded_mod(directory: &std::path::Path, bytes: &[u8]) -> Result<PathBuf, String> {
+	write_embedded_file(directory, MOD_NAME, bytes).map_err(|error| error.to_string())
 }
 
 /// The time the core has to answer before it is considered stuck.
@@ -512,20 +582,43 @@ mod tests {
 		let directory =
 			std::env::temp_dir().join(format!("aether-mod-test-{}", std::process::id()));
 		let _ = std::fs::remove_dir_all(&directory);
-		let temporary = directory.join(format!("{MOD_NAME}.new"));
-
 		let path = write_embedded_mod(&directory, b"first").unwrap();
 		assert_eq!(std::fs::read(&path).unwrap(), b"first");
 
 		// Same bytes: the archive is left alone and no temporary file is written.
 		let path = write_embedded_mod(&directory, b"first").unwrap();
 		assert_eq!(std::fs::read(&path).unwrap(), b"first");
-		assert!(!temporary.exists());
+		assert_eq!(std::fs::read_dir(&directory).unwrap().count(), 1);
 
-		// New bytes: the archive is replaced, and nothing is left behind.
+		// New bytes: the archive is replaced atomically, with no temporary file left behind.
 		let path = write_embedded_mod(&directory, b"second").unwrap();
 		assert_eq!(std::fs::read(&path).unwrap(), b"second");
-		assert!(!temporary.exists());
+		assert_eq!(std::fs::read_dir(&directory).unwrap().count(), 1);
+
+		let _ = std::fs::remove_dir_all(&directory);
+	}
+
+	#[test]
+	fn concurrent_embedded_mod_updates_do_not_share_temporary_files() {
+		let directory = std::env::temp_dir().join(format!("aether-mod-concurrent-{}", std::process::id()));
+		let _ = std::fs::remove_dir_all(&directory);
+		std::fs::create_dir_all(&directory).unwrap();
+
+		let workers: Vec<_> = (0..8)
+			.map(|index| {
+				let directory = directory.clone();
+				std::thread::spawn(move || {
+					let bytes = vec![index as u8; 4096 + index];
+					write_embedded_mod(&directory, &bytes).unwrap();
+					bytes
+				})
+			})
+			.collect();
+
+		let candidates: Vec<Vec<u8>> = workers.into_iter().map(|worker| worker.join().unwrap()).collect();
+		let actual = std::fs::read(directory.join(MOD_NAME)).unwrap();
+		assert!(candidates.iter().any(|candidate| *candidate == actual));
+		assert_eq!(std::fs::read_dir(&directory).unwrap().count(), 1);
 
 		let _ = std::fs::remove_dir_all(&directory);
 	}
