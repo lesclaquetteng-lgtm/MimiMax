@@ -2409,7 +2409,7 @@ async function loadLoaders(gameVersion) {
 }
 
 /** Creates a profile from the one the selected account plays with right now. */
-function newProfileModal() {
+async function newProfileModal() {
 	const source = currentProfile();
 	openModal('Create a profile', \`
 		<p class="muted">Start from your current setup, then give this profile its own Minecraft version, loader and launch settings.</p>
@@ -2497,10 +2497,37 @@ function newProfileModal() {
 	selectOption(versionSelect, source.gameVersion);
 
 	const loaderSelect = $('#profile-loader');
-	for (const option of Array.from($('#select-loader').options)) {
-		loaderSelect.appendChild(option.cloneNode(true));
+	loaderSelect.disabled = true;
+	const loadingLoader = document.createElement('option');
+	loadingLoader.value = '';
+	loadingLoader.textContent = 'Loading Fabric versions…';
+	loaderSelect.appendChild(loadingLoader);
+	try {
+		const initialLoaders = await api.versions.loaders(source.gameVersion);
+		loaderSelect.replaceChildren();
+		if (initialLoaders?.ok && (initialLoaders.loaders || []).length > 0) {
+			for (const loader of initialLoaders.loaders) {
+				const option = document.createElement('option');
+				option.value = loader;
+				option.textContent = loader;
+				loaderSelect.appendChild(option);
+			}
+			selectOption(loaderSelect, source.loaderVersion);
+		} else {
+			const saved = document.createElement('option');
+			saved.value = source.loaderVersion || '';
+			saved.textContent = source.loaderVersion || 'No Fabric loader available';
+			loaderSelect.appendChild(saved);
+		}
+	} catch {
+		loaderSelect.replaceChildren();
+		const saved = document.createElement('option');
+		saved.value = source.loaderVersion || '';
+		saved.textContent = source.loaderVersion || 'Saved loader unavailable';
+		loaderSelect.appendChild(saved);
+	} finally {
+		loaderSelect.disabled = false;
 	}
-	selectOption(loaderSelect, source.loaderVersion);
 
 	$('#profile-memory').value = source.maxMemory;
 	$('#profile-min-memory').value = source.minMemory;
