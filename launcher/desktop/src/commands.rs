@@ -286,8 +286,9 @@ pub async fn mods_install(
 	let Some(_operation) = state.acquire_install() else {
 		return failure("Mods cannot be installed while Minecraft is starting, running or another install is active.");
 	};
-	blocking_stream(
+	blocking_stream_tracked(
 		app,
+		&state,
 		vec![
 			"mods".to_string(),
 			"install".to_string(),
@@ -540,7 +541,7 @@ pub async fn performance_install(
 		}
 	}
 
-	blocking_stream(app, args, StreamKind::Optimisation).await
+	blocking_stream_tracked(app, &state, args, StreamKind::Optimisation).await
 }
 
 /* ------------------------------------------------------------------- logs */
@@ -580,6 +581,42 @@ async fn blocking_stream(app: AppHandle, args: Vec<String>, kind: StreamKind) ->
 	core::blocking(move || core::run_core_streaming(&app, &args, kind, |_, _| {}))
 		.await
 		.unwrap_or_else(|| failure("The launcher core stopped unexpectedly."))
+}
+
+/// Runs a long operation while recording its child process so closing the shell cannot orphan it.
+async fn blocking_stream_tracked(
+	app: AppHandle,
+	state: &RunState,
+	args: Vec<String>,
+	kind: StreamKind,
+) -> Value {
+	let slot = state.install.clone();
+	let cleanup = state.install.clone();
+	let cancelled = Arc::new(AtomicBool::new(false));
+	let stopped = Arc::new(AtomicBool::new(false));
+	let active_cancelled = cancelled.clone();
+	let active_stopped = stopped.clone();
+	let application = app.clone();
+
+	let result = core::blocking(move || {
+		core::run_core_streaming(&application, &args, kind, move |pid, stdin| {
+			if let Ok(mut guard) = slot.lock() {
+				*guard = Some(Active {
+					pid,
+					stdin,
+					cancelled: active_cancelled,
+					stopped: active_stopped,
+				});
+			}
+		})
+	})
+	.await
+	.unwrap_or_else(|| failure("The launcher core stopped unexpectedly."));
+
+	if let Ok(mut guard) = cleanup.lock() {
+		*guard = None;
+	}
+	result
 }
 
 #[tauri::command(rename_all = "snake_case")]
