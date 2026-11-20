@@ -126,6 +126,10 @@ test('Modrinth installs stream real dependency and byte progress into the UI', (
 	const commands = fs.readFileSync(path.join(root, 'desktop/src/commands.rs'), 'utf8');
 	assert.match(modsRust, /pub fn install_catalog_project_with_progress/);
 	assert.match(modsRust, /state: "downloading"/);
+	assert.match(modsRust, /received, total/);
+	assert.match(commands, /async fn blocking_stream_tracked/);
+	assert.match(commands, /blocking_stream_tracked\(app, &state, args, StreamKind::Optimisation\)/);
+	assert.match(commands, /StreamKind::Modrinth/);
 	assert.match(rust, /mods::install_catalog_project_with_progress/);
 	assert.match(rust, /"type".to_string\(\)[\s\S]{0,100}"modrinth"/);
 	assert.match(core, /StreamKind::Modrinth => "mods:progress"/);
