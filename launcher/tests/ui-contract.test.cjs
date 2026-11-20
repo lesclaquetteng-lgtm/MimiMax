@@ -41,6 +41,27 @@ test('the redesigned interface has unique, connected UI anchors', () => {
 	}
 });
 
+test('profile creation supports custom versions, loaders, memory and window presets', () => {
+	for (const id of ['profile-name', 'profile-version', 'profile-loader', 'profile-memory',
+		'profile-min-memory', 'profile-width', 'profile-height']) {
+		assert.match(app, new RegExp('\\\\bid="' + id + '"'));
+	}
+	assert.match(app, /function newProfileModal\(\)/);
+	assert.match(app, /api\.profiles\.add\(name, values\)/);
+	assert.match(app, /Minimum memory cannot exceed maximum memory/);
+	assert.match(app, /api\.versions\.loaders\(selectedVersion\)/);
+	assert.match(css, /\.profile-wizard-grid/);
+});
+
+test('Rust desktop operations prevent installs and launches from racing', () => {
+	const state = fs.readFileSync(path.join(root, 'desktop/src/state.rs'), 'utf8');
+	const commands = fs.readFileSync(path.join(root, 'desktop/src/commands.rs'), 'utf8');
+	assert.match(state, /pub fn acquire_install\(&self\)/);
+	assert.match(state, /pub fn acquire_game\(&self\)/);
+	assert.match(commands, /state\.acquire_install\(\)/);
+	assert.match(commands, /state\.acquire_game\(\)/);
+});
+
 test('the launcher supports quick-joining saved servers from the Play page', () => {
 	assert.match(app, /function renderQuickServers\(\)/);
 	assert.match(app, /launch\(server\.address\)/);
