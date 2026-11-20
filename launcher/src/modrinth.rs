@@ -508,26 +508,16 @@ fn install_version_file(
     }
     let destination = paths.mods.join(&filename);
 
+    let owned_target = manifest.mods.iter().any(|entry| {
+        entry.project_id == project_id && entry.filename == filename
+    });
     let already_installed = manifest.mods.iter().any(|entry| {
         entry.project_id == project_id
             && entry.version_id == version.id
             && managed_file_is_valid(paths, entry)
     });
 
-    if already_installed || (destination.is_file() && http::sha1(&destination).as_deref() == Some(expected_sha1)) {
-        remember(
-            manifest,
-            InstalledProject {
-                project_id: project_id.clone(),
-                slug: name.clone(),
-                title: name.clone(),
-                version_id: version.id.clone(),
-                version_number: version.version_number.clone(),
-                filename: filename.clone(),
-                sha1: expected_sha1.to_string(),
-            },
-        );
-        save_manifest(paths, manifest)?;
+    if already_installed {
         report.skipped.push(name.clone());
         on_progress(&progress(
             &project_id,
@@ -538,6 +528,13 @@ fn install_version_file(
             0,
         ));
         return Ok(());
+    }
+
+    if destination.exists() && !owned_target {
+        return Err(format!(
+            "The file {} already exists but is not managed by Aether. It was left untouched.",
+            filename
+        ));
     }
 
     on_progress(&progress(
@@ -753,5 +750,52 @@ mod tests {
         assert!(valid_sha1("0123456789012345678901234567890123456789"));
         assert!(!valid_sha1("abcd"));
         assert!(!valid_sha1("g123456789012345678901234567890123456789"));
+    }
+
+    fn sample_version(version_type: &str, game_version: &str, loader: &str) -> ProjectVersion {
+        ProjectVersion {
+            id: "AABBCCDD".to_string(),
+            project_id: "EEFFGGHH".to_string(),
+            name: "Sample".to_string(),
+            version_number: "1.0.0".to_string(),
+            version_type: version_type.to_string(),
+            game_versions: vec![game_version.to_string()],
+            loaders: vec![loader.to_string()],
+            dependencies: Vec::new(),
+            files: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn version_selection_prefers_stable_release_over_newer_beta() {
+        let selected = choose_version(
+            vec![
+                sample_version("beta", "1.21.11", "fabric"),
+                sample_version("release", "1.21.11", "fabric"),
+            ],
+            "1.21.11",
+        ).unwrap();
+        assert_eq!(selected.version_type, "release");
+    }
+
+    #[test]
+    fn version_selection_falls_back_to_beta_when_no_release_exists() {
+        let selected = choose_version(
+            vec![sample_version("beta", "1.21.11", "fabric")],
+            "1.21.11",
+        ).unwrap();
+        assert_eq!(selected.version_type, "beta");
+    }
+
+    #[test]
+    fn version_selection_rejects_other_minecraft_versions_and_loaders() {
+        let result = choose_version(
+            vec![
+                sample_version("release", "1.20.1", "fabric"),
+                sample_version("release", "1.21.11", "forge"),
+            ],
+            "1.21.11",
+        );
+        assert!(result.is_err());
     }
 }
