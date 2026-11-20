@@ -10,6 +10,8 @@ const html = fs.readFileSync(path.join(root, 'gui/src/ui/index.html'), 'utf8');
 const app = fs.readFileSync(path.join(root, 'gui/src/ui/app.js'), 'utf8');
 const css = fs.readFileSync(path.join(root, 'gui/src/ui/styles.css'), 'utf8');
 const rust = fs.readFileSync(path.join(root, 'src/main.rs'), 'utf8');
+const modsRust = fs.readFileSync(path.join(root, 'src/mods.rs'), 'utf8');
+const bridge = fs.readFileSync(path.join(root, 'gui/src/ui/bridge.js'), 'utf8');
 
 const ids = [...html.matchAll(/\bid="([^"]+)"/g)].map((match) => match[1]);
 
@@ -28,7 +30,7 @@ test('the redesigned interface has unique, connected UI anchors', () => {
 		'quick-servers', 'quick-servers-open', 'java-runtime-summary',
 		'java-runtime-label', 'java-runtime-detail', 'java-runtime-settings',
 		'java-runtime-status', 'versions-search', 'versions-filter', 'versions-summary',
-		'mods-search', 'mods-filter', 'mods-summary',
+		'mods-search', 'mods-filter', 'mods-summary', 'mods-catalog-search', 'mods-catalog-search-button', 'mods-catalog-status', 'mods-catalog-results',
 		'perf-health-count', 'perf-health-progress', 'perf-health-percent',
 		'perf-health-message', 'perf-jvm-summary', 'perf-options-summary',
 		'command-open', 'command-palette', 'command-search-input', 'command-results',
@@ -68,6 +70,26 @@ test('the command palette is keyboard accessible and supports navigation', () =>
 	assert.match(app, /event\.key === 'ArrowDown'/);
 	assert.match(app, /event\.key === 'ArrowUp'/);
 	assert.match(app, /function runCommand\(item\)/);
+});
+
+test('the Modrinth catalog calls native Rust search and install commands', () => {
+	assert.match(app, /async function searchModCatalog\\(\\)/);
+	assert.match(app, /async function installCatalogMod\\(project\\)/);
+	assert.match(app, /api\\.mods\\.search\\(query, gameVersion\\)/);
+	assert.match(app, /api\\.mods\\.install\\(project\\.projectId, gameVersion\\)/);
+	assert.match(bridge, /invoke\\('mods_search'/);
+	assert.match(bridge, /invoke\\('mods_install'/);
+	assert.match(rust, /mods::search_catalog/);
+	assert.match(rust, /mods::install_catalog_project/);
+});
+
+test('Modrinth downloads are restricted to Fabric-compatible, checksum-verified JARs', () => {
+	assert.match(modsRust, /pub fn search_catalog/);
+	assert.match(modsRust, /pub fn install_catalog_project/);
+	assert.match(modsRust, /is_official_cdn_url/);
+	assert.match(modsRust, /http::download\\(&file\\.url, &destination, Some\\(&checksum\\)/);
+	assert.match(modsRust, /dependency_type\\.as_deref\\(\\) != Some\\("required"\\)/);
+	assert.match(html, /third-party code loaded by Minecraft/i);
 });
 
 test('the launcher never simulates FPS in its desktop UI', () => {
