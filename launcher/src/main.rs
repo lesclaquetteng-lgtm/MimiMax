@@ -565,10 +565,21 @@ fn command_mods(arguments: &[String]) -> Result<(), String> {
             let project_id = flags.positional.get(1).ok_or_else(|| {
                 "usage: mods install <project-id> [--game-version <version>]".to_string()
             })?;
-            let installed = mods::install_catalog_project(
+            let installed = mods::install_catalog_project_with_progress(
                 &launcher.paths.mods,
                 project_id,
                 &game_version,
+                |progress| {
+                    let mut event = serde_json::to_value(progress)
+                        .unwrap_or_else(|_| serde_json::json!({}));
+                    if let Some(object) = event.as_object_mut() {
+                        object.insert(
+                            "type".to_string(),
+                            serde_json::Value::String("modrinth".to_string()),
+                        );
+                    }
+                    emit(&event);
+                },
             )?;
             emit(&serde_json::json!({
                 "ok": true,
