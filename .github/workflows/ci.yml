@@ -11,6 +11,11 @@ on:
 permissions:
   contents: read
 
+# Keep only the newest run for a given PR/ref; stale commits must not occupy CI runners.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   rust:
     name: Rust core (${{ matrix.os }})
