@@ -81,6 +81,12 @@ Microsoft credential handling is covered by the account serialization and creden
 - Modrinth JAR filenames reject directory separators, NTFS alternate data streams, control
   characters and reserved Windows device names.
 - Native ZIP extraction rejects entries that are not enclosed by the extraction root.
+- Asset-index entries are deduplicated by SHA-1 before parallel downloads; conflicting sizes for
+  the same content hash are rejected instead of racing over one destination and partial file.
+- Hosted-server Minecraft/Fabric version identifiers are validated before they become shared
+  artifact-directory names.
+- Mod and session-log discovery/reads refuse symbolic links rather than following them outside the
+  managed directories.
 - Atomic file writes use unique sibling temporary files; concurrent writes of accounts.json and
   accounts.credentials are covered by a regression test.
 
@@ -126,8 +132,9 @@ cargo build --release --manifest-path desktop/Cargo.toml
 ```
 
 The shell tests cover the shape of the answers it builds, the JSON documents of the core and the
-timeouts of the network commands; the two newest check that the embedded mod is a real jar and that
-its extraction replaces an older archive without leaving a temporary file. **8 passed, 0 failed.**
+timeouts of the network commands. Regression coverage also checks that embedded-resource writes
+use unique temporary siblings and atomic replacement, concurrent extraction never leaves partial
+files, and only one installation/game launch can own the corresponding process slot at a time.
 The window itself is covered by the checks below.
 
 ### 4.0 What the shell guarantees
@@ -141,8 +148,14 @@ The window itself is covered by the checks below.
   core as `AETHER_MOD_JAR`. Without it, an installed launcher cannot answer "Install / repair": the
   core would look for `aether-client/build/libs/…` on a machine that never had the sources.
   `build.rs` refuses to build the shell when the jar is missing.
+- **No overlapping processes**: atomic operation guards prevent a second installation or game launch
+  from replacing the PID/stdio handle tracked by the shell while the first operation is still active.
 - **No orphan on close**: `RunEvent::ExitRequested` / `Exit` kill the installation and the game that
   the window started (`state::kill_active`).
+- **Atomic embedded resources**: the embedded core and JAR are written to unique temporary siblings,
+  synced, and replaced atomically; a locked old executable is preserved rather than truncated.
+- **WebView policy**: the Tauri configuration injects a restrictive CSP (`object-src 'none'`,
+  `base-uri 'self'`, `form-action 'self'`) and freezes JavaScript built-in prototypes.
 - **No orphan after a crash**: the core records the game in `<home>/aether/game.pid`, so `stop` (and
   the Stop button of the next session) still kills the tree of a launcher that was killed.
 
