@@ -1,10 +1,11 @@
 # Verification
 
-How the current implementation of **Aether Client** and **Aether Launcher** is verified, and the
-results of the last full run (19 November 2026, Minecraft 1.21.11 / Fabric 0.20.1).
+How the implementation of **Aether Client** and **Aether Launcher** is verified, including the
+last recorded full local run (19 November 2026, Minecraft 1.21.11 / Fabric 0.20.1).
 
-> Everything below was measured on this machine, not estimated. The console excerpts come from the
-> logs written by the core, the game and the hosted server during the run.
+> The numeric results below are a measured baseline from that run, not a claim that every newer
+> hardening change has been exercised locally. The current branch is additionally checked by the
+> locked GitHub Actions tests, Clippy, Fabric build, native-shell build and theme-token workflow.
 
 ## 0. Results at a glance
 
