@@ -38,6 +38,8 @@ contextBridge.exposeInMainWorld('aether', {
 
 	mods: {
 		list: () => ipcRenderer.invoke('mods:list'),
+		search: (query, gameVersion) => ipcRenderer.invoke('mods:search', query, gameVersion),
+		install: (projectId, gameVersion) => ipcRenderer.invoke('mods:install', projectId, gameVersion),
 		toggle: (name, enabled) => ipcRenderer.invoke('mods:toggle', name, enabled),
 		openFolder: () => ipcRenderer.invoke('mods:openFolder')
 	},
@@ -79,6 +81,9 @@ contextBridge.exposeInMainWorld('aether', {
 	},
 	onOptimisationProgress: (callback) => {
 		ipcRenderer.on('optimisation:progress', (_event, progress) => callback(progress));
+	},
+	onModrinthProgress: (callback) => {
+		ipcRenderer.on('mods:progress', (_event, progress) => callback(progress));
 	},
 	onGameOutput: (callback) => {
 		ipcRenderer.on('game:output', (_event, line) => callback(line));
