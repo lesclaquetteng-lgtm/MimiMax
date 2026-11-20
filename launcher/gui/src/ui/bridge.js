@@ -90,6 +90,14 @@
 
 		mods: {
 			list: () => invoke('mods_list'),
+			search: (query, gameVersion) => invoke('mods_search', {
+				query,
+				game_version: gameVersion
+			}),
+			install: (projectId, gameVersion) => invoke('mods_install', {
+				project_id: projectId,
+				game_version: gameVersion
+			}),
 			toggle: (name, enabled) => invoke('mods_toggle', { name, enabled }),
 			openFolder: () => invoke('mods_open_folder')
 		},
@@ -128,6 +136,7 @@
 
 		onInstallProgress: (callback) => listen('install:progress', callback),
 		onOptimisationProgress: (callback) => listen('optimisation:progress', callback),
+		onModrinthProgress: (callback) => listen('mods:progress', callback),
 		onGameOutput: (callback) => listen('game:output', callback),
 		onMicrosoftDeviceCode: (callback) => listen('microsoft:deviceCode', callback)
 	};
