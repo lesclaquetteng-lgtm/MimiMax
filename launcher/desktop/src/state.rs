@@ -114,15 +114,17 @@ mod tests {
 	}
 
 	#[test]
-	fn game_and_install_locks_are_independent() {
+	fn game_and_install_locks_are_mutually_exclusive() {
 		let state = RunState::default();
 		let install = state.acquire_install().expect("install lock");
+		assert!(state.acquire_game().is_none(), "the game cannot start during an install");
+		drop(install);
+
 		let game = state.acquire_game().expect("game lock");
-		assert!(state.acquire_install().is_none());
-		assert!(state.acquire_game().is_none());
-		drop((install, game));
+		assert!(state.acquire_install().is_none(), "the game folder cannot be modified while playing");
+		drop(game);
+
 		assert!(state.acquire_install().is_some());
-		assert!(state.acquire_game().is_some());
 	}
 
 	#[test]
