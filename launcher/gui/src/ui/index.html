@@ -586,6 +586,27 @@
 		</main>
 	</div>
 
+	<!-- ======================= COMMAND PALETTE ======================= -->
+	<div class="command-backdrop" id="command-palette" hidden>
+		<div class="command-dialog" role="dialog" aria-modal="true" aria-labelledby="command-title">
+			<div class="command-heading">
+				<strong id="command-title">Quick actions</strong>
+				<kbd>ESC</kbd>
+			</div>
+			<label class="command-search">
+				<svg viewBox="0 0 24 24"><circle cx="10.8" cy="10.8" r="6.8" /><path d="m16 16 4.5 4.5" /></svg>
+				<span class="sr-only">Search pages and actions</span>
+				<input id="command-search-input" type="search" placeholder="Search pages, actions or servers…" autocomplete="off" />
+			</label>
+			<div class="command-results" id="command-results" role="listbox" aria-label="Search results"></div>
+			<div class="command-footer">
+				<span><kbd>↑</kbd> <kbd>↓</kbd> Navigate</span>
+				<span><kbd>ENTER</kbd> Open</span>
+				<span><kbd>ESC</kbd> Close</span>
+			</div>
+		</div>
+	</div>
+
 	<!-- ============================ MODAL ============================ -->
 	<div class="modal-backdrop" id="modal" hidden>
 		<div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title" tabindex="-1">
