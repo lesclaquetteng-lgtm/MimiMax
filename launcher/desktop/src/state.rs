@@ -41,22 +41,39 @@ pub struct RunState {
 impl RunState {
 	/// Acquires the shared game-directory lock used by Minecraft and mod-pack installations.
 	pub fn acquire_install(&self) -> Option<OperationGuard> {
+		// Do not touch libraries, mods or options.txt while Minecraft is using the game folder.
+		if self.game_busy.load(Ordering::Acquire) {
+			return None;
+		}
 		self.install_busy
 			.compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
-			.ok()
-			.map(|_| OperationGuard {
-				busy: Arc::clone(&self.install_busy),
-			})
+			.ok()?;
+		// Close the race where a launch acquired its lock between the first check and our CAS.
+		if self.game_busy.load(Ordering::Acquire) {
+			self.install_busy.store(false, Ordering::Release);
+			return None;
+		}
+		Some(OperationGuard {
+			busy: Arc::clone(&self.install_busy),
+		})
 	}
 
-	/// Acquires the single-game-process lock.
+	/// Acquires the single-game-process lock, only when the game directory is idle.
 	pub fn acquire_game(&self) -> Option<OperationGuard> {
+		if self.install_busy.load(Ordering::Acquire) {
+			return None;
+		}
 		self.game_busy
 			.compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
-			.ok()
-			.map(|_| OperationGuard {
-				busy: Arc::clone(&self.game_busy),
-			})
+			.ok()?;
+		// Close the race where an install acquired its lock between the first check and our CAS.
+		if self.install_busy.load(Ordering::Acquire) {
+			self.game_busy.store(false, Ordering::Release);
+			return None;
+		}
+		Some(OperationGuard {
+			busy: Arc::clone(&self.game_busy),
+		})
 	}
 }
 
@@ -116,5 +133,19 @@ mod tests {
 			assert!(state.acquire_game().is_none());
 		}
 		assert!(state.acquire_game().is_some());
+	}
+
+	#[test]
+	fn installing_mods_or_game_files_blocks_a_game_launch() {
+		let state = RunState::default();
+		let _install = state.acquire_install().expect("install lock");
+		assert!(state.acquire_game().is_none());
+	}
+
+	#[test]
+	fn a_running_game_blocks_mod_installation_and_tuning() {
+		let state = RunState::default();
+		let _game = state.acquire_game().expect("game lock");
+		assert!(state.acquire_install().is_none());
 	}
 }
