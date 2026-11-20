@@ -2002,7 +2002,7 @@ function applyAccent(color, usePaletteDefault = false) {
 
 	themeCache = null;
 
-	if (usePaletteDefault || !value || LEGACY_ACCENT_DEFAULTS.has(value.toLowerCase())) {
+	if (usePaletteDefault || !value) {
 		root.removeProperty('--accent-user');
 		root.removeProperty('--on-accent');
 		return;
