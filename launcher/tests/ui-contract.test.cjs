@@ -73,22 +73,22 @@ test('the command palette is keyboard accessible and supports navigation', () =>
 });
 
 test('the Modrinth catalog calls native Rust search and install commands', () => {
-	assert.match(app, /async function searchModCatalog\\(\\)/);
-	assert.match(app, /async function installCatalogMod\\(project\\)/);
-	assert.match(app, /api\\.mods\\.search\\(query, gameVersion\\)/);
-	assert.match(app, /api\\.mods\\.install\\(project\\.projectId, gameVersion\\)/);
-	assert.match(bridge, /invoke\\('mods_search'/);
-	assert.match(bridge, /invoke\\('mods_install'/);
-	assert.match(rust, /mods::search_catalog/);
-	assert.match(rust, /mods::install_catalog_project/);
+	assert.ok(app.includes('async function searchModCatalog'));
+	assert.ok(app.includes('async function installCatalogMod'));
+	assert.ok(app.includes('api.mods.search(query, gameVersion)'));
+	assert.ok(app.includes('api.mods.install(project.projectId, gameVersion)'));
+	assert.ok(bridge.includes("invoke('mods_search'"));
+	assert.ok(bridge.includes("invoke('mods_install'"));
+	assert.ok(rust.includes('mods::search_catalog'));
+	assert.ok(rust.includes('mods::install_catalog_project'));
 });
 
 test('Modrinth downloads are restricted to Fabric-compatible, checksum-verified JARs', () => {
-	assert.match(modsRust, /pub fn search_catalog/);
-	assert.match(modsRust, /pub fn install_catalog_project/);
-	assert.match(modsRust, /is_official_cdn_url/);
-	assert.match(modsRust, /http::download\\(&file\\.url, &destination, Some\\(&checksum\\)/);
-	assert.match(modsRust, /dependency_type\\.as_deref\\(\\) != Some\\("required"\\)/);
+	assert.ok(modsRust.includes('pub fn search_catalog'));
+	assert.ok(modsRust.includes('pub fn install_catalog_project'));
+	assert.ok(modsRust.includes('is_official_cdn_url'));
+	assert.ok(modsRust.includes('http::download(&file.url, &destination, Some(&checksum)'));
+	assert.ok(modsRust.includes('dependency_type.as_deref() != Some("required")'));
 	assert.match(html, /third-party code loaded by Minecraft/i);
 });
 
