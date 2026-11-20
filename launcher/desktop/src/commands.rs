@@ -253,6 +253,47 @@ pub async fn mods_list(app: AppHandle) -> Value {
 }
 
 #[tauri::command(rename_all = "snake_case")]
+pub async fn mods_search(
+	app: AppHandle,
+	query: String,
+	game_version: String,
+) -> Value {
+	core::run_core(
+		app,
+		vec![
+			"mods".to_string(),
+			"search".to_string(),
+			query,
+			"--version".to_string(),
+			game_version,
+			"--limit".to_string(),
+			"24".to_string(),
+		],
+	)
+	.await
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn mods_install(
+	app: AppHandle,
+	state: State<'_, RunState>,
+	project_id: String,
+	game_version: String,
+) -> Value {
+	let Some(_operation) = state.acquire_install() else {
+		return failure("An installation or optimisation operation is already running.");
+	};
+	let args = vec![
+		"mods".to_string(),
+		"install".to_string(),
+		project_id,
+		"--version".to_string(),
+		game_version,
+	];
+	blocking_stream(app, args, StreamKind::Modrinth).await
+}
+
+#[tauri::command(rename_all = "snake_case")]
 pub async fn mods_toggle(app: AppHandle, name: String, enabled: bool) -> Value {
 	core::run_core(
 		app,
