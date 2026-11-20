@@ -82,6 +82,9 @@ for (const [selector, label] of [
   requireText('app', selector, `Missing ${label} interaction binding`);
 }
 requireText('app', 'function applyAppearance', 'Missing live appearance application');
+requireText('app', 'const THEME_SIGNATURE_ACCENTS', 'Missing per-material signature accents');
+requireText('app', 'applyAccent(accent, !hasCustomAccent)', 'Legacy default accents must resolve to the active material');
+requireText('app', 'if (usePaletteDefault || !value)', 'An explicitly chosen accent must not be discarded because it matches a former default');
 requireText('app', 'appearanceSaveQueue', 'Appearance writes must be serialized');
 requireText('app', "openModal(\n\t\t\t'Reset workspace design?'", 'Reset must use the accessible app modal');
 requireText('app', 'setChoiceState(selector, attribute, selected)', 'Missing aria state synchronisation');
