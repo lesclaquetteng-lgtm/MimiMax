@@ -2364,3 +2364,26 @@ html[data-theme="light"] .mods-library-compat { color:#53627d; }
 	.mods-library-item, .mods-tab { transition:none; }
 	.mods-library-progress-dot { animation:none; }
 }
+
+
+/* Profile wizard: sensible defaults first, launch tuning when the player asks for it. */
+.profile-wizard-grid {
+	display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:9px 12px; margin-top:11px;
+}
+.profile-wizard-grid .field { min-width:0; }
+.profile-wizard-grid .field-label { font-size:9px; }
+.profile-wizard-grid .input { min-width:0; }
+.profile-wizard-advanced {
+	margin-top:15px; padding:11px 12px; border:1px solid var(--border);
+	border-radius:10px; background:rgba(9,15,26,.3);
+}
+.profile-wizard-advanced summary {
+	color:var(--accent-text); cursor:pointer; font-size:10px; font-weight:650; list-style:none;
+}
+.profile-wizard-advanced summary::-webkit-details-marker { display:none; }
+.profile-wizard-advanced summary::after { content:"＋"; float:right; color:var(--text-tertiary); }
+.profile-wizard-advanced[open] summary::after { content:"−"; }
+html[data-theme="light"] .profile-wizard-advanced { background:#f7f8fd; }
+@media (max-width:520px) {
+	.profile-wizard-grid { grid-template-columns:1fr; }
+}
