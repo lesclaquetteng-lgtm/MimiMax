@@ -7,7 +7,7 @@ use std::process::Command;
 use crate::paths::{home_directory, Paths};
 
 /// The accent colour that is used when nothing was configured.
-pub const DEFAULT_ACCENT: &str = "#3B82F6";
+pub const DEFAULT_ACCENT: &str = "#E7E9EC";
 
 /// The name of the profile that applies when nothing else does.
 pub const DEFAULT_PROFILE: &str = "Default";
