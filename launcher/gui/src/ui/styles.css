@@ -2059,3 +2059,9 @@ html[data-density="compact"] .studio-preview-content { padding-top: 14px; paddin
 	.gate-emblem, .fold-plane--left, .fold-plane--right, .fold-plane--base { animation: none !important; }
 	.gate-enter, .gate-menu { transition: none !important; animation: none !important; }
 }
+
+
+/* The brand is a home control, not a selected navigation tab. */
+.titlebar-brand.is-active,
+.titlebar-brand:hover { background: transparent; }
+.gate-player-change.is-active { background: transparent; color: var(--accent); }
