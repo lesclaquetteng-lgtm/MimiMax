@@ -294,7 +294,15 @@ pub async fn mods_install(
 }
 
 #[tauri::command(rename_all = "snake_case")]
-pub async fn mods_toggle(app: AppHandle, name: String, enabled: bool) -> Value {
+pub async fn mods_toggle(
+	app: AppHandle,
+	state: State<'_, RunState>,
+	name: String,
+	enabled: bool,
+) -> Value {
+	let Some(_operation) = state.acquire_install() else {
+		return failure("Mods cannot be changed while Minecraft is starting, running or installing.");
+	};
 	core::run_core(
 		app,
 		vec![
@@ -469,7 +477,14 @@ pub async fn performance_list(app: AppHandle) -> Value {
 }
 
 #[tauri::command(rename_all = "snake_case")]
-pub async fn performance_tune(app: AppHandle, preset: String) -> Value {
+pub async fn performance_tune(
+	app: AppHandle,
+	state: State<'_, RunState>,
+	preset: String,
+) -> Value {
+	let Some(_operation) = state.acquire_install() else {
+		return failure("Game options cannot be changed while Minecraft is starting, running or installing.");
+	};
 	core::run_core(
 		app,
 		vec![
