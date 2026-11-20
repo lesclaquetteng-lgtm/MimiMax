@@ -373,6 +373,23 @@ mod tests {
         std::fs::remove_dir_all(&root).ok();
     }
 
+    #[cfg(not(windows))]
+    #[test]
+    fn non_windows_builds_refuse_to_persist_microsoft_tokens_in_clear_text() {
+        let root = std::env::temp_dir().join(format!("aether-credentials-unsupported-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let accounts_file = root.join("accounts.json");
+
+        let error = save(&accounts_file, &microsoft_store())
+            .expect_err("there is no secure platform vault on this target");
+
+        assert!(error.contains("supported on Windows only"));
+        assert!(!file_path(&accounts_file).exists());
+
+        std::fs::remove_dir_all(&root).ok();
+    }
+
     #[test]
     fn hexadecimal_encoding_round_trips_and_rejects_bad_input() {
         assert_eq!(hex_encode(&[0, 1, 15, 16, 255]), "00010f10ff");
