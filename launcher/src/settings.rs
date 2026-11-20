@@ -69,10 +69,16 @@ pub struct Settings {
     pub loader_version: String,
     /// The version of the Fabric API.
     pub fabric_api_version: String,
-    /// The theme of the interface.
+    /// The colourway of the interface: graphite, oxide, field or blueprint.
     pub theme: String,
-    /// The accent colour of the interface.
+    /// The accent colour selected by the player, empty/default keeps the colourway accent.
     pub accent_color: String,
+    /// The spacing density of the launcher interface: roomy or compact.
+    pub ui_density: String,
+    /// The background linework: contour, draft or plain.
+    pub surface_style: String,
+    /// The navigation shape: wide or rail.
+    pub navigation_style: String,
     /// Whether the output of the game is shown.
     pub show_game_output: bool,
     /// Whether the G1 garbage collector is used.
@@ -102,8 +108,11 @@ impl Default for Settings {
             game_version: "1.21.11".to_string(),
             loader_version: "0.20.1".to_string(),
             fabric_api_version: "0.141.6+1.21.11".to_string(),
-            theme: "dark".to_string(),
+            theme: "graphite".to_string(),
             accent_color: DEFAULT_ACCENT.to_string(),
+            ui_density: "roomy".to_string(),
+            surface_style: "contour".to_string(),
+            navigation_style: "wide".to_string(),
             show_game_output: true,
             use_g1gc: true,
             jvm_preset: "balanced".to_string(),
@@ -509,6 +518,10 @@ mod tests {
         assert_eq!(settings.loader_version, "0.20.1");
         assert_eq!(settings.required_java_version, 21);
         assert_eq!(settings.max_memory, 4096);
+        assert_eq!(settings.theme, "graphite");
+        assert_eq!(settings.ui_density, "roomy");
+        assert_eq!(settings.surface_style, "contour");
+        assert_eq!(settings.navigation_style, "wide");
     }
 
     #[test]
@@ -529,6 +542,28 @@ mod tests {
         // The other settings are untouched.
         assert_eq!(patched.min_memory, settings.min_memory);
         assert_eq!(patched.game_version, settings.game_version);
+    }
+
+    #[test]
+    fn appearance_settings_are_patched_and_survive_serialization() {
+        let patched = Settings::default()
+            .patched(&[
+                ("theme".to_string(), "oxide".to_string()),
+                ("accentColor".to_string(), "#D58A54".to_string()),
+                ("uiDensity".to_string(), "compact".to_string()),
+                ("surfaceStyle".to_string(), "draft".to_string()),
+                ("navigationStyle".to_string(), "rail".to_string()),
+            ])
+            .expect("the appearance patch is valid");
+
+        let value = serde_json::to_value(&patched).unwrap();
+        let restored: Settings = serde_json::from_value(value).unwrap();
+
+        assert_eq!(restored.theme, "oxide");
+        assert_eq!(restored.accent_color, "#D58A54");
+        assert_eq!(restored.ui_density, "compact");
+        assert_eq!(restored.surface_style, "draft");
+        assert_eq!(restored.navigation_style, "rail");
     }
 
     #[test]
