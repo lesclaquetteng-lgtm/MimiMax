@@ -7,7 +7,7 @@ This document describes how the current implementation is structured and the mai
 ```text
 ┌────────────────────────────────────┐        ┌──────────────────────────────────┐
 │          Aether Launcher           │        │           Aether Client          │
-│      (Rust core + Electron UI)     │        │            (Fabric mod)          │
+│       (Rust core + Tauri 2)       │        │            (Fabric mod)          │
 │                                    │        │                                  │
 │  Rust core (src/*.rs, CLI/JSON):   │        │  AetherClient / Aether           │
 │   - accounts, settings, paths      │        │  ModuleManager / HudManager      │
@@ -15,9 +15,9 @@ This document describes how the current implementation is structured and the mai
 │   - installer (download/verify)    │───────►│  Mixins + session/config logic   │
 │   - game (classpath & launch)      │classpath│                                  │
 │                                    │        │                                  │
-│  Electron (gui/src/*):             │        │                                  │
-│   - spawns core binary via IPC     │        │                                  │
-│   - renders UI, streams progress   │        │                                  │
+│  Tauri desktop (desktop/src/*):   │        │                                  │
+│   - native Rust window + commands │        │                                  │
+│   - embeds core, streams events    │        │                                  │
 └────────────────────────────────────┘        └──────────────────────────────────┘
 ```
 
@@ -45,24 +45,43 @@ JSON lines/events for the GUI.
 | `game.rs` | Classpath construction, JVM/game argument construction, process launch and output forwarding. |
 | `servers.rs` | Saved server list, Server List Ping, login probe that tells an offline-accepting server from a premium-only one. |
 | `hosting.rs` | Local Fabric server: shared installer, `server.properties`, RCON shutdown, process liveness. |
-| `performance.rs` | Optimisation pack resolved on Modrinth and verified by SHA-1, `options.txt` presets with backup, manifest of what was installed. |
+| `performance.rs` | Optimisation pack and reversible JVM/options presets with SHA-1 verification. |
+| `modrinth.rs` | Fabric mod discovery, required dependency resolution, checksum-verified downloads and managed mod manifest. |
 
 Key properties:
 - **Single source of truth for launch/install logic** in Rust; the GUI does not duplicate it.
 - **JSON CLI contract** enables scripting and decouples UI from core implementation details.
 - **Checksum-verified downloads** (SHA-1 where provided/expected) to avoid corrupted/cached-bad files.
 
-### Electron GUI (`launcher/gui/src`)
+### Native Tauri shell and shared UI (`launcher/desktop`, `launcher/gui/src/ui`)
 
 | File | Responsibility |
 | --- | --- |
-| `main.cjs` | Active CommonJS Electron entry point (declared in `package.json`): creates the window, resolves/spawns the Rust binary, validates top-level IPC senders, restricts navigation and streams core events. |
-| `preload.js` | CommonJS preload bridge exposing the limited `window.aether` API with context isolation and renderer sandboxing enabled. |
-| `security.cjs` | Pure security helpers and operation gate, covered by Node's built-in test runner. |
-| `ui/*` | Renderer UI (layout, styling, interaction logic). |
+| `desktop/src/main.rs` | Tauri 2 entry point, native window, single-instance guard, Rust command registry and process shutdown. |
+| `desktop/src/commands.rs` | Validates desktop operations and maps UI commands to the Rust CLI core. |
+| `desktop/src/core.rs` / `state.rs` | Embedded core runner, streaming events, process lifecycle and cross-operation locks. |
+| `gui/src/ui/*` | Shared HTML/CSS/JavaScript renderer with `bridge.js` for typed Tauri commands and events. |
 
-The GUI invokes core commands (`info`, `settings`, `accounts`, `install`, `launch`, etc.) and renders
-structured progress/output messages emitted by the core.
+The shared UI invokes typed Tauri commands (`info`, `settings`, `accounts`, `profiles`, `mods`,
+`servers`, `install`, `launch`, etc.) and renders structured progress/output events emitted by Rust.
+Electron remains an optional fallback shell only; it is not the default build or run path.
+
+The native shell holds exclusive operation guards across asynchronous commands. A game launch cannot
+race with a Minecraft install, Modrinth JAR install, mod toggle or `options.txt` tuning; conversely,
+file-changing operations are rejected while Minecraft is running. Guards release automatically when
+a command completes or exits early.
+
+### Modrinth discovery (`launcher/src/modrinth.rs`)
+
+The Discover tab queries the official Modrinth API with facets for the active Minecraft version and
+Fabric loader. Installation resolves the compatible project version and required dependency chain,
+then downloads JARs through the shared HTTP client. URLs must use HTTPS and the exact Modrinth CDN
+host; filenames are constrained to safe `.jar` names and the API-provided SHA-1 is checked before a
+file is accepted. The managed manifest tracks project/version/file/hash ownership so updates remove
+only intact files previously installed by Aether, never a player's manually placed mods.
+
+Search and install are Rust core commands. The Tauri shell forwards typed `mods:progress` events to
+the same renderer that displays the installed-mod list.
 
 ## Launcher data flow
 
@@ -137,6 +156,8 @@ silently fall back to the defaults.
 
 ## Build/test components
 
-- **Launcher**: Cargo project (`Cargo.toml`), Rust tests under `tests/` and module tests.
-- **Client**: Gradle + Fabric Loom build (`build.gradle`, `gradle.properties`), JUnit tests under `src/test/java`.
-- **GUI**: npm/Electron project (`package.json`, `gui/src/*`) acting as a frontend over the Rust core.
+- **Launcher core**: Cargo project (`launcher/Cargo.toml`), CLI and Rust tests under `launcher/tests/` plus module tests.
+- **Native desktop**: Tauri 2 Rust project (`launcher/desktop/Cargo.toml`) with command/lifecycle tests; Windows CI builds the shell.
+- **Shared UI**: `launcher/gui/src/ui`, tested with Node renderer contracts and the real WebView2/Tauri end-to-end flows.
+- **Fallback shell**: optional Electron wrapper, covered by syntax/security tests; not the default production launcher.
+- **Client**: Gradle + Fabric Loom build (`aether-client/build.gradle`), JUnit tests under `src/test/java`.
