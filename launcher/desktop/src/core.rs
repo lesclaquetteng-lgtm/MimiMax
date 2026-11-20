@@ -157,15 +157,6 @@ fn extract_mod(app: &AppHandle) -> Result<PathBuf, String> {
 	write_embedded_mod(&directory, EMBEDDED_MOD)
 }
 
-/// Writes `bytes` to `directory/MOD_NAME`, replacing an older copy.
-///
-/// Kept separate from the app handle so that the replacement can be tested without a window.
-fn write_embedded_mod(directory: &std::path::Path, bytes: &[u8]) -> Result<PathBuf, String> {
-	std::fs::create_dir_all(directory).map_err(|error| error.to_string())?;
-
-	write_embedded_file(directory, MOD_NAME, bytes).map_err(|error| error.to_string())
-}
-
 /// Creates collision-resistant temporary siblings for embedded resources.
 static NEXT_EMBEDDED_TEMP: AtomicU64 = AtomicU64::new(0);
 
@@ -180,11 +171,12 @@ fn replace_embedded_file(temporary: &std::path::Path, destination: &std::path::P
 
 		#[link(name = "Kernel32")]
 		extern "system" {
-			fn MoveFileExW(existing_name: *const u16, new_name: *const u16, flags: u32) -> i32;
+			#[link_name = "MoveFileExW"]
+			fn move_file_ex_w(existing_name: *const u16, new_name: *const u16, flags: u32) -> i32;
 		}
 
 		// MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH
-		let replaced = unsafe { MoveFileExW(source.as_ptr(), target.as_ptr(), 0x1 | 0x8) };
+		let replaced = unsafe { move_file_ex_w(source.as_ptr(), target.as_ptr(), 0x1 | 0x8) };
 		if replaced == 0 {
 			return Err(std::io::Error::last_os_error());
 		}
