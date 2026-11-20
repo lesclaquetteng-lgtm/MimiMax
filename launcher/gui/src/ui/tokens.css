@@ -92,7 +92,7 @@
 	--color-surface-active: var(--palette-surface-active);
 	--color-border: var(--palette-border);
 	--color-border-strong: var(--palette-border-strong);
-	--color-border-focus: var(--color-accent);
+	--color-border-focus: var(--accent);
 
 	/* ----------------------------------------------------------------- accents */
 	/* The personal signal is optional: the palette supplies the identity when no custom colour
