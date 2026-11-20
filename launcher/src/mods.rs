@@ -673,10 +673,10 @@ mod tests {
         assert!(valid_project_id("sodium_1234"));
         assert!(!valid_project_id("../sodium"));
         assert!(!valid_project_id("x"));
-        assert!(valid_game_version("1.21.11").is_ok());
-        assert!(valid_game_version("26.1").is_ok());
-        assert!(valid_game_version("../1.21").is_err());
-        assert!(valid_game_version("1.21.11?facets=*").is_err());
+        assert!(validate_game_version("1.21.11").is_ok());
+        assert!(validate_game_version("26.1").is_ok());
+        assert!(validate_game_version("../1.21").is_err());
+        assert!(validate_game_version("1.21.11?facets=*").is_err());
         assert!(safe_filename_component("1.21.11-0.6.0+fabric").is_ok());
         assert!(safe_filename_component("../escape").is_err());
         assert!(safe_filename_component(".hidden").is_err());
