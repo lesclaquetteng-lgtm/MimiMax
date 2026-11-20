@@ -40,11 +40,12 @@ pub struct Account {
     pub username: String,
     /// The identifier of the player.
     pub uuid: String,
-    /// The token of the session, an offline account uses the placeholder `0`.
-    #[serde(default)]
+    /// The token of the session, held only in memory or in the DPAPI vault.
+    /// It is deliberately omitted from account JSON and renderer IPC responses.
+    #[serde(default, skip_serializing)]
     pub access_token: String,
-    /// The token that refreshes the session of a Microsoft account.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    /// The token that refreshes a Microsoft session, stored in the DPAPI vault.
+    #[serde(default, skip_serializing)]
     pub refresh_token: Option<String>,
     /// The identifier of the player on Xbox live.
     #[serde(default, skip_serializing_if = "Option::is_none")]
