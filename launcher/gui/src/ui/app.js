@@ -2397,7 +2397,7 @@ function showPage(name) {
 		else other.removeAttribute('aria-current');
 	});
 
-	$('.page').forEach((page) => page.classList.remove('is-active'));
+	$$('.page').forEach((page) => page.classList.remove('is-active'));
 	target.classList.add('is-active');
 
 	// Destinations live in a compact overlay, never in a permanent sidebar.
