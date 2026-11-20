@@ -15,20 +15,89 @@
 :root {
 	color-scheme: dark;
 
+	/* ---------------------------------------------------------------- colourways */
+	/* Four deliberately restrained materials. The active aliases below are the only tokens the
+	 * components consume; app.js switches the aliases without redefining a token in another file. */
+	--palette-graphite-bg: #0a0b0d;
+	--palette-graphite-bg-elevated: #0d0f12;
+	--palette-graphite-surface: #121418;
+	--palette-graphite-surface-hover: #171a1f;
+	--palette-graphite-surface-active: #1c2026;
+	--palette-graphite-border: #21252b;
+	--palette-graphite-border-strong: #2c323a;
+	--palette-graphite-accent: #e7e9ec;
+	--palette-graphite-text-primary: #f2f4f6;
+	--palette-graphite-text-secondary: #a9b1b9;
+	--palette-graphite-text-muted: #7d868f;
+	--palette-graphite-text-dim: #767f88;
+
+	--palette-oxide-bg: #100e0c;
+	--palette-oxide-bg-elevated: #17120f;
+	--palette-oxide-surface: #1d1713;
+	--palette-oxide-surface-hover: #272019;
+	--palette-oxide-surface-active: #30251d;
+	--palette-oxide-border: #392d25;
+	--palette-oxide-border-strong: #514033;
+	--palette-oxide-accent: #d99a69;
+	--palette-oxide-text-primary: #f5eee8;
+	--palette-oxide-text-secondary: #c4b2a4;
+	--palette-oxide-text-muted: #9b897a;
+	--palette-oxide-text-dim: #887767;
+
+	--palette-field-bg: #0c110e;
+	--palette-field-bg-elevated: #111913;
+	--palette-field-surface: #172019;
+	--palette-field-surface-hover: #202b22;
+	--palette-field-surface-active: #29392c;
+	--palette-field-border: #2b3a2e;
+	--palette-field-border-strong: #405544;
+	--palette-field-accent: #c0d18a;
+	--palette-field-text-primary: #edf3e9;
+	--palette-field-text-secondary: #afc0ae;
+	--palette-field-text-muted: #809281;
+	--palette-field-text-dim: #718574;
+
+	--palette-blueprint-bg: #0a1016;
+	--palette-blueprint-bg-elevated: #0e1821;
+	--palette-blueprint-surface: #121f2a;
+	--palette-blueprint-surface-hover: #192a37;
+	--palette-blueprint-surface-active: #203747;
+	--palette-blueprint-border: #263b4b;
+	--palette-blueprint-border-strong: #35566b;
+	--palette-blueprint-accent: #83c5df;
+	--palette-blueprint-text-primary: #edf5f8;
+	--palette-blueprint-text-secondary: #adbfca;
+	--palette-blueprint-text-muted: #8198a7;
+	--palette-blueprint-text-dim: #708a9b;
+
+	/* Active palette aliases: the controller changes these at runtime. */
+	--palette-bg: var(--palette-graphite-bg);
+	--palette-bg-elevated: var(--palette-graphite-bg-elevated);
+	--palette-surface: var(--palette-graphite-surface);
+	--palette-surface-hover: var(--palette-graphite-surface-hover);
+	--palette-surface-active: var(--palette-graphite-surface-active);
+	--palette-border: var(--palette-graphite-border);
+	--palette-border-strong: var(--palette-graphite-border-strong);
+	--palette-accent: var(--palette-graphite-accent);
+	--palette-text-primary: var(--palette-graphite-text-primary);
+	--palette-text-secondary: var(--palette-graphite-text-secondary);
+	--palette-text-muted: var(--palette-graphite-text-muted);
+	--palette-text-dim: var(--palette-graphite-text-dim);
+
 	/* ---------------------------------------------------------------- surfaces */
-	--color-bg: #0a0b0d;
-	--color-bg-elevated: #0d0f12;
-	--color-surface: #121418;
-	--color-surface-hover: #171a1f;
-	--color-surface-active: #1c2026;
-	--color-border: #21252b;
-	--color-border-strong: #2c323a;
+	--color-bg: var(--palette-bg);
+	--color-bg-elevated: var(--palette-bg-elevated);
+	--color-surface: var(--palette-surface);
+	--color-surface-hover: var(--palette-surface-hover);
+	--color-surface-active: var(--palette-surface-active);
+	--color-border: var(--palette-border);
+	--color-border-strong: var(--palette-border-strong);
 	--color-border-focus: var(--color-accent);
 
 	/* ----------------------------------------------------------------- accents */
-	/* Neutral by design: on a graphite interface a coloured accent everywhere is what made the
-	 * previous screen read as a template. The player may replace it in the settings. */
-	--color-accent: #e7e9ec;
+	/* The personal signal is optional: the palette supplies the identity when no custom colour
+	 * has been selected by the player. */
+	--color-accent: var(--palette-accent);
 
 	/* ------------------------------------------------------------------ status */
 	--color-success: #46c98b;
@@ -40,11 +109,11 @@
 	--color-danger-dim: rgba(224, 96, 96, 0.14);
 
 	/* -------------------------------------------------------------------- text */
-	--color-text-primary: #f2f4f6;
-	--color-text-secondary: #a9b1b9;
-	--color-text-muted: #7d868f;
-	/* 4.7:1 on the background: the third level is still read at 11 px, not guessed. */
-	--color-text-dim: #767f88;
+	--color-text-primary: var(--palette-text-primary);
+	--color-text-secondary: var(--palette-text-secondary);
+	--color-text-muted: var(--palette-text-muted);
+	/* 4.7:1 on the graphite background: the third level is still read at 11 px, not guessed. */
+	--color-text-dim: var(--palette-text-dim);
 
 	/* ------------------------------------------------------------------- radii */
 	--radius-xs: 3px;
