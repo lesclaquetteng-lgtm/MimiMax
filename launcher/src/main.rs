@@ -12,6 +12,7 @@ use aether_launcher::game;
 use aether_launcher::logs;
 use aether_launcher::installer::{InstallError, InstallProgress};
 use aether_launcher::minecraft;
+use aether_launcher::modrinth;
 use aether_launcher::settings::{self, Profile};
 use aether_launcher::Launcher;
 
@@ -494,6 +495,10 @@ fn command_launch(arguments: &[String]) -> Result<(), String> {
 fn command_mods(arguments: &[String]) -> Result<(), String> {
     let launcher = Launcher::open();
     let flags = Flags::parse(arguments);
+    let selected_version = flags
+        .get("version")
+        .map(str::to_string)
+        .unwrap_or_else(|| launcher.active_profile().game_version);
 
     match flags.positional.first().map(|value| value.as_str()) {
         Some("list") | None => {
@@ -501,6 +506,46 @@ fn command_mods(arguments: &[String]) -> Result<(), String> {
                 "ok": true,
                 "folder": launcher.paths.mods.to_string_lossy(),
                 "mods": launcher.mods(),
+            }));
+            Ok(())
+        }
+        Some("search") => {
+            let query = flags.positional.get(1).cloned().unwrap_or_default();
+            let limit = flags.number("limit").unwrap_or(20).clamp(1, 40) as usize;
+            let projects = modrinth::search(&launcher.paths, &query, &selected_version, limit)?;
+            emit(&serde_json::json!({
+                "ok": true,
+                "gameVersion": selected_version,
+                "projects": projects,
+            }));
+            Ok(())
+        }
+        Some("install") => {
+            let project_id = flags.positional.get(1).ok_or_else(|| {
+                "usage: mods install <project-id> [--version X]".to_string()
+            })?;
+            let report = modrinth::install(
+                &launcher.paths,
+                project_id,
+                &selected_version,
+                |progress| {
+                    let mut event = serde_json::to_value(progress)
+                        .unwrap_or_else(|_| serde_json::json!({}));
+                    if let Some(object) = event.as_object_mut() {
+                        object.insert(
+                            "type".to_string(),
+                            serde_json::Value::String("modrinth".to_string()),
+                        );
+                    }
+                    emit(&event);
+                },
+            );
+            emit(&serde_json::json!({
+                "ok": report.failed.is_empty(),
+                "report": report,
+                "mods": launcher.mods(),
+                "folder": launcher.paths.mods.to_string_lossy(),
+                "gameVersion": selected_version,
             }));
             Ok(())
         }
@@ -522,7 +567,7 @@ fn command_mods(arguments: &[String]) -> Result<(), String> {
             }));
             Ok(())
         }
-        Some(other) => Err(format!("usage: mods <list|toggle> (got {})", other)),
+        Some(other) => Err(format!("usage: mods <list|toggle|search|install> (got {})", other)),
     }
 }
 
@@ -838,6 +883,8 @@ fn print_help() {
         "  launch [--account ID]         start Minecraft",
         "  mods list                     list the jars of the mods folder",
         "  mods toggle <file>            enable or disable a mod (--enabled false to disable)",
+        "  mods search <query>           search Fabric mods for the active Minecraft version",
+        "  mods install <project-id>     install a mod and its required dependencies from Modrinth",
         "  logs [--lines N]              print the installation log and the last sessions",
         "  profiles [list|add|update|use|assign|remove]  the named profiles of the player",
         "  servers [list|add|remove|ping|probe]  the server list and the offline probe",
