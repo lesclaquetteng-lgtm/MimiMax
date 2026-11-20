@@ -1032,12 +1032,6 @@ async function searchModrinth() {
 
 async function installModrinthProject(project) {
 	if (!project?.projectId || state.modsLibrary.installingId) return;
-	if (!state.accounts.selected) {
-		toast('Select or add a Minecraft account before preparing your client.', 'error');
-		showPage('accounts');
-		return;
-	}
-
 	const gameVersion = currentProfile().gameVersion || state.settings.gameVersion;
 	state.modsLibrary.installingId = project.projectId;
 	state.modsLibrary.progress = {
@@ -1060,7 +1054,6 @@ async function installModrinthProject(project) {
 		}
 		await loadMods();
 		const installed = result.report?.installed?.length || 0;
-		const skipped = result.report?.skipped?.length || 0;
 		toast(
 			installed > 0
 				? project.title + ' and its required dependencies installed.'
