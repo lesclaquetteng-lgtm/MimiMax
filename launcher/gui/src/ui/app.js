@@ -8,6 +8,7 @@ const state = {
 	versions: [],
 	loaders: [],
 	mods: [],
+	modsLibrary: { projects: [], query: '', gameVersion: '', loading: false, searched: false, installingId: null, progress: null, requestId: 0 },
 	profiles: { profiles: [], activeFor: null },
 	servers: { servers: [], pings: {} },
 	hosts: [],
@@ -872,6 +873,225 @@ function clearSession() {
 
 /* -------------------------------------------------------------------- mods */
 
+function setModsTab(tab) {
+	const discover = tab === 'discover';
+	$('#mods-installed-panel').hidden = discover;
+	$('#mods-discover-panel').hidden = !discover;
+	$('#mods-tab-installed').classList.toggle('is-active', !discover);
+	$('#mods-tab-discover').classList.toggle('is-active', discover);
+	$('#mods-tab-installed').setAttribute('aria-selected', String(!discover));
+	$('#mods-tab-discover').setAttribute('aria-selected', String(discover));
+	if (discover && !state.modsLibrary.searched && !state.modsLibrary.loading) {
+		searchModrinth();
+	}
+}
+
+function renderModrinthProjects() {
+	const container = $('#mods-library-results');
+	if (!container) return;
+	container.replaceChildren();
+
+	const projects = state.modsLibrary.projects || [];
+	if (state.modsLibrary.loading && projects.length === 0) {
+		const loading = document.createElement('div');
+		loading.className = 'mods-library-empty';
+		loading.textContent = 'Searching compatible Fabric mods…';
+		container.appendChild(loading);
+		return;
+	}
+	if (projects.length === 0) {
+		const empty = document.createElement('div');
+		empty.className = 'mods-library-empty';
+		empty.textContent = state.modsLibrary.searched
+			? 'No compatible mods found. Try another search.'
+			: 'Search for a mod to get started.';
+		container.appendChild(empty);
+		return;
+	}
+
+	for (const project of projects) {
+		const card = document.createElement('article');
+		card.className = 'mods-library-item';
+
+		const top = document.createElement('div');
+		top.className = 'mods-library-item-top';
+		const identity = document.createElement('div');
+		identity.className = 'mods-library-identity';
+
+		if (project.iconUrl && project.iconUrl.startsWith('https://cdn.modrinth.com/')) {
+			const icon = document.createElement('img');
+			icon.className = 'mods-library-icon';
+			icon.src = project.iconUrl;
+			icon.alt = '';
+			icon.loading = 'lazy';
+			icon.referrerPolicy = 'no-referrer';
+			icon.addEventListener('error', () => icon.remove(), { once: true });
+			identity.appendChild(icon);
+		} else {
+			const fallback = document.createElement('span');
+			fallback.className = 'mods-library-icon mods-library-icon-fallback';
+			fallback.textContent = (project.title || 'M').slice(0, 1).toUpperCase();
+			identity.appendChild(fallback);
+		}
+
+		const title = document.createElement('div');
+		title.className = 'mods-library-title-wrap';
+		const name = document.createElement('strong');
+		name.className = 'mods-library-name';
+		name.textContent = project.title;
+		const author = document.createElement('small');
+		author.textContent = 'by ' + (project.author || 'Unknown author');
+		title.append(name, author);
+		identity.appendChild(title);
+		top.appendChild(identity);
+
+		const side = document.createElement('span');
+		side.className = 'mods-library-type';
+		side.textContent = 'FABRIC';
+		top.appendChild(side);
+
+		const description = document.createElement('p');
+		description.className = 'mods-library-description';
+		description.textContent = project.description || 'No description provided.';
+
+		const meta = document.createElement('div');
+		meta.className = 'mods-library-meta';
+		const downloads = document.createElement('span');
+		downloads.textContent = new Intl.NumberFormat().format(project.downloads || 0) + ' downloads';
+		const version = document.createElement('span');
+		version.textContent = 'Latest ' + (project.latestVersion || 'version available');
+		meta.append(downloads, version);
+
+		const footer = document.createElement('div');
+		footer.className = 'mods-library-footer';
+		const details = document.createElement('span');
+		details.className = 'mods-library-compat';
+		details.textContent = 'Minecraft ' + state.modsLibrary.gameVersion + ' · Fabric';
+		footer.appendChild(details);
+
+		const button = document.createElement('button');
+		button.type = 'button';
+		button.className = project.installed ? 'btn btn--ghost btn--small' : 'btn btn--primary btn--small';
+		button.textContent = project.installed ? 'Installed' : 'Install';
+		button.disabled = Boolean(project.installed || state.modsLibrary.installingId || state.installing || state.performance.installing);
+		if (state.modsLibrary.installingId === project.projectId) {
+			button.textContent = 'Installing…';
+			button.disabled = true;
+		}
+		button.addEventListener('click', () => installModrinthProject(project));
+		footer.appendChild(button);
+
+		card.append(top, description, meta, footer);
+		container.appendChild(card);
+	}
+}
+
+async function searchModrinth() {
+	const query = ($('#mods-library-search')?.value || '').trim();
+	const profile = currentProfile();
+	const gameVersion = profile.gameVersion || state.settings.gameVersion;
+	if (!gameVersion) {
+		toast('Choose a Minecraft version in your profile first.', 'error');
+		return;
+	}
+
+	const requestId = ++state.modsLibrary.requestId;
+	state.modsLibrary.query = query;
+	state.modsLibrary.gameVersion = gameVersion;
+	state.modsLibrary.loading = true;
+	state.modsLibrary.projects = [];
+	state.modsLibrary.searched = false;
+	$('#mods-library-version').textContent = 'Compatible Fabric mods for Minecraft ' + gameVersion;
+	$('#mods-library-summary').textContent = query
+		? 'Searching Modrinth for “' + query + '”…'
+		: 'Loading popular Fabric mods for Minecraft ' + gameVersion + '…';
+	renderModrinthProjects();
+
+	try {
+		const result = await api.mods.search(query, gameVersion);
+		if (requestId !== state.modsLibrary.requestId) return;
+		if (!result?.ok) {
+			throw new Error(result?.error || 'The Modrinth library could not be reached.');
+		}
+		state.modsLibrary.projects = result.projects || [];
+		state.modsLibrary.searched = true;
+		$('#mods-library-summary').textContent = state.modsLibrary.projects.length + ' compatible mod(s) for Minecraft ' + gameVersion;
+	} catch (error) {
+		if (requestId !== state.modsLibrary.requestId) return;
+		state.modsLibrary.projects = [];
+		state.modsLibrary.searched = true;
+		$('#mods-library-summary').textContent = error.message || 'Modrinth search failed.';
+		toast(error.message || 'Modrinth search failed.', 'error');
+	} finally {
+		if (requestId === state.modsLibrary.requestId) {
+			state.modsLibrary.loading = false;
+			renderModrinthProjects();
+		}
+	}
+}
+
+async function installModrinthProject(project) {
+	if (!project?.projectId || state.modsLibrary.installingId) return;
+	if (!state.accounts.selected) {
+		toast('Select or add a Minecraft account before preparing your client.', 'error');
+		showPage('accounts');
+		return;
+	}
+
+	const gameVersion = currentProfile().gameVersion || state.settings.gameVersion;
+	state.modsLibrary.installingId = project.projectId;
+	state.modsLibrary.progress = {
+		name: project.title,
+		state: 'Preparing',
+		received: 0,
+		total: 0
+	};
+	$('#mods-library-progress').hidden = false;
+	$('#mods-library-progress-text').textContent = 'Preparing ' + project.title + '…';
+	$('#mods-library-progress-fill').style.width = '0%';
+	setStatus('Installing mod', 'busy');
+	renderModrinthProjects();
+
+	try {
+		const result = await api.mods.install(project.projectId, gameVersion);
+		if (!result?.ok) {
+			const failed = result?.report?.failed?.[0];
+			throw new Error(failed?.error || result?.error || 'The mod could not be installed.');
+		}
+		await loadMods();
+		const installed = result.report?.installed?.length || 0;
+		const skipped = result.report?.skipped?.length || 0;
+		toast(
+			installed > 0
+				? project.title + ' and its required dependencies installed.'
+				: project.title + ' is already up to date.',
+			'success'
+		);
+		await searchModrinth();
+	} catch (error) {
+		toast(error.message || 'The mod installation failed.', 'error');
+	} finally {
+		state.modsLibrary.installingId = null;
+		state.modsLibrary.progress = null;
+		$('#mods-library-progress').hidden = true;
+		$('#mods-library-progress-fill').style.width = '0%';
+		setStatus('Ready');
+		renderModrinthProjects();
+	}
+}
+
+function handleModrinthProgress(progress) {
+	if (!state.modsLibrary.installingId || !progress) return;
+	state.modsLibrary.progress = progress;
+	const detail = progress.detail ? ' · ' + progress.detail : '';
+	$('#mods-library-progress').hidden = false;
+	$('#mods-library-progress-text').textContent = (progress.name || 'Mod') + ': ' + (progress.state || 'working') + detail;
+	const percent = progress.total > 0
+		? Math.min(100, Math.round((progress.received / progress.total) * 100))
+		: (progress.state === 'installed' || progress.state === 'skipped' ? 100 : 0);
+	$('#mods-library-progress-fill').style.width = percent + '%';
+}
+
 function renderMods() {
 	const table = $('#mods-table');
 	table.innerHTML = '';
@@ -887,6 +1107,7 @@ function renderMods() {
 	$('#mods-count').textContent = state.mods.length === 0
 		? 'no mod'
 		: `${enabled}/${state.mods.length} enabled`;
+	$('#mods-tab-count').textContent = String(state.mods.length);
 	const summary = $('#mods-summary');
 	if (summary) summary.textContent = query || mode !== 'all'
 		? `Showing ${filtered.length} of ${state.mods.length} installed mods`
@@ -2441,6 +2662,12 @@ async function init() {
 	$('#versions-search').addEventListener('input', renderVersions);
 	$('#versions-filter').addEventListener('change', renderVersions);
 	$('#btn-mods-refresh').addEventListener('click', loadMods);
+	$('#mods-tab-installed').addEventListener('click', () => setModsTab('installed'));
+	$('#mods-tab-discover').addEventListener('click', () => setModsTab('discover'));
+	$('#btn-mods-library-search').addEventListener('click', searchModrinth);
+	$('#mods-library-search').addEventListener('keydown', (event) => {
+		if (event.key === 'Enter') searchModrinth();
+	});
 	$('#mods-search').addEventListener('input', renderMods);
 	$('#mods-filter').addEventListener('change', renderMods);
 	$('#quick-servers-open').addEventListener('click', () => showPage('servers'));
@@ -2542,6 +2769,7 @@ async function init() {
 		$('#progress-label').textContent = `${progress.task} (${percent}%)`;
 		$('#progress-fill').style.width = `${percent}%`;
 	});
+	api.onModrinthProgress(handleModrinthProgress);
 	api.onOptimisationProgress((progress) => {
 		if (!state.performance.installing) return;
 
