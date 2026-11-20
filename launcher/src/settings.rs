@@ -402,6 +402,24 @@ pub fn detect_java(preferred: &str, required_major: u32) -> Option<PathBuf> {
         }
     }
 
+    // Also inspect PATH: users frequently install Java through Scoop, Chocolatey,
+    // SDKMAN or a custom package manager instead of the standard vendor directories.
+    if let Some(path_value) = std::env::var_os("PATH") {
+        for directory in std::env::split_paths(&path_value) {
+            let candidate = directory.join(executable_name);
+            if !candidate.is_file() {
+                continue;
+            }
+            if let Some(major) = read_java_major_version(&candidate) {
+                if major >= required_major
+                    && !usable.iter().any(|(seen_path, _)| seen_path == &candidate)
+                {
+                    usable.push((candidate, major));
+                }
+            }
+        }
+    }
+
     usable.sort_by_key(|(_, major)| *major);
 
     if let Some((path, _major)) = usable.iter().find(|(_, major)| *major == required_major) {
