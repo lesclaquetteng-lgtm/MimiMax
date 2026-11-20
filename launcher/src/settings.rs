@@ -381,6 +381,18 @@ pub fn detect_java(preferred: &str, required_major: u32) -> Option<PathBuf> {
         "java"
     };
 
+    // Honour JAVA_HOME before scanning the standard vendor folders and PATH.
+    if let Some(home) = std::env::var_os("JAVA_HOME") {
+        let candidate = PathBuf::from(home).join("bin").join(executable_name);
+        if candidate.is_file() {
+            if let Some(major) = read_java_major_version(&candidate) {
+                if major >= required_major {
+                    return Some(candidate);
+                }
+            }
+        }
+    }
+
     let mut usable: Vec<(PathBuf, u32)> = Vec::new();
 
     for root in java_roots() {
