@@ -1855,11 +1855,23 @@ function bindSettings() {
 	});
 	// The settings page edits the default profile, the play page has to show the new values.
 	maxMemory.addEventListener('change', async () => {
-		await api.settings.update({ maxMemory: Number(maxMemory.value) });
+		const result = await api.settings.update({ maxMemory: Number(maxMemory.value) });
+		if (result.ok) {
+			state.settings = { ...state.settings, ...(result.settings || {}), maxMemory: Number(maxMemory.value) };
+			applyAppearance(state.settings);
+		} else {
+			toast(result.error || 'Maximum memory could not be saved.', 'error');
+		}
 		await loadProfiles();
 	});
 	minMemory.addEventListener('change', async () => {
-		await api.settings.update({ minMemory: Number(minMemory.value) });
+		const result = await api.settings.update({ minMemory: Number(minMemory.value) });
+		if (result.ok) {
+			state.settings = { ...state.settings, ...(result.settings || {}), minMemory: Number(minMemory.value) };
+			applyAppearance(state.settings);
+		} else {
+			toast(result.error || 'Initial memory could not be saved.', 'error');
+		}
 		await loadProfiles();
 	});
 
