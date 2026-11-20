@@ -2016,7 +2016,7 @@ const APPEARANCE_THEMES = Object.freeze({
 });
 
 function setChoiceState(selector, attribute, selected) {
-	$(selector).forEach((button) => {
+	$$(selector).forEach((button) => {
 		const active = button.dataset[attribute] === selected;
 		button.classList.toggle('is-active', active);
 		button.setAttribute('aria-pressed', String(active));
