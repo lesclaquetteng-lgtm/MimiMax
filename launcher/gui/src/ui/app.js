@@ -1892,7 +1892,34 @@ function bindSettings() {
 		applyAccent(event.target.value);
 	});
 	$('#input-accent').addEventListener('change', (event) => {
-		api.settings.update({ accentColor: event.target.value });
+		saveAppearance({ accentColor: event.target.value });
+	});
+
+	$('#theme-choices').addEventListener('click', (event) => {
+		const button = event.target.closest('[data-theme]');
+		if (button) saveAppearance({ theme: button.dataset.theme });
+	});
+	$('#surface-choices').addEventListener('click', (event) => {
+		const button = event.target.closest('[data-surface]');
+		if (button) saveAppearance({ surfaceStyle: button.dataset.surface });
+	});
+	$('#density-choices').addEventListener('click', (event) => {
+		const button = event.target.closest('[data-density]');
+		if (button) saveAppearance({ uiDensity: button.dataset.density });
+	});
+	$('#navigation-choices').addEventListener('click', (event) => {
+		const button = event.target.closest('[data-navigation]');
+		if (button) saveAppearance({ navigationStyle: button.dataset.navigation });
+	});
+	$('#appearance-reset').addEventListener('click', async () => {
+		const confirmed = await confirmAction(
+			'Reset workspace design?',
+			'The colourway, custom accent, surface, spacing and navigation will return to their defaults.'
+		);
+		if (confirmed) {
+			await saveAppearance({ ...APPEARANCE_DEFAULTS });
+			toast('Workspace design restored.', 'success');
+		}
 	});
 
 	$('#input-fabric-api').addEventListener('change', (event) => {
@@ -1919,7 +1946,7 @@ function applySettings(settings) {
 	$('#input-fabric-api').value = settings.fabricApiVersion;
 	$('#check-g1').checked = settings.useG1gc !== false;
 
-	applyAccent(settings.accentColor);
+	applyAppearance(settings);
 	paintRanges();
 }
 
@@ -1953,7 +1980,7 @@ function themeColors() {
  * settings file that still carries one of them was never a choice, and it must not freeze the
  * interface on the old palette.
  */
-const LEGACY_ACCENT_DEFAULTS = new Set(['#6c5ce7', '#7c5cfc', '#3b82f6']);
+const LEGACY_ACCENT_DEFAULTS = new Set(['#6c5ce7', '#7c5cfc', '#3b82f6', '#e7e9ec']);
 
 function applyAccent(color) {
 	const value = String(color ?? '').trim();
@@ -1969,6 +1996,92 @@ function applyAccent(color) {
 
 	root.setProperty('--accent-user', value);
 	root.setProperty('--on-accent', inkFor(value));
+}
+
+const APPEARANCE_DEFAULTS = Object.freeze({
+	theme: 'graphite',
+	accentColor: '#E7E9EC',
+	uiDensity: 'roomy',
+	surfaceStyle: 'contour',
+	navigationStyle: 'wide'
+});
+
+const APPEARANCE_THEMES = Object.freeze({
+	graphite: 'GRAPHITE',
+	oxide: 'OXIDE',
+	field: 'FIELD',
+	blueprint: 'BLUEPRINT'
+});
+
+function setChoiceState(selector, attribute, selected) {
+	$(selector).forEach((button) => {
+		const active = button.dataset[attribute] === selected;
+		button.classList.toggle('is-active', active);
+		button.setAttribute('aria-pressed', String(active));
+	});
+}
+
+/** Applies the complete workspace identity without reloading the page. */
+function applyAppearance(settings = {}) {
+	const theme = Object.hasOwn(APPEARANCE_THEMES, settings.theme) ? settings.theme : APPEARANCE_DEFAULTS.theme;
+	const density = ['roomy', 'compact'].includes(settings.uiDensity) ? settings.uiDensity : APPEARANCE_DEFAULTS.uiDensity;
+	const surface = ['contour', 'draft', 'plain'].includes(settings.surfaceStyle) ? settings.surfaceStyle : APPEARANCE_DEFAULTS.surfaceStyle;
+	const navigation = ['wide', 'rail'].includes(settings.navigationStyle) ? settings.navigationStyle : APPEARANCE_DEFAULTS.navigationStyle;
+
+	const root = document.documentElement;
+	root.dataset.theme = theme;
+	root.dataset.density = density;
+	root.dataset.surface = surface;
+	root.dataset.navigation = navigation;
+
+	setChoiceState('#theme-choices [data-theme]', 'theme', theme);
+	setChoiceState('#surface-choices [data-surface]', 'surface', surface);
+	setChoiceState('#density-choices [data-density]', 'density', density);
+	setChoiceState('#navigation-choices [data-navigation]', 'navigation', navigation);
+
+	const themeName = $('#studio-theme-name');
+	if (themeName) themeName.textContent = `${APPEARANCE_THEMES[theme]} / ${surface.toUpperCase()}`;
+	const densityName = $('#studio-preview-density');
+	if (densityName) densityName.textContent = `${density.toUpperCase()} · ${navigation === 'wide' ? 'WIDE NAVIGATION' : 'ICON RAIL'}`;
+	const memory = $('#studio-preview-memory');
+	if (memory) {
+		const amount = Number(settings.maxMemory) || 4096;
+		memory.innerHTML = `${amount} <i>MB</i>`;
+	}
+
+	if ($('#input-accent')) {
+		const accent = /^#[0-9a-f]{6}$/i.test(String(settings.accentColor || ''))
+			? settings.accentColor
+			: APPEARANCE_DEFAULTS.accentColor;
+		$('#input-accent').value = accent;
+		$('#output-accent').textContent = accent.toUpperCase();
+		applyAccent(accent);
+	}
+}
+
+/** Saves an appearance change, keeping the live preview and persisted settings in sync. */
+async function saveAppearance(patch) {
+	const previous = { ...state.settings };
+	const optimistic = { ...previous, ...patch };
+	applyAppearance(optimistic);
+
+	try {
+		const result = await api.settings.update(patch);
+		if (!result || !result.ok) {
+			state.settings = previous;
+			applyAppearance(previous);
+			toast(result?.error || 'The appearance could not be saved.', 'error');
+			return false;
+		}
+		state.settings = { ...optimistic, ...(result.settings || {}) };
+		applyAppearance(state.settings);
+		return true;
+	} catch (error) {
+		state.settings = previous;
+		applyAppearance(previous);
+		toast(`The appearance could not be saved: ${error.message}`, 'error');
+		return false;
+	}
 }
 
 /**
