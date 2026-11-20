@@ -10,9 +10,9 @@ The launcher is split into two parts:
 - **Native shell** (`desktop/`, Tauri 2 + WebView2): the window, the single-instance lock, the
   process runner, the packaging — and the interface it serves from `gui/src/ui/`.
 
-The interface is plain HTML/CSS/JavaScript. It was written for an Electron shell, which is gone: the
-same files are now served by the system webview, through `gui/src/ui/bridge.js`, which exposes
-`window.aether` over Tauri's IPC.
+The interface is HTML/CSS/JavaScript served by the system WebView2 runtime.
+`gui/src/ui/bridge.js` exposes `window.aether` through Tauri IPC; the renderer does not own
+accounts, settings, installation or game processes. Those operations remain in Rust.
 
 ## Prerequisites
 
@@ -23,24 +23,35 @@ same files are now served by the system webview, through `gui/src/ui/bridge.js`,
 
 ## Build & run
 
+The native shell embeds **both** the Rust core executable and the Fabric client JAR. Build these
+prerequisites before compiling the shell:
+
 ```powershell
-cargo build --release                                # core  -> target/release/aether-launcher.exe
-cargo build --release --manifest-path desktop/Cargo.toml  # shell -> desktop/target/release/aether-desktop.exe
+# From the repository root: build the Fabric mod embedded by Tauri.
+cd aether-client
+.\\gradlew.bat --no-daemon build
+
+# Build the game-management core and then the native desktop shell.
+cd ..\\launcher
+cargo build --release
+cargo build --release --manifest-path desktop/Cargo.toml
 ```
 
-The shell **embeds** the core binary at compile time (`desktop/src/core.rs`, `include_bytes!` of
-`target/release/aether-launcher.exe`): build the core first, or the shell build fails. A portable
-build is therefore one file, and the installer carries one file.
+The build script checks both embedded files and stops with a specific message when either is missing.
+Rebuild the shell after changing the core, the mod JAR or any shared interface asset.
+
+To run it from `launcher/`:
 
 ```powershell
 npm run core      # cargo build --release
 npm run shell     # cargo build --release --manifest-path desktop/Cargo.toml
-npm start         # runs the shell from its build directory
+npm start         # runs the native Tauri shell
 npm run test:shell
 ```
 
-> Without a built core, the shell reports that it must be built first (`AETHER_LAUNCHER_BIN` can
-> point at any core binary).
+For a clean portable build with both root entry points, run `build.bat` from the repository root.
+It builds the Fabric mod, the Rust core, the Tauri shell and finally the small Rust executable that
+opens the shell.
 
 ## CLI (Rust core)
 
