@@ -5,7 +5,7 @@
 //! Rust.
 
 use crate::core::{self, StreamKind};
-use crate::state::{Active, RunState};
+use crate::state::{Active, BusyOperation, RunState};
 use serde_json::{json, Value};
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -541,9 +541,16 @@ pub async fn install_start(app: AppHandle, profile: Option<Value>) -> Value {
 		args.push(loader.to_string());
 	}
 
+	let (slot, busy) = {
+		let state = app.state::<RunState>();
+		(state.install.clone(), state.install_busy.clone())
+	};
+	let Some(_operation) = BusyOperation::try_acquire(busy) else {
+		return failure("An installation is already running.");
+	};
+
 	let cancelled = Arc::new(AtomicBool::new(false));
 	let stopped = Arc::new(AtomicBool::new(false));
-	let slot = app.state::<RunState>().install.clone();
 	let flag = cancelled.clone();
 	let application = app.clone();
 
@@ -562,7 +569,6 @@ pub async fn install_start(app: AppHandle, profile: Option<Value>) -> Value {
 	.await
 	.unwrap_or_else(|| failure("The launcher core stopped unexpectedly."));
 
-	let slot = app.state::<RunState>().install.clone();
 	if let Ok(mut guard) = slot.lock() {
 		*guard = None;
 	}
@@ -648,8 +654,15 @@ pub async fn game_launch(app: AppHandle, options: Option<Value>) -> Value {
 		args.push(server.to_string());
 	}
 
+	let (slot, busy) = {
+		let state = app.state::<RunState>();
+		(state.game.clone(), state.game_busy.clone())
+	};
+	let Some(_operation) = BusyOperation::try_acquire(busy) else {
+		return failure("Minecraft is already running.");
+	};
+
 	let stopped = Arc::new(AtomicBool::new(false));
-	let slot = app.state::<RunState>().game.clone();
 	let flag = stopped.clone();
 	let application = app.clone();
 
@@ -668,7 +681,6 @@ pub async fn game_launch(app: AppHandle, options: Option<Value>) -> Value {
 	.await
 	.unwrap_or_else(|| failure("The launcher core stopped unexpectedly."));
 
-	let slot = app.state::<RunState>().game.clone();
 	if let Ok(mut guard) = slot.lock() {
 		*guard = None;
 	}
