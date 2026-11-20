@@ -116,9 +116,11 @@ See [`docs/FEATURES.md`](docs/FEATURES.md) for the detailed list.
 
 ### Launcher
 - Offline and Microsoft account support.
+- Guided profiles: Minecraft/Fabric version, memory and window presets per profile.
 - Version/Fabric loader selection and installation pipeline.
 - Downloads/verifies game client, libraries, assets, Fabric profile dependencies, Fabric API and Aether mod jar.
 - Builds and runs the Java launch command through the Rust CLI and native Tauri desktop shell.
+- Modrinth library: discover Fabric mods compatible with the active profile, install required dependencies and verify each JAR before use.
 - Servers page: server list, ping, offline-account probe, one-click hosting of an offline server.
 - Performance page: optimisation pack from Modrinth, options and JVM presets.
 - Stores settings/accounts/game data under an Aether-managed home (configurable).
