@@ -899,6 +899,8 @@ fn print_help() {
         "  launch [--account ID]         start Minecraft",
         "  stop                          stop the game, even after a crashed launcher",
         "  mods list                     list the jars of the mods folder",
+        "  mods search <query>           search compatible Fabric mods on Modrinth",
+        "  mods install <project-id>     install a mod and its required dependencies",
         "  mods toggle <file>            enable or disable a mod (--enabled false to disable)",
         "  logs [--lines N]              print the installation log and the last sessions",
         "  profiles [list|add|update|use|assign|remove]  the named profiles of the player",
@@ -912,6 +914,7 @@ fn print_help() {
         "  --version <id>     the Minecraft version (default 1.21.11)",
         "  --loader <id>      the Fabric loader version (default 0.20.1)",
         "  --account <id>     the account, the selected one by default",
+        "  --game-version <id>  the Minecraft version used for Modrinth mod compatibility",
         "  --limit <n>        the number of versions",
         "  --key K --value V  change a setting, the value may be JSON (numbers, booleans)",
     ]
