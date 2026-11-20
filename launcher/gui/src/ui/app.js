@@ -2229,7 +2229,7 @@ async function loadLoaders(gameVersion) {
 /** Creates a profile from the one the selected account plays with right now. */
 function newProfileModal() {
 	const source = currentProfile();
-	openModal('Create a profile', \`
+	openModal('Create a profile', `
 		<p class="muted">Start from your current setup, then give this profile its own Minecraft version, Fabric loader and launch settings.</p>
 		<label class="field">
 			<span class="field-label">Profile name</span>
@@ -2266,7 +2266,7 @@ function newProfileModal() {
 				</label>
 			</div>
 		</details>
-	\`, async () => {
+	`, async () => {
 		const name = $('#profile-name').value.trim();
 		if (!name) {
 			toast('Give your profile a name first.', 'error');
