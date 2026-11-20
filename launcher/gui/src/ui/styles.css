@@ -2065,3 +2065,25 @@ html[data-density="compact"] .studio-preview-content { padding-top: 14px; paddin
 .titlebar-brand.is-active,
 .titlebar-brand:hover { background: transparent; }
 .gate-player-change.is-active { background: transparent; color: var(--accent); }
+
+
+/* The first view carries no decorative copy: mark, state, player and ENTER. */
+.gate-header { align-items: center; }
+.gate-heading { display: flex; align-items: center; min-height: 20px; }
+.gate-heading h1,
+.gate-heading .gate-intro { display: none; }
+.gate-visually-hidden {
+	position: absolute !important;
+	width: 1px !important;
+	height: 1px !important;
+	padding: 0 !important;
+	margin: -1px !important;
+	overflow: hidden !important;
+	clip: rect(0, 0, 0, 0) !important;
+	white-space: nowrap !important;
+	border: 0 !important;
+}
+.gate-art { min-height: 350px; }
+.gate-action-column { padding-top: 0; }
+.gate-footer { grid-template-columns: 1fr auto; }
+.gate-footer > span { display: none; }
