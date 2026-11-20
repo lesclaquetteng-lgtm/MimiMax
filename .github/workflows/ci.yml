@@ -78,6 +78,8 @@ jobs:
         run: |
           node --check launcher/gui/src/ui/app.js
           node --check launcher/gui/src/ui/bridge.js
+      - name: Verify Identity Studio contracts
+        run: node tools/check-identity-studio.mjs
 
   fabric-mod:
     name: Fabric client
