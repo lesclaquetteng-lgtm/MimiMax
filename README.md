@@ -8,12 +8,12 @@ It consists of two parts:
 | Part | Path | Description |
 | --- | --- | --- |
 | **Aether Client** | `aether-client/` | Fabric mod that runs inside Minecraft: modules, HUD, Click GUI, configuration and session handling. |
-| **Aether Launcher** | `launcher/` | Rust launcher core + Electron GUI that manages accounts/settings, installs Minecraft/Fabric/mods and starts the game. |
+| **Aether Launcher** | `launcher/` | Rust game-management core + Tauri 2 native desktop shell, with a shared interface for accounts, profiles, installs, mods, servers and performance. |
 
 ```
 .
 ├── aether-client/      Fabric mod (Minecraft 1.21.11, Java 21, Mojang mappings)
-├── launcher/           Rust core + Electron interface
+├── launcher/           Rust core + Tauri 2 desktop shell
 ├── docs/               Architecture, features and verification notes
 └── tools/              Local helper scripts/references used during development
 ```
@@ -118,7 +118,7 @@ See [`docs/FEATURES.md`](docs/FEATURES.md) for the detailed list.
 - Offline and Microsoft account support.
 - Version/Fabric loader selection and installation pipeline.
 - Downloads/verifies game client, libraries, assets, Fabric profile dependencies, Fabric API and Aether mod jar.
-- Builds and runs the Java launch command (CLI) or launches from the Electron UI.
+- Builds and runs the Java launch command through the Rust CLI and native Tauri desktop shell.
 - Servers page: server list, ping, offline-account probe, one-click hosting of an offline server.
 - Performance page: optimisation pack from Modrinth, options and JVM presets.
 - Stores settings/accounts/game data under an Aether-managed home (configurable).
@@ -131,7 +131,8 @@ See [`docs/FEATURES.md`](docs/FEATURES.md) for the detailed list.
 
 ### Aether Launcher (`launcher/`)
 - **Rust toolchain** (Cargo) to build/test the launcher core.
-- **Node.js + npm** to run the Electron GUI.
+- **MSVC C++ Build Tools + WebView2** for the Tauri Windows desktop shell.
+- **Node.js + npm** for development scripts and the optional Electron fallback.
 - A working **Java runtime** for launching Minecraft (the launcher can detect/configure it).
 
 ## Building
@@ -155,14 +156,26 @@ cargo build --release
 Binary:
 - `launcher/target/release/aether-launcher` (or `.exe` on Windows)
 
-### Launcher GUI (Electron)
+### Launcher desktop (Tauri 2 + Rust)
 ```powershell
 cd launcher
-npm install
+cargo build --release
+cargo run --manifest-path desktop/Cargo.toml
+```
+
+Convenience command (builds the Rust core before starting Tauri):
+```powershell
+cd launcher
 npm start
 ```
 
-The Electron app looks for the Rust binary (e.g. `target/release/aether-launcher` or `target/debug/aether-launcher`, or `AETHER_LAUNCHER_BIN`).
+Release installer (install the Tauri CLI once with `cargo install tauri-cli --version "^2"`):
+```powershell
+npm run build:desktop
+npm run dist:desktop
+```
+
+The native shell embeds the Rust core and uses the system WebView2 runtime. The legacy Electron shell remains available with `npm run start:electron`, but is no longer the default.
 
 ## Command line (launcher core)
 
@@ -228,7 +241,7 @@ cd aether-client
 gradle build              # 25 JUnit tests, then the remapped jar
 ```
 
-### Electron security regression checks
+### Desktop and renderer regression checks
 From `launcher/`, run the dependency-free Node.js checks before changing the main process or preload:
 
 ```powershell
@@ -240,7 +253,7 @@ npm run test:security
 The checks cover HTTPS-only external navigation, renderer IPC origin checks, and mutual exclusion
 for installation/game operations.
 
-### Interface (Electron, headless check)
+### Interface (shared renderer, desktop runtime)
 ```powershell
 # Starts the launcher on a debugging port, walks every page at 1180x760 and 940x620,
 # measures the overflows and writes the screenshots.
