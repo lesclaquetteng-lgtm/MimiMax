@@ -548,13 +548,12 @@ fn extract_zip(bytes: &[u8], destination: &Path) -> Result<(), InstallError> {
             continue;
         }
 
-        let name = entry.name().to_string();
-        let target = destination.join(&name);
-
-        // Protection against the zip slip vulnerability.
-        if !target.starts_with(destination) {
+        // Reject absolute paths, parent-directory escapes and NUL bytes before
+        // joining the entry to the extraction root.
+        let Some(name) = entry.enclosed_name() else {
             continue;
-        }
+        };
+        let target = destination.join(name);
 
         if let Some(parent) = target.parent() {
             fs::create_dir_all(parent)?;
@@ -715,6 +714,33 @@ mod tests {
     /// The log tests share one counter of written bytes, they run one at a time and start from
     /// zero so the moment of a size check is known exactly.
     static LOG_WRITER_LOCK: Mutex<()> = Mutex::new(());
+
+    #[test]
+    fn zip_extraction_rejects_paths_that_escape_the_destination() {
+        let mut writer = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+        let options = zip::write::SimpleFileOptions::default();
+
+        writer.start_file("../outside.txt", options).unwrap();
+        writer.write_all(b"outside").unwrap();
+        writer.start_file("safe/inside.txt", options).unwrap();
+        writer.write_all(b"inside").unwrap();
+
+        let archive = writer.finish().unwrap().into_inner();
+        let root = std::env::temp_dir().join(format!("aether-zip-slip-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        let destination = root.join("natives");
+        fs::create_dir_all(&destination).unwrap();
+
+        extract_zip(&archive, &destination).expect("the archive can be extracted");
+
+        assert_eq!(fs::read(destination.join("safe/inside.txt")).unwrap(), b"inside");
+        assert!(
+            !root.join("outside.txt").exists(),
+            "an entry escaped the extraction directory"
+        );
+
+        fs::remove_dir_all(&root).ok();
+    }
 
     #[test]
     fn the_metrics_of_a_download_reach_the_log() {
