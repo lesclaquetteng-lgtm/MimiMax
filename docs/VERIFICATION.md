@@ -77,7 +77,10 @@ Microsoft credential handling is covered by the account serialization and creden
 - The diagnostic command masks the access token before printing launch arguments.
 
 - Remote version identifiers, Fabric versions, Maven artifact paths, asset index identifiers and
-  asset SHA-1 names are checked before they are used in local paths.
+  asset SHA-1 names are checked before they are used in local paths; reserved Windows device names
+  and trailing-dot components are rejected as well.
+- Asset SHA-1 values are canonicalized before deduplication, and an overflowing aggregate asset
+  progress size is rejected instead of wrapping.
 - Modrinth JAR filenames reject directory separators, NTFS alternate data streams, control
   characters and reserved Windows device names.
 - Native ZIP extraction rejects entries that are not enclosed by the extraction root.
