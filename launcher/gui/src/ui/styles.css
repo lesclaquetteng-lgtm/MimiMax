@@ -1092,51 +1092,6 @@ input[type="range"]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px 
  * Colourway, linework, spacing and navigation are separate parts of the workspace identity.
  */
 
-:root[data-theme="oxide"] {
-	--color-bg: #100e0c;
-	--color-bg-elevated: #17120f;
-	--color-surface: #1d1713;
-	--color-surface-hover: #272019;
-	--color-surface-active: #30251d;
-	--color-border: #392d25;
-	--color-border-strong: #514033;
-	--color-accent: #d99a69;
-	--color-text-primary: #f5eee8;
-	--color-text-secondary: #c4b2a4;
-	--color-text-muted: #9b897a;
-	--color-text-dim: #887767;
-}
-
-:root[data-theme="field"] {
-	--color-bg: #0c110e;
-	--color-bg-elevated: #111913;
-	--color-surface: #172019;
-	--color-surface-hover: #202b22;
-	--color-surface-active: #29392c;
-	--color-border: #2b3a2e;
-	--color-border-strong: #405544;
-	--color-accent: #c0d18a;
-	--color-text-primary: #edf3e9;
-	--color-text-secondary: #afc0ae;
-	--color-text-muted: #809281;
-	--color-text-dim: #718574;
-}
-
-:root[data-theme="blueprint"] {
-	--color-bg: #0a1016;
-	--color-bg-elevated: #0e1821;
-	--color-surface: #121f2a;
-	--color-surface-hover: #192a37;
-	--color-surface-active: #203747;
-	--color-border: #263b4b;
-	--color-border-strong: #35566b;
-	--color-accent: #83c5df;
-	--color-text-primary: #edf5f8;
-	--color-text-secondary: #adbfca;
-	--color-text-muted: #8198a7;
-	--color-text-dim: #708a9b;
-}
-
 /* Aether's surface drawing sits behind the workspace, never behind text or controls. */
 body::before {
 	content: "";
