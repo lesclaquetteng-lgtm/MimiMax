@@ -45,7 +45,7 @@ jobs:
       # The shell embeds both build products, so generate each one before compiling Tauri.
       - name: Build the Fabric client
         working-directory: aether-client
-        run: .\\gradlew.bat --no-daemon build
+        run: .\gradlew.bat --no-daemon build
       - name: Build the launcher core
         working-directory: launcher
         run: cargo build --release --locked
