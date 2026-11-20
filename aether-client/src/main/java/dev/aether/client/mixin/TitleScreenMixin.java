@@ -1,6 +1,7 @@
 package dev.aether.client.mixin;
 
 import dev.aether.client.Aether;
+import dev.aether.client.design.AetherDesignSystem;
 import dev.aether.client.util.ColorUtil;
 import dev.aether.client.util.RenderUtil;
 import dev.aether.client.util.SessionUtil;
@@ -31,11 +32,10 @@ public abstract class TitleScreenMixin {
 			CallbackInfo callback) {
 		int width = graphics.guiWidth();
 		int height = graphics.guiHeight();
-		int accent = Aether.getOrNull() == null ? 0xFF6C5CE7 : Aether.get().getConfig().getAccentColor();
-
-		// Deep obsidian dark gradient
-		graphics.fillGradient(0, 0, width, height / 2, 0xFF0D0D10, 0xFF09090C);
-		graphics.fillGradient(0, height / 2, width, height, 0xFF09090C, 0xFF060608);
+		AetherDesignSystem.Palette palette = RenderUtil.theme();
+		int accent = palette.accent();
+		graphics.fillGradient(0, 0, width, height / 2, palette.elevatedBackground(), palette.background());
+		graphics.fillGradient(0, height / 2, width, height, palette.background(), palette.background());
 
 		// Cinematic micro-stars
 		int starCol = ColorUtil.withAlpha(0xFFFFFF, 0.15f);
@@ -117,7 +117,7 @@ public abstract class TitleScreenMixin {
 		RenderUtil.card(graphics, 12, hintY, totalW, 18, 4);
 		RenderUtil.roundedRect(graphics, 16, hintY + 3, keyW, 12, 3, accent);
 		RenderUtil.text(graphics, font, hintKey, 19, hintY + 5, 0xFFFFFFFF);
-		RenderUtil.text(graphics, font, hintText, 16 + keyW + 6, hintY + 5, RenderUtil.TEXT_PRIMARY);
+		RenderUtil.text(graphics, font, hintText, 16 + keyW + 6, hintY + 5, RenderUtil.theme().textPrimary());
 	}
 
 	/**

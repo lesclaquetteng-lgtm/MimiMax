@@ -142,6 +142,6 @@ public abstract class HudElement extends Module {
 		RenderUtil.outline(graphics, frame.x(), frame.y() + LABEL_H, frame.w(),
 				frame.h() - LABEL_H, ColorUtil.withAlpha(accent, 0.6f));
 		RenderUtil.roundedRect(graphics, frame.x(), frame.y(), labelWidth, LABEL_H, 3, accent);
-		RenderUtil.text(graphics, font, getName(), frame.x() + 4, frame.y() + 2, 0xFF0A0B0D, false);
+		RenderUtil.text(graphics, font, getName(), frame.x() + 4, frame.y() + 2, RenderUtil.theme().onAccentText(), false);
 	}
 }

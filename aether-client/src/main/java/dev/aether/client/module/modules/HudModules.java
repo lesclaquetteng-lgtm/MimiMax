@@ -40,7 +40,7 @@ public final class HudModules {
 	 */
 	static void drawPanel(GuiGraphics graphics, Font font, int x, int y, int width, int height) {
 		RenderUtil.bordered(graphics, x, y, width, height, 4,
-				RenderUtil.SURFACE, RenderUtil.BORDER);
+				RenderUtil.theme().surface(), RenderUtil.theme().border());
 	}
 
 	/**
@@ -48,8 +48,8 @@ public final class HudModules {
 	 */
 	static void drawPanel(GuiGraphics graphics, Font font, int x, int y, int width, int height, float opacity) {
 		RenderUtil.bordered(graphics, x, y, width, height, 4,
-				dev.aether.client.util.ColorUtil.fade(RenderUtil.SURFACE, opacity),
-				dev.aether.client.util.ColorUtil.fade(RenderUtil.BORDER, opacity));
+				dev.aether.client.util.ColorUtil.fade(RenderUtil.theme().surface(), opacity),
+				dev.aether.client.util.ColorUtil.fade(RenderUtil.theme().border(), opacity));
 	}
 
 	/** The accent colour of the configuration, used by every element that highlights a value. */
@@ -132,7 +132,7 @@ public final class HudModules {
 		@Override
 		public void onRender(GuiGraphics graphics, float partialTick) {
 			String text = text();
-			int colour = coloured.isEnabled() ? fpsColour(cachedFps) : RenderUtil.TEXT_PRIMARY;
+			int colour = coloured.isEnabled() ? fpsColour(cachedFps) : RenderUtil.theme().textPrimary();
 			drawPanel(graphics, Minecraft.getInstance().font, getX(), getY(), textWidth + 12, 14);
 			RenderUtil.text(graphics, Minecraft.getInstance().font, text, getX() + 6, getY() + 3, colour);
 		}
@@ -197,7 +197,7 @@ public final class HudModules {
 
 			if (showValue.isEnabled()) {
 				String text = minecraft.getFps() + " FPS";
-				RenderUtil.text(graphics, font, text, x + 6, y + 4, RenderUtil.TEXT_MUTED);
+				RenderUtil.text(graphics, font, text, x + 6, y + 4, RenderUtil.theme().textSecondary());
 			}
 
 			int graphX = x + 6;
@@ -281,7 +281,7 @@ public final class HudModules {
 			Font font = Minecraft.getInstance().font;
 
 			drawPanel(graphics, font, getX(), getY(), textWidth + 12, 14);
-			int colour = RenderUtil.TEXT_PRIMARY;
+			int colour = RenderUtil.theme().textPrimary();
 			if (showColour.isEnabled()) {
 				if (cachedLatency >= 200) {
 					colour = 0xFFE05260;
@@ -345,7 +345,7 @@ public final class HudModules {
 			String text = text();
 			Font font = Minecraft.getInstance().font;
 			drawPanel(graphics, font, getX(), getY(), textWidth + 12, 14);
-			RenderUtil.text(graphics, font, text, getX() + 6, getY() + 3, RenderUtil.TEXT_PRIMARY);
+			RenderUtil.text(graphics, font, text, getX() + 6, getY() + 3, RenderUtil.theme().textPrimary());
 		}
 
 		@Override
@@ -426,7 +426,7 @@ public final class HudModules {
 		private void drawKey(GuiGraphics graphics, Font font, int x, int y, String label, float progress, int cps) {
 			int accent = Aether.get().getConfig().getAccentColor();
 			int background = ColorUtil.lerp(0xC0202530, accent, progress);
-			int textColour = ColorUtil.lerp(RenderUtil.TEXT_MUTED, 0xFFFFFFFF, progress);
+			int textColour = ColorUtil.lerp(RenderUtil.theme().textSecondary(), 0xFFFFFFFF, progress);
 			RenderUtil.roundedRect(graphics, x, y, KEY_SIZE, KEY_SIZE, 4, background);
 
 			if (cps >= 0) {
@@ -477,7 +477,7 @@ public final class HudModules {
 			for (EquipmentSlot slot : SLOTS) {
 				ItemStack stack = minecraft.player.getItemBySlot(slot);
 				int bg = stack.isEmpty() ? 0x1A141722 : 0x40141722;
-				int border = stack.isEmpty() ? 0x203D4560 : RenderUtil.BORDER_STRONG;
+				int border = stack.isEmpty() ? 0x203D4560 : RenderUtil.theme().borderStrong();
 				RenderUtil.bordered(graphics, x, y, 20, 20, 4, bg, border);
 				if (!stack.isEmpty()) {
 					graphics.renderItem(stack, x + 2, y + 2);
@@ -535,7 +535,7 @@ public final class HudModules {
 				// is neutral. A thin strip on the left carries the same colour.
 				int colour = effectColour(holder.value().getCategory());
 				int width = font.width(label) + 12;
-				RenderUtil.roundedRect(graphics, x, y, width, 13, 3, RenderUtil.PANEL_BACKGROUND);
+				RenderUtil.roundedRect(graphics, x, y, width, 13, 3, RenderUtil.theme().elevatedBackground());
 				graphics.fill(x + 2, y + 3, x + 4, y + 10, colour);
 				RenderUtil.text(graphics, font, label, x + 7, y + 2, colour);
 				y += 15;
@@ -543,8 +543,8 @@ public final class HudModules {
 			}
 
 			if (count == 0) {
-				RenderUtil.roundedRect(graphics, x, y, 52, 13, 3, RenderUtil.PANEL_BACKGROUND);
-				RenderUtil.text(graphics, font, "No effects", x + 5, y + 2, RenderUtil.TEXT_DIM);
+				RenderUtil.roundedRect(graphics, x, y, 52, 13, 3, RenderUtil.theme().elevatedBackground());
+				RenderUtil.text(graphics, font, "No effects", x + 5, y + 2, RenderUtil.theme().textDim());
 			}
 		}
 
@@ -626,7 +626,7 @@ public final class HudModules {
 
 			Font font = Minecraft.getInstance().font;
 			drawPanel(graphics, font, getX(), getY(), textWidth + 12, 14);
-			RenderUtil.text(graphics, font, text, getX() + 6, getY() + 3, RenderUtil.TEXT_PRIMARY);
+			RenderUtil.text(graphics, font, text, getX() + 6, getY() + 3, RenderUtil.theme().textPrimary());
 		}
 
 		/** @return the line the element shows, or null when there is nothing to describe yet. */
@@ -730,7 +730,7 @@ public final class HudModules {
 
 			Font font = Minecraft.getInstance().font;
 			drawPanel(graphics, font, getX(), getY(), textWidth + 12, 14);
-			RenderUtil.text(graphics, font, text, getX() + 6, getY() + 3, RenderUtil.TEXT_PRIMARY);
+			RenderUtil.text(graphics, font, text, getX() + 6, getY() + 3, RenderUtil.theme().textPrimary());
 		}
 
 		/** @return the software of the server, or null when the player is not connected. */
@@ -779,7 +779,7 @@ public final class HudModules {
 			String text = text();
 			Font font = Minecraft.getInstance().font;
 			drawPanel(graphics, font, getX(), getY(), textWidth + 12, 14);
-			RenderUtil.text(graphics, font, text, getX() + 6, getY() + 3, RenderUtil.TEXT_PRIMARY);
+			RenderUtil.text(graphics, font, text, getX() + 6, getY() + 3, RenderUtil.theme().textPrimary());
 		}
 
 		/** @return the name of the item in the main hand, or Empty. */
@@ -832,7 +832,7 @@ public final class HudModules {
 			String text = text();
 			Font font = Minecraft.getInstance().font;
 			drawPanel(graphics, font, getX(), getY(), textWidth + 12, 14);
-			RenderUtil.text(graphics, font, text, getX() + 6, getY() + 3, RenderUtil.TEXT_PRIMARY);
+			RenderUtil.text(graphics, font, text, getX() + 6, getY() + 3, RenderUtil.theme().textPrimary());
 		}
 
 		private String text() {
@@ -922,7 +922,7 @@ public final class HudModules {
 				cachedName = RenderUtil.truncate(font, entity.getName().getString(), width - 20);
 				cachedEntity = entity;
 			}
-			RenderUtil.text(graphics, font, cachedName, x + 8, y + 6, ColorUtil.fade(RenderUtil.TEXT_PRIMARY, opacity));
+			RenderUtil.text(graphics, font, cachedName, x + 8, y + 6, ColorUtil.fade(RenderUtil.theme().textPrimary(), opacity));
 
 			if (entity instanceof LivingEntity living) {
 				float max = living.getMaxHealth();
@@ -941,7 +941,7 @@ public final class HudModules {
 					cachedHealth = living.getHealth();
 					cachedMaxHealth = max;
 				}
-				RenderUtil.text(graphics, font, cachedHealthText, x + 8, y + 18, ColorUtil.fade(RenderUtil.TEXT_MUTED, opacity));
+				RenderUtil.text(graphics, font, cachedHealthText, x + 8, y + 18, ColorUtil.fade(RenderUtil.theme().textSecondary(), opacity));
 
 				int barColour = ColorUtil.lerp(healthColour(health.getValue()), 0xFFFFFFFF, flash.getValue());
 				RenderUtil.bar(graphics, x + 8, y + 28, width - 16, 4, health.getValue(),
@@ -1123,11 +1123,11 @@ public final class HudModules {
 			int accent = accent();
 			int numberColour = combo > 0
 					? ColorUtil.lerp(accent, 0xFFFFFFFF, pop.getValue() * 0.7f)
-					: RenderUtil.TEXT_DIM;
+					: RenderUtil.theme().textDim();
 
 			drawPanel(graphics, font, getX(), getY(), textWidth + 16, 14);
-			RenderUtil.roundedRect(graphics, getX() + 5, getY() + 6, 3, 3, 1, combo > 0 ? accent : RenderUtil.TEXT_DIM);
-			RenderUtil.text(graphics, font, LABEL, getX() + 11, getY() + 3, RenderUtil.TEXT_MUTED);
+			RenderUtil.roundedRect(graphics, getX() + 5, getY() + 6, 3, 3, 1, combo > 0 ? accent : RenderUtil.theme().textDim());
+			RenderUtil.text(graphics, font, LABEL, getX() + 11, getY() + 3, RenderUtil.theme().textSecondary());
 			RenderUtil.text(graphics, font, String.valueOf(Math.max(0, combo)),
 					getX() + 11 + labelWidth, getY() + 3, numberColour);
 
@@ -1214,7 +1214,7 @@ public final class HudModules {
 			}
 			hadTarget = hasTarget;
 
-			int colour = hasTarget ? accent() : RenderUtil.TEXT_DIM;
+			int colour = hasTarget ? accent() : RenderUtil.theme().textDim();
 			drawPanel(graphics, font, getX(), getY(), textWidth + 16, 14);
 			RenderUtil.roundedRect(graphics, getX() + 5, getY() + 6, 3, 3, 1, colour);
 			RenderUtil.text(graphics, font, text, getX() + 11, getY() + 3, colour);
@@ -1270,7 +1270,7 @@ public final class HudModules {
 			}
 
 			drawPanel(graphics, font, getX(), getY(), textWidth + 12, 14);
-			RenderUtil.text(graphics, font, text, getX() + 6, getY() + 3, RenderUtil.TEXT_PRIMARY);
+			RenderUtil.text(graphics, font, text, getX() + 6, getY() + 3, RenderUtil.theme().textPrimary());
 		}
 
 		private static String cardinalName(float yaw) {
@@ -1390,13 +1390,13 @@ public final class HudModules {
 
 			if (cachedHorizontal) {
 				drawPanel(graphics, font, getX(), getY(), textWidth + 12, 14);
-				RenderUtil.text(graphics, font, name, getX() + 6, getY() + 3, RenderUtil.TEXT_PRIMARY);
+				RenderUtil.text(graphics, font, name, getX() + 6, getY() + 3, RenderUtil.theme().textPrimary());
 				RenderUtil.text(graphics, font, "  ·  " + type, getX() + 6 + nameWidth, getY() + 3, typeColour);
 				return;
 			}
 
 			drawPanel(graphics, font, getX(), getY(), textWidth + 12, 28);
-			RenderUtil.text(graphics, font, name, getX() + 6, getY() + 4, RenderUtil.TEXT_PRIMARY);
+			RenderUtil.text(graphics, font, name, getX() + 6, getY() + 4, RenderUtil.theme().textPrimary());
 			RenderUtil.text(graphics, font, type + " session", getX() + 6, getY() + 15, typeColour);
 		}
 
