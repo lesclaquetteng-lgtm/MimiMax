@@ -1006,6 +1006,7 @@ function pingSummary(ping) {
 }
 
 function renderServers() {
+	renderQuickServers();
 	const table = $('#server-list');
 	table.innerHTML = '';
 
