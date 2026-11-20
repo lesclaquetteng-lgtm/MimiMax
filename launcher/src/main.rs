@@ -564,11 +564,22 @@ fn command_command(arguments: &[String]) -> Result<(), String> {
 
     let options = launcher.launch_options_for(account.as_deref(), version.as_deref(), server.as_deref())?;
     let built = game::build_command(&options);
+    let mut displayed_arguments = built.arguments.clone();
+
+    // This diagnostic command prints launch arguments. Never echo a live Microsoft access token
+    // into a terminal, shell history, CI log or copied support report.
+    if !options.access_token.is_empty() {
+        for argument in &mut displayed_arguments {
+            if argument.contains(&options.access_token) {
+                *argument = argument.replace(&options.access_token, "<redacted>");
+            }
+        }
+    }
 
     emit(&serde_json::json!({
         "ok": true,
         "program": built.program.to_string_lossy(),
-        "arguments": built.arguments,
+        "arguments": displayed_arguments,
         "classpath": built.classpath.iter().map(|entry| entry.to_string_lossy().to_string()).collect::<Vec<String>>(),
     }));
     Ok(())
