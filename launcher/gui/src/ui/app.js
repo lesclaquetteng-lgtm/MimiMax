@@ -2390,7 +2390,7 @@ function showPage(name) {
 	if (!target) return;
 
 	state.page = name;
-	$('.nav-item').forEach((other) => {
+	$$('.nav-item').forEach((other) => {
 		const match = other.dataset.page === name;
 		other.classList.toggle('is-active', match);
 		if (match) other.setAttribute('aria-current', 'page');
@@ -2419,7 +2419,67 @@ function showPage(name) {
 	}
 }
 
+
+let voxelBackdropFrame = 0;
+function initVoxelBackdrop() {
+	const canvas = $('#voxel-backdrop');
+	if (!canvas || canvas.dataset.initialized) return;
+	canvas.dataset.initialized = 'true';
+	const ctx = canvas.getContext('2d');
+	if (!ctx) return;
+	let width = 0, height = 0, ratio = 1, last = 0;
+	const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+	const stars = Array.from({ length: 86 }, (_, i) => ({ x: ((i * 73.73) % 997) / 997, y: ((i * 41.19 + 11) % 613) / 613, s: i % 9 === 0 ? 1.8 : .8, p: i * .71 }));
+	function resize() {
+		ratio = Math.min(window.devicePixelRatio || 1, 1.6);
+		width = window.innerWidth; height = Math.max(1, window.innerHeight - 34);
+		canvas.width = Math.round(width * ratio); canvas.height = Math.round(height * ratio);
+		ctx.setTransform(ratio, 0, 0, ratio, 0, 0); draw(performance.now());
+	}
+	function ridge(base, amp, step, seed, color) {
+		ctx.beginPath(); ctx.moveTo(0, height);
+		for (let x = 0; x <= width + step; x += step) {
+			const wave = Math.abs(Math.sin((x + seed) * .009) * .55 + Math.cos((x + seed) * .021) * .35);
+			const y = base - 9 - wave * amp;
+			ctx.lineTo(x, y); ctx.lineTo(x + step * .5, y); ctx.lineTo(x + step * .5, y + step * .55);
+		}
+		ctx.lineTo(width, height); ctx.closePath(); ctx.fillStyle = color; ctx.fill();
+	}
+	function draw(time) {
+		ctx.clearRect(0, 0, width, height);
+		const sky = ctx.createLinearGradient(0, 0, 0, height);
+		sky.addColorStop(0, '#050a15'); sky.addColorStop(.55, '#0a1422'); sky.addColorStop(1, '#101c27');
+		ctx.fillStyle = sky; ctx.fillRect(0, 0, width, height);
+		const glow = ctx.createRadialGradient(width*.62,height*.39,8,width*.62,height*.39,width*.57);
+		glow.addColorStop(0,'rgba(72,181,137,.18)'); glow.addColorStop(.55,'rgba(50,104,125,.08)'); glow.addColorStop(1,'rgba(5,10,21,0)');
+		ctx.fillStyle=glow; ctx.fillRect(0,0,width,height);
+		for (const star of stars) { ctx.globalAlpha = reduced ? .62 : .36 + (Math.sin(time*.0007+star.p)+1)*.24; ctx.fillStyle='#d7f4e5'; ctx.fillRect(star.x*width,star.y*height*.72,star.s,star.s); }
+		ctx.globalAlpha=1;
+		const mx=width*.79,my=height*.2,mr=Math.max(18,Math.min(width,height)*.038);
+		const halo=ctx.createRadialGradient(mx,my,mr*.3,mx,my,mr*3.2); halo.addColorStop(0,'rgba(218,242,226,.16)'); halo.addColorStop(1,'rgba(218,242,226,0)');
+		ctx.fillStyle=halo; ctx.beginPath(); ctx.arc(mx,my,mr*3.2,0,Math.PI*2); ctx.fill();
+		ctx.fillStyle='#dcebe1'; ctx.beginPath(); ctx.arc(mx,my,mr,0,Math.PI*2); ctx.fill();
+		const drift=reduced?0:Math.sin(time*.00013)*22;
+		const aurora=ctx.createLinearGradient(0,height*.12,width,height*.62);
+		aurora.addColorStop(0,'rgba(73,180,159,0)'); aurora.addColorStop(.35,'rgba(91,255,177,.66)'); aurora.addColorStop(.68,'rgba(80,177,203,.54)'); aurora.addColorStop(1,'rgba(100,117,206,0)');
+		ctx.save(); ctx.globalCompositeOperation='screen'; ctx.globalAlpha=.17; ctx.lineWidth=Math.max(22,height*.075); ctx.lineCap='round'; ctx.strokeStyle=aurora; ctx.shadowBlur=36; ctx.shadowColor='rgba(94,243,177,.35)';
+		ctx.beginPath(); ctx.moveTo(width*.04,height*.28+drift*.25); ctx.bezierCurveTo(width*.28,height*.02-drift,width*.55,height*.55+drift,width*.95,height*.17-drift*.3); ctx.stroke();
+		ctx.globalAlpha=.1; ctx.lineWidth=Math.max(12,height*.038); ctx.beginPath(); ctx.moveTo(width*.1,height*.48-drift*.2); ctx.bezierCurveTo(width*.37,height*.13+drift,width*.63,height*.58-drift,width*.98,height*.34); ctx.stroke(); ctx.restore();
+		ridge(height*.76,height*.23,22,18,'#101d2a'); ridge(height*.84,height*.17,16,82,'#0b1722');
+		const u=Math.max(3,Math.min(width,height)*.012), cx=width*.7, ground=height*.79;
+		ctx.fillStyle='#0a121d'; ctx.fillRect(cx-u*8,ground-u*6,u*25,u*6); ctx.fillRect(cx-u*5,ground-u*12,u*7,u*12); ctx.fillRect(cx+u*10,ground-u*15,u*7,u*15); ctx.fillRect(cx+u*2,ground-u*10,u*8,u*10);
+		ctx.fillRect(cx-u*7,ground-u*14,u*3,u*2); ctx.fillRect(cx+u*11,ground-u*17,u*5,u*2);
+		ctx.fillStyle='rgba(169,245,182,.68)'; for(const [x,y] of [[-3,-9],[-3,-5],[12,-12],[12,-8],[4,-7],[8,-7]]) ctx.fillRect(cx+u*x,ground+u*y,u*.8,u*1.2);
+		const fog=ctx.createLinearGradient(0,height*.68,0,height); fog.addColorStop(0,'rgba(8,16,26,0)'); fog.addColorStop(1,'rgba(5,10,17,.92)'); ctx.fillStyle=fog; ctx.fillRect(0,height*.65,width,height*.35);
+	}
+	function animate(time) { if (document.hidden) { voxelBackdropFrame=0; return; } if(time-last>40){draw(time);last=time;} voxelBackdropFrame=requestAnimationFrame(animate); }
+	function visibility() { if(document.hidden){cancelAnimationFrame(voxelBackdropFrame);voxelBackdropFrame=0;} else if(!reduced&&!voxelBackdropFrame) voxelBackdropFrame=requestAnimationFrame(animate); }
+	window.addEventListener('resize',resize,{passive:true}); document.addEventListener('visibilitychange',visibility); resize();
+	if(!reduced) voxelBackdropFrame=requestAnimationFrame(animate);
+}
+
 async function init() {
+	initVoxelBackdrop();
 	// Window controls.
 	$$('[data-window]').forEach((button) => {
 		button.addEventListener('click', () => api.window(button.dataset.window));
@@ -2431,7 +2491,7 @@ async function init() {
 	});
 	$('#btn-gate-menu-close').addEventListener('click', () => setGateMenuOpen(false, true));
 	$('#gate-menu-backdrop').addEventListener('click', closeGateMenu);
-	$('.nav-item').forEach((item) => {
+	$$('.nav-item').forEach((item) => {
 		item.addEventListener('click', () => showPage(item.dataset.page));
 	});
 
