@@ -295,7 +295,9 @@ launcher as a designed workspace rather than a collection of unrelated skin sett
 - Two real layout densities (roomy / compact) and two navigation layouts (wide / rail).
 - A live preview that reflects the active colourway, surface, density, navigation and memory setting.
 - Preferences are saved through the existing Rust settings command to the local settings.json.
-  Older settings files acquire the new values through the Settings serde defaults.
+  Older settings files acquire the new values through the Settings serde defaults; the previous
+  generic dark theme is migrated to Graphite, and old built-in accent values follow the active
+  material while explicitly chosen custom colours remain untouched.
 
 The palette values live once in gui/src/ui/tokens.css. The interface switches twelve palette
 aliases at runtime; it does not redefine colour tokens in separate theme blocks. This keeps the
