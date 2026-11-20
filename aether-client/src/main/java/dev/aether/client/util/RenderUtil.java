@@ -1,5 +1,7 @@
 package dev.aether.client.util;
 
+import dev.aether.client.Aether;
+import dev.aether.client.design.AetherDesignSystem;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.Minecraft;
@@ -29,7 +31,26 @@ public final class RenderUtil {
 	public static final int BORDER_STRONG = 0xFF2C323A;
 	public static final int SHADOW = 0x55000000;
 
-	private RenderUtil() {
+	private static volatile AetherDesignSystem.Palette cachedTheme=AetherDesignSystem.Colorway.GRAPHITE.palette();
+	private static volatile String cachedThemeKey="";
+
+	private RenderUtil() {}
+
+	/** Current palette, cached so resolving the design tokens does not allocate on HUD frames. */
+	public static AetherDesignSystem.Palette theme(){
+		Aether aether=Aether.getOrNull();
+		if(aether==null)return AetherDesignSystem.Colorway.GRAPHITE.palette();
+		var config=aether.getConfig();
+		String key=config.colorway+"|"+config.surfaceTreatment+"|"+config.customAccent+"|"+config.accentColor;
+		if(!key.equals(cachedThemeKey)){
+			synchronized(RenderUtil.class){
+				if(!key.equals(cachedThemeKey)){
+					cachedTheme=AetherDesignSystem.resolve(config);
+					cachedThemeKey=key;
+				}
+			}
+		}
+		return cachedTheme;
 	}
 
 	/**
@@ -141,8 +162,9 @@ public final class RenderUtil {
 		int spread = 4;
 		roundedRect(graphics, x - spread, y - spread + 2, width + spread * 2, height + spread * 2,
 				radius + spread, ColorUtil.fade(0x30000000, opacity));
-		bordered(graphics, x, y, width, height, radius,
-				ColorUtil.fade(SURFACE, opacity), ColorUtil.fade(BORDER, opacity));
+		AetherDesignSystem.Palette palette=theme();
+		bordered(graphics,x,y,width,height,radius,
+				ColorUtil.fade(palette.surface(),opacity),ColorUtil.fade(palette.border(),opacity));
 		if (width > radius * 2 && height > 2) {
 			graphics.fill(x + radius, y + 1, x + width - radius, y + 2, ColorUtil.fade(0x1AFFFFFF, opacity));
 		}
@@ -209,8 +231,8 @@ public final class RenderUtil {
 		float maxOffset = contentHeight - height;
 		int position = maxOffset <= 0 ? 0 : Math.round(travel * (offset / maxOffset));
 
-		roundedRect(graphics, x, y, 3, height, 1, 0x22FFFFFF);
-		roundedRect(graphics, x, y + position, 3, thumb, 1, ColorUtil.withAlpha(accent, 0.9f));
+		roundedRect(graphics,x,y,3,height,1,ColorUtil.withAlpha(theme().borderStrong(),0.55f));
+		roundedRect(graphics,x,y+position,3,thumb,1,ColorUtil.withAlpha(accent,0.9f));
 	}
 
 	/**
