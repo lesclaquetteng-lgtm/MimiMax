@@ -105,6 +105,23 @@ Steve        5627dd98-e6be-3c21-b8a8-e92344183641
 Player123    3da1e349-17b0-38ed-a07b-1e78c8ebd956
 ```
 
+## Microsoft account security
+
+On Windows, Microsoft access and refresh tokens are **not stored in accounts.json** and are not
+returned to the interface through the account JSON contract. They are stored in accounts.credentials,
+protected with Windows DPAPI for the current Windows user. Copying that file to another Windows
+account does not grant access to the session tokens.
+
+Existing installations are migrated on first start: the launcher encrypts the legacy tokens first,
+then rewrites the public account catalogue without them. If the protected vault cannot be decrypted
+(for example, after moving it to another Windows user profile), account metadata is kept but the
+Microsoft account must be signed in again. The diagnostic command also redacts the access token from
+its displayed launch arguments.
+
+The protected Microsoft session vault is currently supported by the Windows launcher. Non-Windows
+builds refuse to persist new Microsoft session secrets rather than silently writing them in clear
+text; offline accounts remain available.
+
 ## Offline servers
 
 The **Servers** page of the launcher answers one question before the game starts: *will this server
