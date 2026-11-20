@@ -1,12 +1,12 @@
-﻿{
+{
   "name": "aether-launcher",
   "version": "1.0.0",
-  "description": "The launcher of the Aether Client, a Rust core with an Electron interface.",
-    "main": "gui/src/main.cjs",
+  "description": "Aether Launcher: Rust game-management core and Tauri 2 native desktop shell.",
+  "main": "gui/src/main.cjs",
   "author": "Aether",
   "license": "MIT",
   "scripts": {
-    "start": "electron .",
+    "start": "npm run core && cargo run --manifest-path desktop/Cargo.toml",
     "build:exe": "rustc -O -C opt-level=z -C lto=yes -C strip=symbols ../tools/launcher-runner.rs -o ../MimiMax.exe && copy ..\\MimiMax.exe ..\\Aether-Launcher.exe",
     "core": "cargo build --release",
     "core:debug": "cargo build",
@@ -23,8 +23,13 @@
     "e2e:a11y": "node ../tools/e2e/a11y.mjs",
     "e2e:profiles": "node ../tools/e2e/profiles.mjs",
     "e2e:sliders": "node ../tools/e2e/sliders.mjs",
-    "pack": "electron-builder --dir",
-    "dist": "electron-builder"
+    "start:tauri": "npm run core && cargo run --manifest-path desktop/Cargo.toml",
+    "start:electron": "electron .",
+    "build:desktop": "npm run core && cargo build --release --manifest-path desktop/Cargo.toml",
+    "test:desktop": "cargo test --manifest-path desktop/Cargo.toml",
+    "dist:desktop": "cargo tauri build --manifest-path desktop/Cargo.toml",
+    "pack:electron": "electron-builder --dir",
+    "dist:electron": "electron-builder"
   },
   "devDependencies": {
     "electron": "^45.3.1"
@@ -44,7 +49,10 @@
       {
         "from": "target/release",
         "to": ".",
-        "filter": ["aether-launcher", "aether-launcher.exe"]
+        "filter": [
+          "aether-launcher",
+          "aether-launcher.exe"
+        ]
       }
     ],
     "directories": {
@@ -62,5 +70,3 @@
     }
   }
 }
-
-
