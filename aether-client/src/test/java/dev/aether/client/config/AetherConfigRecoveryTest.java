@@ -86,7 +86,7 @@ class AetherConfigRecoveryTest {
 	@DisplayName("an unversioned legacy file is migrated and backed up")
 	void legacyConfigurationIsVersioned(@TempDir Path directory) throws Exception {
 		Path file = directory.resolve("config.json");
-		String legacy = "{\\"accentColor\\":\\"#2ECC8F\\",\\"modules\\":{\\"fps\\":true}}";
+		String legacy = "{\"accentColor\":\"#2ECC8F\",\"modules\":{\"fps\":true}}";
 		Files.writeString(file, legacy, StandardCharsets.UTF_8);
 
 		AetherConfig loaded = AetherConfig.load(file);
