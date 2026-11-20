@@ -14,14 +14,14 @@ use crate::accounts::AccountStore;
 const HEADER: &str = "AETHER-CREDENTIALS-V1";
 const MAX_CREDENTIAL_FILE_BYTES: usize = 2 * 1024 * 1024;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct CredentialsDocument {
     version: u32,
     accounts: Vec<AccountCredentials>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct AccountCredentials {
     account_id: String,
@@ -67,11 +67,18 @@ pub fn save(accounts_file: &Path, accounts: &AccountStore) -> Result<(), String>
         }
     }
 
-    let document = CredentialsDocument {
+    let mut document = CredentialsDocument {
         version: 1,
         accounts: entries,
     };
-    let mut plaintext = serde_json::to_vec(&document)
+    let serialized = serde_json::to_vec(&document);
+    for account in &mut document.accounts {
+        account.access_token.zeroize();
+        if let Some(token) = &mut account.refresh_token {
+            token.zeroize();
+        }
+    }
+    let mut plaintext = serialized
         .map_err(|error| format!("could not encode Microsoft credentials: {error}"))?;
     let protected = protect(&plaintext);
     plaintext.zeroize();
@@ -308,6 +315,9 @@ fn unprotect(ciphertext: &[u8]) -> Result<Vec<u8>, String> {
 
     if !output.data.is_null() {
         unsafe {
+            // CryptUnprotectData allocated a plaintext buffer. Erase it before returning it to
+            // the Windows heap; the owned Vec above is the only copy that remains for parsing.
+            std::ptr::write_bytes(output.data, 0, output.size as usize);
             LocalFree(output.data.cast::<c_void>());
         }
     }
