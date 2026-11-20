@@ -122,6 +122,28 @@ The protected Microsoft session vault is currently supported by the Windows laun
 builds refuse to persist new Microsoft session secrets rather than silently writing them in clear
 text; offline accounts remain available.
 
+## Launcher security and process integrity
+
+The launcher treats downloaded metadata and files as untrusted input:
+
+- Minecraft/Fabric identifiers, library-relative paths, asset hashes, hosted-server version names and
+  Modrinth JAR filenames are validated before they are used in local file paths.
+- ZIP extraction rejects archive entries that escape the destination; duplicate content-addressed
+  assets are deduplicated before parallel download workers start.
+- Mod and session-log operations reject symbolic links rather than following paths outside the
+  launcher's managed folders.
+- Atomic writes use unique temporary siblings. The native shell applies the same rule when extracting
+  its embedded core and client JAR, then replaces completed files atomically.
+- The Tauri WebView has an injected Content Security Policy that disables plugins/objects and
+  restricts scripts, base URLs and form submissions to the local application. JavaScript built-in
+  prototypes are frozen.
+- The shell refuses a second simultaneous installation or Minecraft launch, preserving the process
+  handle that the Stop/Cancel controls need.
+
+On Windows, the CI workflow builds the embedded Fabric JAR with Java 25 (required by the current
+Gradle/Loom runtime) while retaining the mod's Java 21 compilation target, then builds the Rust core
+and native Tauri shell.
+
 ## Offline servers
 
 The **Servers** page of the launcher answers one question before the game starts: *will this server
