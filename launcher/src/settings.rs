@@ -288,26 +288,76 @@ impl Settings {
     }
 }
 
+/// A process-local sequence makes temporary names distinct even when different files share
+/// the same stem (for example, accounts.json and accounts.credentials).
+static NEXT_TEMP_FILE: std::sync::atomic::AtomicU64 =
+    std::sync::atomic::AtomicU64::new(0);
+
+fn temporary_path(path: &Path, sequence: u64) -> PathBuf {
+    let filename = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("aether-data");
+    path.with_file_name(format!(
+        ".{}.{}.{}.tmp",
+        filename,
+        std::process::id(),
+        sequence
+    ))
+}
+
 /// Writes a file in one step.
 ///
-/// The content is written next to the target and moved into place, a crash in the middle never
-/// leaves a truncated file behind. A truncated settings file would silently reset every setting and
-/// every account of the player.
+/// The content is written to a unique sibling file and moved into place. Different files with the
+/// same stem never share a temporary path, and concurrent writes cannot truncate each other's data.
 pub fn write_atomic(path: &Path, content: &str) -> std::io::Result<()> {
+    use std::fs::OpenOptions;
     use std::io::Write;
 
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
 
-    let temporary = path.with_extension("tmp");
-    {
-        let mut file = std::fs::File::create(&temporary)?;
-        file.write_all(content.as_bytes())?;
-        file.sync_all()?;
+    let mut temporary = None;
+    let mut file = None;
+    for _ in 0..32 {
+        let sequence = NEXT_TEMP_FILE.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let candidate = temporary_path(path, sequence);
+        match OpenOptions::new().write(true).create_new(true).open(&candidate) {
+            Ok(created) => {
+                temporary = Some(candidate);
+                file = Some(created);
+                break;
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(error) => return Err(error),
+        }
     }
 
-    std::fs::rename(&temporary, path)
+    let temporary = temporary.ok_or_else(|| {
+        std::io::Error::new(
+            std::io::ErrorKind::AlreadyExists,
+            "could not allocate a unique temporary file",
+        )
+    })?;
+
+    let write_result = (|| {
+        let mut file = file.expect("a temporary file was created");
+        file.write_all(content.as_bytes())?;
+        file.sync_all()
+    })();
+
+    if let Err(error) = write_result {
+        let _ = std::fs::remove_file(&temporary);
+        return Err(error);
+    }
+
+    if let Err(error) = std::fs::rename(&temporary, path) {
+        let _ = std::fs::remove_file(&temporary);
+        return Err(error);
+    }
+
+    Ok(())
 }
 
 /// Reads a value of the command line, a value that is valid JSON keeps its type.
@@ -518,6 +568,68 @@ mod tests {
             !directory.join("accounts.tmp").exists(),
             "a temporary file was left behind"
         );
+
+        std::fs::remove_dir_all(&directory).ok();
+    }
+
+    #[test]
+    fn atomic_temporary_paths_are_unique_for_files_with_the_same_stem() {
+        let root = std::env::temp_dir().join(format!("aether-atomic-paths-{}", std::process::id()));
+        let accounts = root.join("accounts.json");
+        let credentials = root.join("accounts.credentials");
+
+        assert_ne!(
+            temporary_path(&accounts, 7),
+            temporary_path(&credentials, 7),
+            "different files must not share a temporary path"
+        );
+        assert_ne!(
+            temporary_path(&accounts, 7),
+            temporary_path(&accounts, 8),
+            "separate writes must not share a temporary path"
+        );
+    }
+
+    #[test]
+    fn atomic_writes_to_the_account_catalogue_and_vault_do_not_collide() {
+        let directory = std::env::temp_dir().join(format!("aether-atomic-pair-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&directory);
+        std::fs::create_dir_all(&directory).unwrap();
+
+        let accounts = directory.join("accounts.json");
+        let credentials = directory.join("accounts.credentials");
+        let barrier = std::sync::Arc::new(std::sync::Barrier::new(2));
+
+        let first = {
+            let barrier = barrier.clone();
+            let accounts = accounts.clone();
+            std::thread::spawn(move || {
+                barrier.wait();
+                for _ in 0..32 {
+                    write_atomic(&accounts, "{\"accounts\":[]}").unwrap();
+                }
+            })
+        };
+        let second = {
+            let barrier = barrier.clone();
+            let credentials = credentials.clone();
+            std::thread::spawn(move || {
+                barrier.wait();
+                for _ in 0..32 {
+                    write_atomic(&credentials, "AETHER-CREDENTIALS-V1\nprotected").unwrap();
+                }
+            })
+        };
+
+        first.join().unwrap();
+        second.join().unwrap();
+
+        assert_eq!(std::fs::read_to_string(&accounts).unwrap(), "{\"accounts\":[]}");
+        assert_eq!(
+            std::fs::read_to_string(&credentials).unwrap(),
+            "AETHER-CREDENTIALS-V1\nprotected"
+        );
+        assert_eq!(std::fs::read_dir(&directory).unwrap().count(), 2);
 
         std::fs::remove_dir_all(&directory).ok();
     }
