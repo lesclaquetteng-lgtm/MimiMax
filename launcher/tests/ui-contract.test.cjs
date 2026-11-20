@@ -27,7 +27,7 @@ test('the workspace components have unique DOM anchors', () => {
 		'dashboard-status', 'setup-card', 'setup-dismiss', 'setup-account', 'setup-account-state',
 		'setup-profile', 'setup-profile-state', 'setup-performance', 'setup-performance-state',
 		'perf-health-count', 'perf-health-progress', 'perf-health-percent', 'perf-jvm-summary',
-		'perf-options-summary', 'perf-health-message'
+		'perf-options-summary', 'perf-health-message', 'quick-servers', 'quick-servers-open', 'java-runtime-status', 'mods-search', 'mods-filter', 'mods-summary', 'versions-search', 'versions-filter', 'versions-summary'
 	];
 	for (const id of ids) {
 		const occurrences = [...html.matchAll(new RegExp('\\bid="' + id + '"', 'g'))].length;
@@ -56,6 +56,24 @@ test('appearance is persisted through the Rust settings API', () => {
 	assert.match(html, /id="select-theme"/);
 	assert.match(app, /document\.documentElement\.dataset\.theme/);
 	assert.match(styles, /html\[data-theme="light"\]/);
+});
+
+
+test('the dashboard provides saved-server quick play and real Java diagnostics', () => {
+	assert.match(html, /id="quick-servers"/);
+	assert.match(app, /function renderQuickServers\(\)/);
+	assert.match(app, /launch\(server\.address\)/);
+	assert.match(app, /info\.javaRuntime/);
+	assert.match(app, /runtime\?\.compatible/);
+});
+
+test('the installed mod library and version list can be searched and filtered', () => {
+	for (const id of ['mods-search', 'mods-filter', 'versions-search', 'versions-filter']) {
+		assert.match(html, new RegExp('\\\\bid="' + id + '"'));
+	}
+	assert.match(app, /function renderMods\(\)/);
+	assert.match(app, /function renderVersions\(\)/);
+	assert.match(app, /const matchesType = type === 'all' \|\| version\.type === type/);
 });
 
 test('performance overview does not publish simulated FPS telemetry', () => {
