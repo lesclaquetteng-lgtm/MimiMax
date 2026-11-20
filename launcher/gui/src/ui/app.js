@@ -1911,15 +1911,17 @@ function bindSettings() {
 		const button = event.target.closest('[data-navigation]');
 		if (button) saveAppearance({ navigationStyle: button.dataset.navigation });
 	});
-	$('#appearance-reset').addEventListener('click', async () => {
-		const confirmed = await confirmAction(
+	$('#appearance-reset').addEventListener('click', () => {
+		openModal(
 			'Reset workspace design?',
-			'The colourway, custom accent, surface, spacing and navigation will return to their defaults.'
+			'<p>The colourway, personal signal, surface, spacing and navigation will return to their defaults.</p>',
+			async () => {
+				if (await saveAppearance({ ...APPEARANCE_DEFAULTS })) {
+					toast('Workspace design restored.', 'success');
+				}
+			},
+			'Reset'
 		);
-		if (confirmed) {
-			await saveAppearance({ ...APPEARANCE_DEFAULTS });
-			toast('Workspace design restored.', 'success');
-		}
 	});
 
 	$('#input-fabric-api').addEventListener('change', (event) => {
