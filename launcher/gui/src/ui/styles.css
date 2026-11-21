@@ -1,3 +1,4 @@
+
 /* ------------------------------------------------------------------ theme --
  *
  * Aether Client — graphite editorial.
@@ -2087,3 +2088,63 @@ html[data-density="compact"] .studio-preview-content { padding-top: 14px; paddin
 .gate-action-column { padding-top: 0; }
 .gate-footer { grid-template-columns: 1fr auto; }
 .gate-footer > span { display: none; }
+
+
+/* AETHER VOXEL AURORA */
+.titlebar{background:rgba(7,12,20,.72);border-bottom-color:rgba(190,226,207,.1);backdrop-filter:blur(18px)}
+.titlebar-brand .titlebar-fold-mark{filter:drop-shadow(0 0 12px rgba(124,244,154,.28))}
+.gate-menu-toggle{border:1px solid rgba(190,226,207,.13);border-radius:10px;margin-right:9px;background:rgba(255,255,255,.035)}
+.voxel-atmosphere{position:fixed;inset:34px 0 0;z-index:0;overflow:hidden;pointer-events:none;background:#070d18}
+.voxel-backdrop{position:absolute;inset:0;width:100%;height:100%;display:block}
+.voxel-atmosphere-vignette{position:absolute;inset:0;background:linear-gradient(90deg,rgba(4,8,15,.52),transparent 34%,transparent 76%,rgba(4,8,15,.25)),linear-gradient(0deg,rgba(4,8,15,.62),transparent 38%,rgba(4,8,15,.18))}
+.voxel-dock{position:fixed;z-index:180;top:54px;bottom:18px;left:16px;width:66px;display:flex;flex-direction:column;align-items:center;gap:13px;padding:13px 9px;border:1px solid rgba(202,235,218,.15);border-radius:22px;background:rgba(9,17,27,.68);box-shadow:0 18px 60px rgba(0,0,0,.36),inset 0 1px 0 rgba(255,255,255,.055);backdrop-filter:blur(24px) saturate(1.25)}
+.voxel-dock-brand,.voxel-dock-item{position:relative;width:44px;height:44px;flex:0 0 44px;display:grid;place-items:center;padding:0;border:1px solid transparent;border-radius:14px;color:rgba(221,235,226,.62);background:transparent;transition:color 160ms ease,background 160ms ease,border-color 160ms ease,transform 160ms ease,box-shadow 160ms ease}
+.voxel-dock-brand{color:#a6f4b4;background:rgba(116,232,151,.1);border-color:rgba(147,245,171,.2);box-shadow:0 0 24px rgba(101,236,146,.08)}
+.voxel-dock-brand svg{width:23px;height:23px}.voxel-dock-item svg{width:19px;height:19px}
+.voxel-dock-item:hover,.voxel-dock-item.is-active{color:#e8fff0;background:rgba(129,238,157,.13);border-color:rgba(147,245,171,.19);box-shadow:0 0 22px rgba(101,236,146,.09);transform:translateY(-1px)}
+.voxel-dock-item.is-active::before{position:absolute;left:-10px;top:12px;width:3px;height:20px;content:"";border-radius:0 4px 4px 0;background:#8bf0a5;box-shadow:0 0 12px rgba(139,240,165,.75)}
+.voxel-dock-divider{width:28px;height:1px;background:rgba(211,236,220,.14)}
+.voxel-dock-nav{display:flex;flex:1;flex-direction:column;align-items:center;gap:7px}.voxel-dock-bottom{margin-top:auto}
+.voxel-tooltip{position:absolute;left:calc(100% + 13px);top:50%;z-index:10;padding:7px 10px;border:1px solid rgba(202,235,218,.15);border-radius:8px;background:rgba(7,13,21,.94);color:#e8f5eb;font:10px var(--font-ui);white-space:nowrap;opacity:0;pointer-events:none;transform:translate(-4px,-50%);transition:opacity 130ms ease,transform 130ms ease;box-shadow:0 8px 24px rgba(0,0,0,.3)}
+.voxel-dock-item:hover .voxel-tooltip,.voxel-dock-brand:hover .voxel-tooltip{opacity:1;transform:translate(0,-50%)}
+.shell{position:relative;z-index:2;width:100%;height:calc(100% - 34px);padding-left:94px;background:transparent}
+.content{position:relative;width:100%;height:100%;overflow:auto;background:transparent;scrollbar-color:rgba(181,216,194,.25) transparent}
+.voxel-hero-copy{width:min(100%,1160px);margin:0 auto;padding:4px 0 0;text-align:left}
+.voxel-hero-kicker{display:inline-flex;align-items:center;gap:9px;color:#9be9b0;font:9px var(--font-mono);letter-spacing:.2em;text-shadow:0 0 18px rgba(104,245,148,.26)}
+.voxel-hero-kicker::before{width:18px;height:1px;content:"";background:#85eaa0;box-shadow:0 0 10px rgba(133,234,160,.6)}
+.voxel-hero-copy h1{margin:14px 0 8px;color:#f1f8f3;font-family:var(--font-display);font-size:clamp(30px,4.3vw,55px);font-weight:750;letter-spacing:-.055em;line-height:.98;text-shadow:0 8px 34px rgba(0,0,0,.4)}
+.voxel-hero-copy h1 span{color:#9be9b0;text-shadow:0 0 28px rgba(117,241,151,.2)}
+.voxel-hero-copy p{max-width:560px;color:rgba(222,235,226,.67);font-size:12px;line-height:1.65}
+.gate-content{width:min(100%,1420px);min-height:100%;padding:clamp(25px,3vw,42px) clamp(24px,5vw,78px) 22px}
+.gate-header{margin-bottom:12px}.gate-stage{width:min(100%,1160px);margin-top:20px;gap:clamp(20px,4vw,62px)}
+.gate-art{min-height:350px;border:1px solid rgba(204,235,217,.12);border-radius:28px;background:radial-gradient(ellipse at 50% 48%,rgba(118,239,158,.12),transparent 56%),linear-gradient(145deg,rgba(19,35,43,.63),rgba(8,15,25,.55));box-shadow:0 25px 80px rgba(0,0,0,.18),inset 0 1px 0 rgba(255,255,255,.04);backdrop-filter:blur(8px)}
+.gate-emblem{filter:drop-shadow(0 16px 36px rgba(109,240,151,.13))}
+.gate-action-column{padding:23px;border:1px solid rgba(204,235,217,.15);border-radius:24px;background:rgba(10,18,28,.69);box-shadow:0 24px 70px rgba(0,0,0,.24),inset 0 1px 0 rgba(255,255,255,.045);backdrop-filter:blur(20px)}
+.gate-player{padding:12px;border:1px solid rgba(204,235,217,.1);border-radius:14px;background:rgba(255,255,255,.035)}
+.gate-enter{min-height:62px;padding-inline:20px;border:1px solid rgba(176,255,192,.52);border-radius:15px;background:linear-gradient(135deg,#9af2ad,#70d991);color:#08130d;box-shadow:0 12px 32px rgba(91,227,133,.16),inset 0 1px 0 rgba(255,255,255,.35);font-size:13px;letter-spacing:.12em}
+.gate-enter:hover{background:linear-gradient(135deg,#b7ffc5,#85e7a0);border-color:rgba(216,255,224,.8);box-shadow:0 16px 38px rgba(91,227,133,.23)}
+.gate-disclosure{border-color:rgba(204,235,217,.15)}.gate-disclosure>summary{color:rgba(226,239,230,.68)}
+.gate-footer{border-top-color:rgba(204,235,217,.12);color:rgba(208,226,214,.46)}
+.page:not(.gate-page).is-active{max-width:1180px;padding:32px clamp(22px,4vw,52px) 48px}
+.page-header{border-bottom-color:rgba(204,235,217,.13)}.page-header h1{color:#f0f8f2}.page-header p{color:rgba(220,234,224,.64)}
+.block,.card{border-color:rgba(204,235,217,.13);border-radius:17px;background:rgba(10,18,28,.67);box-shadow:0 16px 50px rgba(0,0,0,.12),inset 0 1px 0 rgba(255,255,255,.035);backdrop-filter:blur(16px)}
+.block-head,.card-head{border-bottom-color:rgba(204,235,217,.1)}
+.input{border-color:rgba(204,235,217,.16);border-radius:9px;background:rgba(4,10,17,.58)}.input:focus{border-color:#8bf0a5;box-shadow:0 0 0 3px rgba(118,239,158,.13)}
+.gate-status-mark,.gate-footer-mark{background:#8bf0a5;box-shadow:0 0 12px rgba(139,240,165,.38)}
+.progress-fill{background:#8bf0a5;box-shadow:0 0 14px rgba(139,240,165,.22)}
+.btn--primary{border-color:rgba(176,255,192,.5);background:linear-gradient(135deg,#9af2ad,#70d991);color:#08130d}
+.btn--primary:hover{background:linear-gradient(135deg,#b7ffc5,#85e7a0)}
+.btn,.icon-btn,.preset-card{border-radius:10px}
+.modal-backdrop{backdrop-filter:blur(10px)}.modal{border:1px solid rgba(204,235,217,.16);border-radius:20px;background:rgba(8,15,24,.94);box-shadow:0 30px 90px rgba(0,0,0,.5)}
+.toast-stack>*{border:1px solid rgba(204,235,217,.16);border-radius:12px;background:rgba(8,15,24,.94);backdrop-filter:blur(16px)}
+@media(max-width:760px){
+	.shell{padding-left:0;padding-bottom:82px}.content{padding-bottom:82px}
+	.voxel-dock{left:10px;right:10px;top:auto;bottom:10px;width:auto;height:66px;flex-direction:row;justify-content:flex-start;gap:9px;padding:8px 9px;border-radius:19px}
+	.voxel-dock-brand,.voxel-dock-divider{display:none}.voxel-dock-nav{flex-direction:row;justify-content:space-between;gap:3px;width:100%;overflow-x:auto}
+	.voxel-dock-item{width:42px;height:42px;flex-basis:42px;flex-shrink:0;border-radius:13px}.voxel-dock-bottom{margin:0}.voxel-tooltip{display:none}
+	.voxel-dock-item.is-active::before{left:10px;top:auto;bottom:-8px;width:20px;height:3px;border-radius:3px 3px 0 0}
+	.voxel-hero-copy h1{font-size:clamp(31px,8vw,43px)}.gate-content{padding:26px 18px 18px}.gate-stage{margin-top:14px}.gate-art{min-height:230px;max-height:260px}.gate-action-column{padding:17px}
+	.page:not(.gate-page).is-active{padding:25px 16px 34px}
+}
+@media(max-width:420px){.voxel-dock{left:6px;right:6px;padding-inline:6px;gap:5px}.voxel-dock-item{width:38px;height:40px;flex-basis:38px}.voxel-dock-item svg{width:17px;height:17px}.voxel-dock-nav{gap:1px}.gate-footer{gap:8px}}
+@media(prefers-reduced-motion:reduce){.voxel-dock-item,.voxel-tooltip,.gate-enter{transition:none!important}}

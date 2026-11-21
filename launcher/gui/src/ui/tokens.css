@@ -150,6 +150,10 @@
 	/* Runtime values, written by `app.js`. */
 	--fill: 0%;
 	--accent-user: var(--color-accent);
+	--voxel-glass: rgba(10, 18, 28, 0.67);
+	--voxel-glass-strong: rgba(8, 15, 24, 0.92);
+	--voxel-edge: rgba(204, 235, 217, 0.15);
+	--voxel-glow: rgba(101, 236, 146, 0.16);
 	--on-accent: #0a0b0d;
 
 	/* ------------------------------------------------------------------- motion */
