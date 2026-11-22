@@ -123,14 +123,14 @@ record(
 );
 
 const after = await view();
-record('the installation is reported as cancelled', after.toast.includes('The installation was cancelled.'), after.toast);
+record('the installation is reported as cancelled', after.toast.includes("L'installation a été annulée."), after.toast);
 record('the installation button is clickable again', after.installDisabled === false);
 record('the progress bar is hidden', after.progressHidden === true);
 record('the progress bar is empty again', after.fill === '0%' || after.fill === '', `fill=${after.fill}`);
 record('the cancel button is gone', after.cancelHidden === true);
 record('the controls are thawed', after.versionDisabled === false && after.loaderDisabled === false);
 record('the flag is back to its initial state', after.installing === false);
-record('the status is ready again', after.status === 'Ready', after.status);
+record('the status is ready again', after.status === 'Prêt', after.status);
 
 const second = await evaluate('window.aether.installStop()');
 record('the core has no installation left to stop', second.ok === false, JSON.stringify(second));

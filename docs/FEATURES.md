@@ -23,14 +23,15 @@ The switch of a module is animated, the interface uses the accent colour of the 
 
 ### Configuration screen
 
-Opens with the unbound key `key.aether.hud_editor`. It shows the session of the player, the accent
-colour, the keybind of every module (click a keybind and press the new one), a HUD editor and the
-actions to reset the modules or the settings.
+Opens with `J` by default (`key.aether.config`, rebindable in the controls screen). It shows the
+session of the player, the accent colour, the keybind of every module (click a keybind and press the
+new one), a HUD editor and the actions to reset the modules or the settings.
 
 ### HUD editor
 
-Opens from the configuration screen. Every HUD element can be dragged around, the positions are
-saved when the game is closed.
+Opens with `H` by default (`key.aether.hud_editor`, rebindable in the controls screen) or from the
+configuration screen. Every HUD element can be dragged around, and the positions are saved as soon
+as they change.
 
 ### Main menu
 

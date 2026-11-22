@@ -49,6 +49,8 @@ fn main() {
 			commands::mods_list,
 			commands::mods_toggle,
 			commands::mods_open_folder,
+			commands::mods_search,
+			commands::mods_install,
 			commands::servers_list,
 			commands::servers_add,
 			commands::servers_remove,

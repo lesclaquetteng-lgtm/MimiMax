@@ -1,6 +1,7 @@
 package dev.aether.client.mixin;
 
 import dev.aether.client.Aether;
+import dev.aether.client.AetherClient;
 import dev.aether.client.design.AetherDesignSystem;
 import dev.aether.client.util.ColorUtil;
 import dev.aether.client.util.RenderUtil;
@@ -108,9 +109,11 @@ public abstract class TitleScreenMixin {
 		RenderUtil.roundedRect(graphics, labelX + 6, 19, 6, 6, 3, statusColor);
 		RenderUtil.text(graphics, font, label, labelX + 16, 17, statusColor);
 
-		// A floating hint that shows how the click GUI is opened.
-		String hintKey = "[R-SHIFT]";
-		String hintText = "Open Click GUI & HUD";
+		// A floating hint that shows how the click GUI is opened. The label follows the binding the
+		// player actually chose instead of advertising the default key after a remap.
+		AetherClient client = AetherClient.getInstance();
+		String hintKey = "[" + (client == null ? "R-SHIFT" : client.getClickGuiKeyLabel()) + "]";
+		String hintText = "Open Click GUI";
 		int keyW = font.width(hintKey) + 6;
 		int totalW = keyW + font.width(hintText) + 18;
 		int hintY = graphics.guiHeight() - 26;

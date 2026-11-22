@@ -129,20 +129,20 @@ record('the cancel button is offered during the installation',
 
 await clickElement('#btn-cancel-install');
 await waitFor(
-	`Array.from(document.querySelectorAll('#toasts .toast')).some((toast) => toast.textContent.includes('cancelled'))`,
+	`Array.from(document.querySelectorAll('#toasts .toast')).some((toast) => toast.textContent.includes('annulée'))`,
 	'the cancellation answer',
 	20000
 );
 
 const stopped = await view();
-record('the cancellation is reported', stopped.toast.includes('The installation was cancelled.'), stopped.toast);
+record('the cancellation is reported', stopped.toast.includes("L'installation a été annulée."), stopped.toast);
 record('the installation button is clickable again', stopped.installDisabled === false);
 record('the progress bar is hidden', stopped.progressHidden === true);
 record('the progress bar is empty again', stopped.fill === '0%' || stopped.fill === '', `fill=${stopped.fill}`);
 record('the cancel button is gone', stopped.cancelHidden === true);
 record('the controls are thawed', stopped.versionDisabled === false && stopped.loaderDisabled === false && stopped.cardBusy === false);
 record('the flag is back to its initial state', stopped.installing === false);
-record('the status is ready again', stopped.status === 'Ready', stopped.status);
+record('the status is ready again', stopped.status === 'Prêt', stopped.status);
 
 // Nothing is left running: a second stop has nothing to stop.
 const second = await evaluate('window.aether.installStop()');

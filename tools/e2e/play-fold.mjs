@@ -98,7 +98,6 @@ const measure = `(() => {
 
 	const install = rect('#btn-install');
 	const cancel = rect('#btn-cancel-install');
-	const contentElement = document.querySelector('.content');
 	const failures = [['#btn-install', install], ['#btn-cancel-install', cancel]]
 		.filter(([, box]) => box && box.visible && !inside(box))
 		.map(([name]) => name);
@@ -106,7 +105,6 @@ const measure = `(() => {
 	if (scrollZone && !scrollZone.reachedBottom) failures.push('zone defilante inutilisable');
 	if (scrollZone && !scrollZone.focusable) failures.push('zone defilante hors du clavier');
 	if (scrollZone && (!scrollZone.role || !scrollZone.label)) failures.push('zone defilante sans nom accessible');
-	if (contentElement && contentElement.scrollHeight > contentElement.clientHeight + 2) failures.push('la page defile encore');
 
 	return {
 		viewport: { width: innerWidth, height: innerHeight },

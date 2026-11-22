@@ -103,13 +103,13 @@ const report = await evaluate(`(() => ({
 
 const expected = mode === 'core'
 	? {
-		title: 'The launcher core stopped',
-		problem: /problem\s+The launcher core stopped with the code 3\./,
+		title: 'Le cœur du launcher s\'est arrêté',
+		problem: /problème\s+Le cœur du launcher s'est arrêté avec le code 3\./,
 		code: false
 	}
 	: {
-		title: 'The game stopped',
-		problem: /problem\s+the game stopped with the code 3/,
+		title: 'Le jeu s\'est arrêté',
+		problem: /problème\s+le jeu s'est arrêté avec le code 3/,
 		code: true
 	};
 
@@ -117,22 +117,22 @@ record('the report opens by itself', report.title === expected.title, report.tit
 record('the report says what happened', expected.problem.test(report.text), report.text.split('\n')[2] || '');
 record(
 	`the exit code line ${expected.code ? 'is' : 'is not'} in the report`,
-	/exit code\s+3/.test(report.text) === expected.code,
+	/code sortie\s+3/.test(report.text) === expected.code,
 	report.text.split('\n').slice(2, 4).join(' | ')
 );
 record('the version and the loader are in the report',
 	/version\s+1\.21\.11/.test(report.text) && /loader\s+\d/.test(report.text),
 	`${report.text.split('\n')[3]} | ${report.text.split('\n')[4]}`);
 record('the session file of the crash is named', /session\s+session-\d{8}-\d{6}\.log/.test(report.text), report.text.split('\n')[6] || '');
-record('the last lines of the session are included', /last lines/.test(report.text) && report.text.split('\n').length > 9);
-record('the report is offered for copying', report.confirm === 'Copy report', report.confirm);
+record('the last lines of the session are included', /dernières lignes/.test(report.text) && report.text.split('\n').length > 9);
+record('the report is offered for copying', report.confirm === 'Copier le rapport', report.confirm);
 record('the interface is idle behind the report', report.launching === false && report.launchDisabled === false,
 	JSON.stringify({ launching: report.launching, disabled: report.launchDisabled }));
 
 await clickElement('#modal-confirm');
 // The toast of the crash is still on screen: the confirmation is looked for among all of them.
 await waitFor(
-	`Array.from(document.querySelectorAll('#toasts .toast')).some((toast) => toast.textContent.includes('copied'))`,
+	`Array.from(document.querySelectorAll('#toasts .toast')).some((toast) => toast.textContent.includes('copié'))`,
 	'the confirmation of the copy',
 	15000
 );
@@ -141,7 +141,7 @@ const copied = await evaluate(`(() => {
 	const toasts = Array.from(document.querySelectorAll('#toasts .toast')).map((toast) => toast.textContent);
 	return { modalHidden: document.querySelector('#modal').hidden, last: toasts[toasts.length - 1] };
 })()`);
-record('the report is copied and the dialog closes', copied.modalHidden === true && copied.last === 'The report was copied.', JSON.stringify(copied));
+record('the report is copied and the dialog closes', copied.modalHidden === true && copied.last === 'Le rapport a été copié.', JSON.stringify(copied));
 
 // --- Open the logs -------------------------------------------------------------------------
 // The report also leads to the session it was built from: one click instead of a search.

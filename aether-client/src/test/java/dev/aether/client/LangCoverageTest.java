@@ -22,7 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * <p>The game prints the raw translation key when a key is missing: the controls screen showed
  * {@code key.aether.click_gui} and {@code key.aether.kill_aura} because the mod shipped no
  * {@code en_us.json} at all. This test keeps the file complete: every module that creates a keybind,
- * and the two keys of the client, must have a label.</p>
+ * and the three screen keys of the client, must have a label.</p>
  */
 class LangCoverageTest {
 
@@ -49,16 +49,19 @@ class LangCoverageTest {
 	void labelsAreRealLabels() throws IOException {
 		String lang = Files.readString(LANG, StandardCharsets.UTF_8);
 		assertTrue(lang.contains("\"key.aether.click_gui\": \"Click GUI\""), "the click GUI key has no label");
-		assertTrue(lang.contains("\"key.aether.hud_editor\": \"Aether configuration\""),
+		assertTrue(lang.contains("\"key.aether.config\": \"Aether configuration\""),
 				"the configuration key has no label");
+		assertTrue(lang.contains("\"key.aether.hud_editor\": \"HUD editor\""),
+				"the HUD editor key has no label");
 	}
 
 	/**
-	 * @return every {@code key.aether.…} the client can display: the two fixed keys, plus the key of
-	 *         each module, built from its name the same way {@code Module.createKeyBinding} does.
+	 * @return every {@code key.aether.…} the client can display: the three screen keys, plus the key
+	 *         of each module, built from its name the same way {@code Module.createKeyBinding} does.
 	 */
 	private static List<String> requestedKeys() throws IOException {
-		List<String> keys = new ArrayList<>(List.of("key.aether.click_gui", "key.aether.hud_editor"));
+		List<String> keys = new ArrayList<>(List.of(
+				"key.aether.click_gui", "key.aether.config", "key.aether.hud_editor"));
 		Pattern constructor = Pattern.compile("super\\(\"([^\"]+)\"");
 		Pattern keybind = Pattern.compile("new KeyMapping\\(\\s*\"(key\\.aether\\.[a-z_]+)\"");
 

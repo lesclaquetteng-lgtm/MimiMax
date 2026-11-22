@@ -48,6 +48,23 @@ class EspTargetsTest {
 	}
 
 	@Test
+	@DisplayName("squared distances preserve the ESP range boundary without a square root")
+	void squaredDistanceSelectionUsesTheSameStrictBoundary() {
+		assertTrue(EspTargets.selectsSquared("All", true, (EspTargets.RANGE - 0.5) * (EspTargets.RANGE - 0.5)));
+		assertFalse(EspTargets.selectsSquared("All", true, EspTargets.RANGE_SQUARED));
+		assertFalse(EspTargets.selectsSquared("All", true, Double.NaN));
+	}
+
+	@Test
+	@DisplayName("ESP leaves glow tags owned by other systems untouched")
+	void onlyOwnsGlowItAddedItself() {
+		assertTrue(EspTargets.shouldTrackGlow(false, false), "a new glow is owned by ESP");
+		assertFalse(EspTargets.shouldTrackGlow(false, true), "an existing game glow is not adopted");
+		assertTrue(EspTargets.shouldTrackGlow(true, true), "ESP keeps tracking its own active glow");
+		assertTrue(EspTargets.shouldTrackGlow(true, false), "a removed ESP glow is restored on the next tick");
+	}
+
+	@Test
 	@DisplayName("an entity that leaves the range is released")
 	void leavingTheRangeIsReleased() {
 		assertEquals(ids(2), EspTargets.stale(ids(1, 2, 3), ids(1, 3)));

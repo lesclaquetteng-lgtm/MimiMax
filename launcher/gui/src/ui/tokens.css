@@ -1,23 +1,35 @@
 /**
- * Aether Client — design tokens.
+ * CUBE Launcher — design tokens.
  *
- * This file is the only place a colour, a size, a radius or a duration is written. Every rule of
- * the interface reads these names.
+ * One place for every colour, radius, duration and font. The four material blocks below are the
+ * contract shared with the in-game client (`AetherDesignSystem.java`): their order and their 12
+ * channels must not change, `node tools/check-aether-design-system.mjs` compares them.
  *
- * Identity — "graphite": a near-black base, two levels of surface separated by a hairline, and one
- * accent that only ever marks an action, the current page, a focus ring or a live dot. The accent
- * is neutral by default (a warm graphite white) and stays replaceable by the player: the tints are
- * derived from whatever accent the interface wears, never frozen on the shipped one.
- *
- * `node tools/check-theme-tokens.mjs` fails when a `var(--…)` of the interface has no definition
- * here, and when the same token is declared twice.
+ * The launcher itself is built around a fifth, warmer signal: `--brand`, a voxel green whose hue
+ * follows the "Teinte de l'interface" control. `--accent` stays the material accent of the
+ * Identity Studio, so the two ideas never fight for the same pixel.
  */
+
+@font-face {
+	font-family: "Inter";
+	src: url("fonts/Inter-Variable.woff2") format("woff2");
+	font-weight: 100 900;
+	font-style: normal;
+	font-display: swap;
+}
+
+@font-face {
+	font-family: "Press Start 2P";
+	src: url("fonts/Press-Start-2P-400.woff2") format("woff2");
+	font-weight: 400;
+	font-style: normal;
+	font-display: swap;
+}
+
 :root {
 	color-scheme: dark;
 
 	/* ---------------------------------------------------------------- colourways */
-	/* Four deliberately restrained materials. The active aliases below are the only tokens the
-	 * components consume; app.js switches the aliases without redefining a token in another file. */
 	--palette-graphite-bg: #0a0b0d;
 	--palette-graphite-bg-elevated: #0d0f12;
 	--palette-graphite-surface: #121418;
@@ -70,7 +82,7 @@
 	--palette-blueprint-text-muted: #8198a7;
 	--palette-blueprint-text-dim: #708a9b;
 
-	/* Active palette aliases: the controller changes these at runtime. */
+	/* Active palette aliases: app.js changes these at runtime. */
 	--palette-bg: var(--palette-graphite-bg);
 	--palette-bg-elevated: var(--palette-graphite-bg-elevated);
 	--palette-surface: var(--palette-graphite-surface);
@@ -92,11 +104,21 @@
 	--color-surface-active: var(--palette-surface-active);
 	--color-border: var(--palette-border);
 	--color-border-strong: var(--palette-border-strong);
-	--color-border-focus: var(--accent);
+	--color-border-focus: var(--brand);
+
+	/* ------------------------------------------------------------------ brand */
+	/* The hue is the one control the player has over the whole atmosphere. */
+	--brand-hue: 96;
+	--brand-sat: 68%;
+	--brand: hsl(var(--brand-hue) var(--brand-sat) 62%);
+	--brand-strong: hsl(var(--brand-hue) calc(var(--brand-sat) + 6%) 48%);
+	--brand-deep: hsl(var(--brand-hue) calc(var(--brand-sat) + 10%) 28%);
+	--brand-soft: hsl(var(--brand-hue) var(--brand-sat) 62% / 0.16);
+	--brand-line: hsl(var(--brand-hue) var(--brand-sat) 62% / 0.34);
+	--brand-ink: #08110a;
+	--brand-glow: 0 0 32px hsl(var(--brand-hue) var(--brand-sat) 62% / 0.22);
 
 	/* ----------------------------------------------------------------- accents */
-	/* The personal signal is optional: the palette supplies the identity when no custom colour
-	 * has been selected by the player. */
 	--color-accent: var(--palette-accent);
 
 	/* ------------------------------------------------------------------ status */
@@ -112,54 +134,113 @@
 	--color-text-primary: var(--palette-text-primary);
 	--color-text-secondary: var(--palette-text-secondary);
 	--color-text-muted: var(--palette-text-muted);
-	/* 4.7:1 on the graphite background: the third level is still read at 11 px, not guessed. */
 	--color-text-dim: var(--palette-text-dim);
 
 	/* ------------------------------------------------------------------- radii */
-	--radius-xs: 3px;
-	--radius-sm: 4px;
-	--radius-panel: 8px;
+	--radius-xs: 6px;
+	--radius-sm: 10px;
+	--radius-md: 14px;
+	--radius-panel: 20px;
+	--radius-lg: 28px;
 	--radius-full: 9999px;
 
 	/* -------------------------------------------------------------- elevation */
-	/* No glow anywhere: depth comes from the border and the surface steps. */
-	--shadow-md: 0 10px 30px rgba(0, 0, 0, 0.45);
-	--shadow-lg: 0 24px 60px rgba(0, 0, 0, 0.55);
-	--ring: 0 0 0 3px color-mix(in srgb, var(--color-border-focus) 22%, transparent);
+	--shadow-md: 0 12px 34px rgba(0, 0, 0, 0.42);
+	--shadow-lg: 0 28px 80px rgba(0, 0, 0, 0.55);
+	--shadow-card: 0 22px 60px rgba(0, 0, 0, 0.34), 0 2px 0 rgba(255, 255, 255, 0.035) inset;
+	--shadow-glow: 0 0 34px hsl(var(--brand-hue) var(--brand-sat) 62% / 0.18);
+	--ring: 0 0 0 3px hsl(var(--brand-hue) var(--brand-sat) 62% / 0.26);
 
 	/* --------------------------------------------------------------- typography */
-	--font-ui: "Segoe UI Variable Text", "Segoe UI", "SF Pro Text", system-ui, -apple-system, sans-serif;
-	--font-display: "Segoe UI Variable Display", "Segoe UI Semibold", "Segoe UI", system-ui, sans-serif;
+	--font-ui: "Inter", "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
+	--font-display: "Press Start 2P", "Cascadia Mono", ui-monospace, monospace;
 	--font-mono: "Cascadia Mono", "Cascadia Code", "JetBrains Mono", ui-monospace, monospace;
+	--text-xs: 10px;
 	--text-sm: 11px;
 	--text-base: 12px;
 	--text-md: 13px;
-	--text-lg: 15px;
-	--text-2xl: 32px;
+	--text-lg: 16px;
+	--text-xl: 20px;
+	--text-2xl: 30px;
+	--text-3xl: clamp(34px, 4.4vw, 54px);
+	--text-4xl: clamp(46px, 6.2vw, 82px);
+	--weight-regular: 400;
 	--weight-medium: 500;
 	--weight-semibold: 600;
-	--tracking-tight: -0.02em;
-	--tracking-wide: 0.02em;
-	--leading-base: 1.5;
+	--weight-bold: 700;
+	--weight-black: 800;
+	--tracking-tight: -0.035em;
+	--tracking-wide: 0.08em;
+	--tracking-huge: 0.2em;
+	--leading-base: 1.55;
 
 	/* ------------------------------------------------------------------- states */
-	--state-hover: rgba(255, 255, 255, 0.04);
-	--state-disabled-opacity: 0.4;
+	--state-hover: rgba(255, 255, 255, 0.05);
+	--state-disabled-opacity: 0.42;
 	--state-disabled-cursor: not-allowed;
 
-	/* Runtime values, written by `app.js`. */
+	/* Runtime values, written by app.js. */
 	--fill: 0%;
 	--accent-user: var(--color-accent);
-	--voxel-glass: rgba(10, 18, 28, 0.67);
-	--voxel-glass-strong: rgba(8, 15, 24, 0.92);
-	--voxel-edge: rgba(204, 235, 217, 0.15);
-	--voxel-glow: rgba(101, 236, 146, 0.16);
 	--on-accent: #0a0b0d;
 
 	/* ------------------------------------------------------------------- motion */
 	--ease-out-expo: cubic-bezier(0.22, 1, 0.36, 1);
 	--ease: var(--ease-out-expo);
-	--dur-micro: 90ms;
-	--dur: 140ms;
-	--dur-page: 180ms;
+	--dur-micro: 110ms;
+	--dur: 190ms;
+	--dur-page: 320ms;
+	--dur-scene: 26s;
+
+	/* ------------------------------------------------------------ voxel scene */
+	--scene-sky-top: #050b08;
+	--scene-sky-mid: #07130d;
+	--scene-sky-low: #0b1c13;
+	--scene-sun: #e9f7c9;
+	--scene-sun-glow: hsl(var(--brand-hue) var(--brand-sat) 62% / 0.2);
+	--scene-star: #dff5e9;
+	--scene-hill-far: #0c1d15;
+	--scene-hill-mid: #081510;
+	--scene-hill-near: #050d09;
+	--scene-cube-top: hsl(var(--brand-hue) var(--brand-sat) 46% / 0.55);
+	--scene-cube-left: hsl(var(--brand-hue) var(--brand-sat) 34% / 0.5);
+	--scene-cube-right: hsl(var(--brand-hue) var(--brand-sat) 24% / 0.55);
+	--scene-particle: hsl(var(--brand-hue) var(--brand-sat) 72% / 0.85);
+	--scene-fog: rgba(4, 10, 7, 0.9);
+	--scene-grid: hsl(var(--brand-hue) var(--brand-sat) 62% / 0.055);
+
+	/* ------------------------------------------------------------------- glass */
+	--glass: rgba(8, 17, 12, 0.62);
+	--glass-strong: rgba(6, 13, 9, 0.88);
+	--glass-line: rgba(196, 232, 204, 0.13);
+	--glass-line-strong: rgba(196, 232, 204, 0.24);
+	--glass-highlight: rgba(255, 255, 255, 0.06);
+	--glass-blur: 22px;
+	--shine: rgba(255, 255, 255, 0.26);
+
+	/* -------------------------------------------------------------------- rail */
+	--rail-bg: rgba(6, 13, 9, 0.82);
+	--rail-line: rgba(196, 232, 204, 0.14);
+	--rail-width: 248px;
+	--titlebar-height: 38px;
+
+	/* ------------------------------------------------------------------ aliases */
+	--bg: var(--color-bg);
+	--surface: var(--color-surface);
+	--surface-hover: var(--color-surface-hover);
+	--surface-active: var(--color-surface-active);
+	--line: var(--color-border);
+	--line-strong: var(--color-border-strong);
+	--text: var(--color-text-primary);
+	--text-secondary: var(--color-text-secondary);
+	--text-muted: var(--color-text-muted);
+	--text-dim: var(--color-text-dim);
+	--accent: var(--accent-user, var(--color-accent));
+	--accent-ink: var(--on-accent);
+	--accent-soft: color-mix(in srgb, var(--accent) 26%, transparent);
+	--danger-text: var(--color-danger-text);
+	--success: var(--color-success);
+	--success-text: var(--color-success-text);
+	--warning: var(--color-warning);
+	--warning-text: var(--color-warning-text);
 }

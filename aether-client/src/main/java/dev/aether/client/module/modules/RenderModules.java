@@ -18,6 +18,7 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 
 import java.util.LinkedHashSet;
+import java.util.Iterator;
 import java.util.Set;
 
 /**
@@ -32,6 +33,7 @@ public final class RenderModules {
 	 */
 	public static class Fullbright extends Module {
 		private final BooleanSetting gamma = register(new BooleanSetting("Gamma", "Uses the gamma setting instead of a night vision effect", true));
+		private double previousGamma;
 
 		public Fullbright() {
 			super("Fullbright", "Removes the darkness of the world", ModuleCategory.RENDER, false);
@@ -40,6 +42,7 @@ public final class RenderModules {
 		@Override
 		public void onEnable() {
 			Minecraft minecraft = Minecraft.getInstance();
+			previousGamma = minecraft.options.gamma().get();
 			if (gamma.isEnabled()) {
 				minecraft.options.gamma().set(1.0);
 			}
@@ -47,7 +50,7 @@ public final class RenderModules {
 
 		@Override
 		public void onDisable() {
-			Minecraft.getInstance().options.gamma().set(0.5);
+			Minecraft.getInstance().options.gamma().set(previousGamma);
 		}
 	}
 
@@ -55,7 +58,8 @@ public final class RenderModules {
 	 * Changes the field of view of the game.
 	 */
 	public static class Fov extends Module {
-		private final IntegerSetting value = register(new IntegerSetting("Value", "The field of view of the player", 90, 30, 170));
+		private final IntegerSetting value = register(new IntegerSetting("Value", "The field of view of the player", 90, 30, 110));
+		private int previousFov;
 
 		public Fov() {
 			super("FOV", "Changes the field of view", ModuleCategory.RENDER, false);
@@ -63,12 +67,14 @@ public final class RenderModules {
 
 		@Override
 		public void onEnable() {
-			Minecraft.getInstance().options.fov().set(value.get());
+			Minecraft minecraft = Minecraft.getInstance();
+			previousFov = minecraft.options.fov().get();
+			minecraft.options.fov().set(value.get());
 		}
 
 		@Override
 		public void onDisable() {
-			Minecraft.getInstance().options.fov().set(70);
+			Minecraft.getInstance().options.fov().set(previousFov);
 		}
 
 		@Override
@@ -84,18 +90,22 @@ public final class RenderModules {
 	 * Stops the camera from moving while the player walks.
 	 */
 	public static class NoViewBobbing extends Module {
+		private boolean previousViewBobbing;
+
 		public NoViewBobbing() {
 			super("No View Bobbing", "Stops the camera from moving while walking", ModuleCategory.RENDER, false);
 		}
 
 		@Override
 		public void onEnable() {
-			Minecraft.getInstance().options.bobView().set(false);
+			Minecraft minecraft = Minecraft.getInstance();
+			previousViewBobbing = minecraft.options.bobView().get();
+			minecraft.options.bobView().set(false);
 		}
 
 		@Override
 		public void onDisable() {
-			Minecraft.getInstance().options.bobView().set(true);
+			Minecraft.getInstance().options.bobView().set(previousViewBobbing);
 		}
 	}
 
@@ -211,6 +221,8 @@ public final class RenderModules {
 
 		/** The entities this module is currently keeping glowing. */
 		private final Set<Integer> glowing = new LinkedHashSet<>();
+		/** Reused scratch set; allocating two sets for every client tick caused avoidable GC churn. */
+		private final Set<Integer> current = new LinkedHashSet<>();
 
 		/** The level the ids in {@link #glowing} belong to, null when there is none. */
 		private ClientLevel trackedLevel;
@@ -223,8 +235,7 @@ public final class RenderModules {
 		public void onTick() {
 			Minecraft minecraft = Minecraft.getInstance();
 			if (minecraft.level == null || minecraft.player == null) {
-				unmark(minecraft, EspTargets.stale(glowing, Set.of()));
-				glowing.clear();
+				unmarkAll(minecraft);
 				trackedLevel = null;
 				return;
 			}
@@ -238,41 +249,61 @@ public final class RenderModules {
 				trackedLevel = minecraft.level;
 			}
 
-			Set<Integer> current = new LinkedHashSet<>();
-			for (Entity entity : minecraft.level.entitiesForRendering()) {
-				if (entity == minecraft.player || !(entity instanceof LivingEntity)) {
+			current.clear();
+			String targetMode = targets.get();
+			for (LivingEntity entity : minecraft.level.getEntitiesOfClass(LivingEntity.class,
+					minecraft.player.getBoundingBox().inflate(EspTargets.RANGE))) {
+				if (entity == minecraft.player) {
 					continue;
 				}
-				if (!EspTargets.selects(targets.get(), entity instanceof Player, entity.distanceTo(minecraft.player))) {
+				if (!EspTargets.selectsSquared(targetMode, entity instanceof Player,
+						entity.distanceToSqr(minecraft.player))) {
 					continue;
 				}
-				entity.setGlowingTag(true);
-				current.add(entity.getId());
+				int id = entity.getId();
+				boolean alreadyTracked = glowing.contains(id);
+				boolean currentlyGlowing = entity.isCurrentlyGlowing();
+				if (EspTargets.shouldTrackGlow(alreadyTracked, currentlyGlowing)) {
+					if (!currentlyGlowing) {
+						entity.setGlowingTag(true);
+					}
+					current.add(id);
+				}
 			}
 
-			unmark(minecraft, EspTargets.stale(glowing, current));
-			glowing.clear();
+			Iterator<Integer> previous = glowing.iterator();
+			while (previous.hasNext()) {
+				int id = previous.next();
+				if (!current.contains(id)) {
+					Entity entity = minecraft.level.getEntity(id);
+					if (entity != null) {
+						entity.setGlowingTag(false);
+					}
+					previous.remove();
+				}
+			}
 			glowing.addAll(current);
 		}
 
 		@Override
 		public void onDisable() {
 			Minecraft minecraft = Minecraft.getInstance();
-			unmark(minecraft, EspTargets.stale(glowing, Set.of()));
-			glowing.clear();
+			unmarkAll(minecraft);
 		}
 
-		/** Removes the glow this module added to the given entities. */
-		private void unmark(Minecraft minecraft, Set<Integer> ids) {
+		/** Removes the glow this module added to its tracked entities. */
+		private void unmarkAll(Minecraft minecraft) {
 			if (minecraft.level == null) {
+				glowing.clear();
 				return;
 			}
-			for (int id : ids) {
+			for (int id : glowing) {
 				Entity entity = minecraft.level.getEntity(id);
 				if (entity != null) {
 					entity.setGlowingTag(false);
 				}
 			}
+			glowing.clear();
 		}
 	}
 

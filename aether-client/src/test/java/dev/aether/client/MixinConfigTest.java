@@ -121,15 +121,17 @@ class MixinConfigTest {
 	}
 
 	@Test
-	@DisplayName("every mixin patches a class of the game")
+	@DisplayName("every mixin patches Minecraft or its bundled Realms client")
 	void everyMixinPatchesAGameClass() throws Exception {
 		for (String name : readMixinNames()) {
 			Class<?> mixin = Class.forName(name);
 			String target = readTargetOf(mixin);
 
 			assertNotNull(target, name + " does not declare a target class");
-			assertTrue(target.startsWith("net.minecraft."),
-					name + " patches " + target + " which is not a class of the game");
+			boolean isMinecraftTarget = target.startsWith("net.minecraft.");
+			boolean isBundledRealmsTarget = target.startsWith("com.mojang.realmsclient.");
+			assertTrue(isMinecraftTarget || isBundledRealmsTarget,
+					name + " patches " + target + " which is not part of the Minecraft client");
 		}
 	}
 

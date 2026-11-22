@@ -21,7 +21,8 @@ loom {
 		client {
 			client()
 			ideConfigGenerated true
-			runDir 'run'
+			// Keep automated launch checks away from the developer's saved worlds and settings.
+			runDir providers.gradleProperty('clientRunDir').getOrElse('run')
 		}
 	}
 }

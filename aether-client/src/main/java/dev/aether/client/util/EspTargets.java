@@ -19,6 +19,8 @@ public final class EspTargets {
 
 	/** The distance, in blocks, inside which an entity is highlighted. */
 	public static final double RANGE = 64.0;
+	/** Squared form avoids a square root for every entity scanned by the tick callback. */
+	public static final double RANGE_SQUARED = RANGE * RANGE;
 
 	private EspTargets() {
 	}
@@ -32,7 +34,12 @@ public final class EspTargets {
 	 * @return whether the entity has to glow
 	 */
 	public static boolean selects(String mode, boolean player, double distance) {
-		if (!(distance < RANGE)) {
+		return selectsSquared(mode, player, distance * distance);
+	}
+
+	/** Same selection using squared distance, for hot loops that already have a squared metric. */
+	public static boolean selectsSquared(String mode, boolean player, double distanceSquared) {
+		if (!(distanceSquared < RANGE_SQUARED)) {
 			// Also rejects a distance that is not a number: an entity at an unknown position has no
 			// business being highlighted.
 			return false;
@@ -44,6 +51,11 @@ public final class EspTargets {
 			return !player;
 		}
 		return true;
+	}
+
+	/** Whether ESP should own a glow tag, preserving glow state that another system already set. */
+	public static boolean shouldTrackGlow(boolean alreadyTracked, boolean alreadyGlowing) {
+		return alreadyTracked || !alreadyGlowing;
 	}
 
 	/**

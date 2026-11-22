@@ -157,7 +157,8 @@ public final class CombatModules {
 			Entity closest = null;
 			double closestDistance = maxRangeSquared;
 
-			for (Entity entity : minecraft.level.entitiesForRendering()) {
+			for (Entity entity : minecraft.level.getEntitiesOfClass(Entity.class,
+					minecraft.player.getBoundingBox().inflate(range.get()))) {
 				if (entity == minecraft.player || !entity.isAlive()) {
 					continue;
 				}
@@ -256,8 +257,9 @@ public final class CombatModules {
 			EndCrystal closest = null;
 			double closestDistance = maxRangeSquared;
 
-			for (Entity entity : minecraft.level.entitiesForRendering()) {
-				if (!(entity instanceof EndCrystal crystal) || !crystal.isAlive()) {
+			for (EndCrystal crystal : minecraft.level.getEntitiesOfClass(EndCrystal.class,
+					minecraft.player.getBoundingBox().inflate(range.get()))) {
+				if (!crystal.isAlive()) {
 					continue;
 				}
 				double distance = crystal.distanceToSqr(minecraft.player);

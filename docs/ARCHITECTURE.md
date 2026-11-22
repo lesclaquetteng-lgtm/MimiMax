@@ -63,7 +63,7 @@ Key properties:
 ### Native shell (`launcher/desktop`)
 
 Tauri 2 serves the interface to the system WebView2 runtime. There is no bundled browser: the shell
-is a single ~8.75 MB executable, the backend is the same language as the core, and the interface files
+is a single ~8.90 MB executable, the backend is the same language as the core, and the interface files
 are the same ones the previous Electron shell loaded.
 
 | File | Responsibility |
@@ -88,7 +88,7 @@ objects are disabled, the base URL and form targets are restricted to the local 
 `freezePrototype` prevents page scripts from modifying built-in JavaScript prototypes.
 
 **Why the shell is native and not Electron.** The Electron build shipped a whole Chromium for a
-launcher: ~150 MB installed against one ~8.75 MB executable, and it added a Node runtime next to the
+launcher: ~150 MB installed against one ~8.90 MB executable, and it added a Node runtime next to the
 Rust core for no benefit (the interface calls the core over JSON either way). The cost of the move
 was the shell only — not the interface, not the core, not the module system.
 

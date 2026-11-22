@@ -156,14 +156,7 @@ impl Launcher {
 
     /// The profile that applies to the selected account, the one the interface shows.
     pub fn active_profile(&self) -> settings::Profile {
-        let chosen = self
-            .accounts
-            .selected
-            .as_deref()
-            .and_then(|id| self.accounts.find(id))
-            .and_then(|account| account.profile.clone());
-
-        self.settings.profile_for(chosen.as_deref())
+        settings::Profile::from_settings(&self.settings)
     }
 
     /// Adds a profile, it replaces one with the same name.
@@ -288,6 +281,11 @@ impl Launcher {
         )
     }
 
+	/// Creates a hosted server using the newest Fabric loader for the chosen Minecraft version.
+	pub fn create_hosted_server_for_version(&self, name: &str, port: u16, max_players: u32, game_version: &str) -> Result<hosting::HostedServer, String> {
+		hosting::create_for_version(&self.paths, name, port, max_players, game_version)
+	}
+
     /// Starts a local server in the background.
     pub fn start_hosted_server(&self, name: &str) -> Result<hosting::HostedServer, String> {
         hosting::start(&self.paths, name)
@@ -375,8 +373,8 @@ impl Launcher {
         cancel: &std::sync::atomic::AtomicBool,
         on_progress: impl FnMut(&InstallProgress),
     ) -> Result<(String, String, String), installer::InstallError> {
-        // An installation without explicit versions uses the profile of the selected account.
-        let profile = self.active_profile();
+        // Installation defaults to the launcher-wide version settings.
+        let profile = settings::Profile::from_settings(&self.settings);
 
         let game_version = game_version
             .map(|value| value.to_string())
@@ -456,8 +454,8 @@ impl Launcher {
                 .ok_or_else(|| "the account does not exist".to_string())?;
         }
 
-        // The profile of the account decides the version, the loader and the resources it runs with.
-        let profile = self.settings.profile_for(account.profile.as_deref());
+        // Launcher-wide game settings apply to every account. Account identity remains separate.
+        let profile = settings::Profile::from_settings(&self.settings);
 
         let game_version = game_version
             .map(|value| value.to_string())

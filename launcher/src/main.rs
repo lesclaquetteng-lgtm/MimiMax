@@ -492,6 +492,39 @@ fn command_mods(arguments: &[String]) -> Result<(), String> {
     let flags = Flags::parse(arguments);
 
     match flags.positional.first().map(|value| value.as_str()) {
+		Some("search") => {
+			let query = flags.positional.get(1).map(String::as_str).unwrap_or("").trim();
+			if query.len() < 2 { return Err("Entre au moins deux caractères pour rechercher un mod.".to_string()); }
+			let version = flags.get("version").unwrap_or(&launcher.settings.game_version);
+            let encoded = urlencoding::encode(query);
+			let url = format!("https://api.modrinth.com/v2/search?query={}&facets=%5B%5B%22project_type%3Amod%22%5D%5D&limit=24", encoded);
+			let result: serde_json::Value = ureq::get(&url).call().map_err(|e| e.to_string())?.into_json().map_err(|e| e.to_string())?;
+			let hits = result.get("hits").and_then(serde_json::Value::as_array).cloned().unwrap_or_default();
+			let mut mods = Vec::new();
+			for hit in hits {
+				let Some(slug) = hit.get("slug").and_then(serde_json::Value::as_str) else { continue };
+				let version_url = format!("https://api.modrinth.com/v2/project/{}/version?loaders=%5B%22fabric%22%5D&game_versions=%5B%22{}%22%5D", slug, version);
+				let compatible = ureq::get(&version_url).call().map(|response| response.into_json::<Vec<serde_json::Value>>().map(|versions| !versions.is_empty()).unwrap_or(false)).unwrap_or(false);
+				mods.push(serde_json::json!({
+					"slug": slug,
+					"title": hit.get("title").and_then(serde_json::Value::as_str).unwrap_or(slug),
+					"description": hit.get("description").and_then(serde_json::Value::as_str).unwrap_or(""),
+					"downloads": hit.get("downloads").and_then(serde_json::Value::as_u64).unwrap_or(0),
+					"iconUrl": hit.get("icon_url").cloned().unwrap_or(serde_json::Value::Null),
+					"compatible": compatible
+				}));
+			}
+			emit(&serde_json::json!({"ok": true, "gameVersion": version, "mods": mods}));
+			Ok(())
+		}
+		Some("install") => {
+			let slug = flags.positional.get(1).ok_or_else(|| "usage: mods install <slug> [--version <version>]".to_string())?;
+			let version = flags.get("version").unwrap_or(&launcher.settings.game_version);
+			let report = aether_launcher::performance::install(&launcher.paths, version, std::slice::from_ref(slug), |_| {});
+			if !report.failed.is_empty() { return Err(report.failed[0].error.clone()); }
+			emit(&serde_json::json!({"ok": true, "installed": report.installed, "skipped": report.skipped, "mods": launcher.mods()}));
+			Ok(())
+		}
         Some("list") | None => {
             emit(&serde_json::json!({
                 "ok": true,
@@ -683,6 +716,12 @@ fn command_hosts(arguments: &[String]) -> Result<(), String> {
             let name = name()?;
             let port = flags.number("port").unwrap_or(25565) as u16;
             let max_players = flags.number("max-players").unwrap_or(20);
+			if let Some(version) = flags.get("version") {
+				let server = launcher.create_hosted_server_for_version(&name, port, max_players, version)?;
+				let address = aether_launcher::hosting::local_address(server.port);
+				emit(&serde_json::json!({"ok": true, "server": server, "address": address, "servers": launcher.hosted_servers()}));
+				return Ok(());
+			}
             let online_mode = flags
                 .get("online-mode")
                 .map(|value| value == "true" || value == "1")

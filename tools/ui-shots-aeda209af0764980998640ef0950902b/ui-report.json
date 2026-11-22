@@ -1,0 +1,276 @@
+{
+  "layout": [
+    {
+      "page": "play",
+      "viewport": {
+        "width": 1180,
+        "height": 760
+      },
+      "documentOverflow": 0,
+      "contentOverflow": 0,
+      "contentVertical": 1268,
+      "offenders": [],
+      "size": "1180x760"
+    },
+    {
+      "page": "accounts",
+      "viewport": {
+        "width": 1180,
+        "height": 760
+      },
+      "documentOverflow": 0,
+      "contentOverflow": 0,
+      "contentVertical": 0,
+      "offenders": [],
+      "size": "1180x760"
+    },
+    {
+      "page": "worlds",
+      "viewport": {
+        "width": 1180,
+        "height": 760
+      },
+      "documentOverflow": 0,
+      "contentOverflow": 0,
+      "contentVertical": 0,
+      "offenders": [],
+      "size": "1180x760"
+    },
+    {
+      "page": "mods",
+      "viewport": {
+        "width": 1180,
+        "height": 760
+      },
+      "documentOverflow": 0,
+      "contentOverflow": 0,
+      "contentVertical": 128,
+      "offenders": [],
+      "size": "1180x760"
+    },
+    {
+      "page": "servers",
+      "viewport": {
+        "width": 1180,
+        "height": 760
+      },
+      "documentOverflow": 0,
+      "contentOverflow": 0,
+      "contentVertical": 68,
+      "offenders": [],
+      "size": "1180x760"
+    },
+    {
+      "page": "performance",
+      "viewport": {
+        "width": 1180,
+        "height": 760
+      },
+      "documentOverflow": 0,
+      "contentOverflow": 0,
+      "contentVertical": 822,
+      "offenders": [
+        {
+          "key": "BUTTON.preset-card",
+          "scrollWidth": 121,
+          "clientWidth": 114
+        },
+        {
+          "key": "SPAN.preset-card-info",
+          "scrollWidth": 74,
+          "clientWidth": 58
+        },
+        {
+          "key": "SPAN.preset-card-title",
+          "scrollWidth": 74,
+          "clientWidth": 58
+        }
+      ],
+      "size": "1180x760"
+    },
+    {
+      "page": "logs",
+      "viewport": {
+        "width": 1180,
+        "height": 760
+      },
+      "documentOverflow": 0,
+      "contentOverflow": 0,
+      "contentVertical": 227,
+      "offenders": [],
+      "size": "1180x760"
+    },
+    {
+      "page": "settings",
+      "viewport": {
+        "width": 1180,
+        "height": 760
+      },
+      "documentOverflow": 0,
+      "contentOverflow": 0,
+      "contentVertical": 652,
+      "offenders": [],
+      "size": "1180x760"
+    },
+    {
+      "page": "play",
+      "viewport": {
+        "width": 940,
+        "height": 620
+      },
+      "documentOverflow": 0,
+      "contentOverflow": 0,
+      "contentVertical": 2300,
+      "offenders": [],
+      "size": "940x620"
+    },
+    {
+      "page": "accounts",
+      "viewport": {
+        "width": 940,
+        "height": 620
+      },
+      "documentOverflow": 0,
+      "contentOverflow": 0,
+      "contentVertical": 5,
+      "offenders": [],
+      "size": "940x620"
+    },
+    {
+      "page": "worlds",
+      "viewport": {
+        "width": 940,
+        "height": 620
+      },
+      "documentOverflow": 0,
+      "contentOverflow": 0,
+      "contentVertical": 328,
+      "offenders": [],
+      "size": "940x620"
+    },
+    {
+      "page": "mods",
+      "viewport": {
+        "width": 940,
+        "height": 620
+      },
+      "documentOverflow": 0,
+      "contentOverflow": 0,
+      "contentVertical": 249,
+      "offenders": [],
+      "size": "940x620"
+    },
+    {
+      "page": "servers",
+      "viewport": {
+        "width": 940,
+        "height": 620
+      },
+      "documentOverflow": 0,
+      "contentOverflow": 0,
+      "contentVertical": 189,
+      "offenders": [],
+      "size": "940x620"
+    },
+    {
+      "page": "performance",
+      "viewport": {
+        "width": 940,
+        "height": 620
+      },
+      "documentOverflow": 0,
+      "contentOverflow": 0,
+      "contentVertical": 1341,
+      "offenders": [],
+      "size": "940x620"
+    },
+    {
+      "page": "logs",
+      "viewport": {
+        "width": 940,
+        "height": 620
+      },
+      "documentOverflow": 0,
+      "contentOverflow": 0,
+      "contentVertical": 348,
+      "offenders": [],
+      "size": "940x620"
+    },
+    {
+      "page": "settings",
+      "viewport": {
+        "width": 940,
+        "height": 620
+      },
+      "documentOverflow": 0,
+      "contentOverflow": 0,
+      "contentVertical": 1141,
+      "offenders": [],
+      "size": "940x620"
+    },
+    {
+      "page": "servers",
+      "viewport": {
+        "width": 940,
+        "height": 620
+      },
+      "documentOverflow": 0,
+      "contentOverflow": 0,
+      "contentVertical": 224,
+      "offenders": [],
+      "size": "940x620"
+    },
+    {
+      "page": "performance",
+      "viewport": {
+        "width": 940,
+        "height": 620
+      },
+      "documentOverflow": 0,
+      "contentOverflow": 0,
+      "contentVertical": 1341,
+      "offenders": [],
+      "size": "940x620"
+    }
+  ],
+  "pages": {
+    "servers": {
+      "buttons": [
+        "Ajouter le serveur",
+        "Tester l'adresse",
+        "Rejoindre",
+        "Tester",
+        "Retirer"
+      ],
+      "serverRows": 1,
+      "hostRows": 0,
+      "hostText": [],
+      "count": "1 serveur",
+      "hostCount": "0 mondes"
+    },
+    "performance": {
+      "rows": 11,
+      "installed": 0,
+      "count": "0/11",
+      "jvm": "Preset actuel : balanced. Il s'applique au prochain lancement.",
+      "options": "Le options.txt d'origine est en place.",
+      "path": "C:\\Users\\ee\\Desktop\\MimiMax\\tools\\ui-home-aeda209af0764980998640ef0950902b\\.minecraft\\mods"
+    },
+    "mods": {
+      "count": "aucun mod",
+      "rows": 0,
+      "names": []
+    }
+  },
+  "interactions": {
+    "probe": "Premium uniquement : the server runs in online mode, a Microsoft account is required. 26803/200000 joueurs · 430 ms · Requires MC 1.8 / 1.21",
+    "serverRow": {
+      "text": "Hypixel\nmc.hypixel.net\n430 MS\n26803/200000\nHypixel Network [1.8/26.3] SB MAGIC FIND, ACCESSORY BAG REWORK\nRejoindre\nTester\nRetirer",
+      "buttons": [
+        "Rejoindre",
+        "Tester",
+        "Retirer"
+      ]
+    }
+  }
+}

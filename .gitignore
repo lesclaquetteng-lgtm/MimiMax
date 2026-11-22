@@ -42,6 +42,10 @@ tools/test-home/
 
 # Logs and temporary files
 *.log
+*.pdb
+
+# Logs written by the client at run time (*.log.gz keeps a rotated copy)
+aether-client/logs/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*

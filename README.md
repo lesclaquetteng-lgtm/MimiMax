@@ -348,21 +348,21 @@ cargo test --release --manifest-path desktop/Cargo.toml
 ```
 
 8 tests, including the embedded mod: that it is a real jar, and that its extraction replaces an older
-archive without leaving a temporary file behind. `tools/clean-install-check.ps1` proves the rest on a
+archive without leaving a temporary file behind. `tools/checks/clean-install-check.ps1` proves the rest on a
 clean machine (see `launcher/desktop/README.md`).
 
 ### Design tokens
 ```powershell
-node tools/check-theme-tokens.mjs
+node tools/checks/check-theme-tokens.mjs
 ```
 
 Fails when a `var(--…)` of the interface has no definition in `launcher/gui/src/ui/tokens.css`, or
-when the same token is declared in two files. `tools/capture-window.ps1` screenshots the real window
-and `tools/theme-probe.mjs` reads the computed theme over the DevTools protocol of WebView2.
-`tools/theme-sweep.mjs` walks the eight pages, exercises the accent control by clicking it, and
+when the same token is declared in two files. `tools/window/capture-window.ps1` screenshots the real window
+and `tools/checks/theme-probe.mjs` reads the computed theme over the DevTools protocol of WebView2.
+`tools/checks/theme-sweep.mjs` walks the eight pages, exercises the accent control by clicking it, and
 audits every page: unresolved tokens, text below the WCAG contrast floor, leftovers of the previous
 palette. Start the shell with `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS="--remote-debugging-port=9247"`,
-then `node tools/theme-sweep.mjs 9247 tools/theme-pages` (optionally a colour as a fourth argument).
+then `node tools/checks/theme-sweep.mjs 9247 tools/theme-pages` (optionally a colour as a fourth argument).
 With `AETHER_INSTALL_STATE=1` it also measures the interface during an installation, the only state
 that renders a `.btn--danger` (and it hovers it, where the danger colour is filled): start the shell
 on the fake core with `AETHER_FAKE_FAIL=install-slow`, then add `--install-only` to measure just that
@@ -392,7 +392,7 @@ $env:AETHER_HOME = "tools/ui-home"
 $env:AETHER_SHARED_DIR = "tools/aether-home/.minecraft"
 $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = "--remote-debugging-port=9233"
 & launcher/desktop/target/release/aether-desktop.exe
-node tools/ui-check.mjs 9233 tools/ui-shots
+node tools/checks/ui-check.mjs 9233 tools/ui-shots
 ```
 
 The behavioural end-to-end checks (failures, crash report, cancellation, timeouts, accessibility,
@@ -416,11 +416,16 @@ is refused in milliseconds without sending anything, a hit on a child counts as 
 ## Documentation
 
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) – component design and key decisions
-- [`launcher/desktop/README.md`](launcher/desktop/README.md) – Tauri build, installer and CDP recipe
 - [`docs/FEATURES.md`](docs/FEATURES.md) – user-facing features and modules
+- [`docs/DESIGN-SYSTEM.md`](docs/DESIGN-SYSTEM.md) – palette, type scale and layout rules
 - [`docs/VERIFICATION.md`](docs/VERIFICATION.md) – verification checklist and measured results
-- [`ANALYSE-AMELIORATIONS.md`](ANALYSE-AMELIORATIONS.md) – the improvement log, with the evidence of
-  each change (in French)
+- [`launcher/desktop/README.md`](launcher/desktop/README.md) – Tauri build, installer and CDP recipe
+- [`docs/rapports/ANALYSE-AMELIORATIONS.md`](docs/rapports/ANALYSE-AMELIORATIONS.md) – the improvement
+  log, with the evidence of each change (in French)
+- [`docs/rapports/RAPPORT-FINAL.md`](docs/rapports/RAPPORT-FINAL.md) – final specification and results
+  (in French)
+- [`docs/rapports/NETTOYAGE.md`](docs/rapports/NETTOYAGE.md) – repository layout and cleanup log (in
+  French)
 
 ## Licence
 
