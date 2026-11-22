@@ -9,8 +9,8 @@ use std::sync::Arc;
 
 use aether_launcher::accounts;
 use aether_launcher::game;
-use aether_launcher::logs;
 use aether_launcher::installer::{InstallError, InstallProgress};
+use aether_launcher::logs;
 use aether_launcher::minecraft;
 use aether_launcher::settings::Profile;
 use aether_launcher::Launcher;
@@ -34,6 +34,7 @@ fn main() {
         "versions" => command_versions(rest),
         "loaders" => command_loaders(rest),
         "install" => command_install(rest),
+        "verify" => command_verify(rest),
         "launch" => command_launch(rest),
         "stop" => command_stop(),
         "mods" => command_mods(rest),
@@ -74,14 +75,13 @@ impl Flags {
         while index < arguments.len() {
             let argument = &arguments[index];
             if let Some(name) = argument.strip_prefix("--") {
-                let value = if index + 1 < arguments.len()
-                    && !arguments[index + 1].starts_with("--")
-                {
-                    index += 1;
-                    arguments[index].clone()
-                } else {
-                    "true".to_string()
-                };
+                let value =
+                    if index + 1 < arguments.len() && !arguments[index + 1].starts_with("--") {
+                        index += 1;
+                        arguments[index].clone()
+                    } else {
+                        "true".to_string()
+                    };
                 values.push((name.to_string(), value));
             } else {
                 positional.push(argument.clone());
@@ -128,6 +128,8 @@ fn command_info() -> Result<(), String> {
         "settings": launcher.settings,
         // The profile that applies to the selected account, the one a launch would use.
         "profile": launcher.active_profile(),
+        // An installation that did not finish, so the interface can offer to resume or discard it.
+        "pendingInstall": launcher.pending_installation(),
     }));
     Ok(())
 }
@@ -209,7 +211,9 @@ fn command_account(arguments: &[String]) -> Result<(), String> {
                 .get(1)
                 .ok_or_else(|| "usage: account check <username>".to_string())?;
             let status = accounts::name_status(name).map_err(|error| error.to_string())?;
-            emit(&serde_json::json!({ "ok": true, "name": status.name, "premium": status.premium }));
+            emit(
+                &serde_json::json!({ "ok": true, "name": status.name, "premium": status.premium }),
+            );
         }
         Some("microsoft") => {
             // The code is printed first so that the interface can show it, the sign in is then
@@ -225,8 +229,8 @@ fn command_account(arguments: &[String]) -> Result<(), String> {
             }));
 
             let token = accounts::poll_device_code(&code).map_err(|error| error.to_string())?;
-            let account = accounts::complete_microsoft_login(&token)
-                .map_err(|error| error.to_string())?;
+            let account =
+                accounts::complete_microsoft_login(&token).map_err(|error| error.to_string())?;
             launcher.add_account(account.clone())?;
 
             // The last document of a command is its result, the interface reads it for the account.
@@ -274,7 +278,11 @@ fn command_loaders(arguments: &[String]) -> Result<(), String> {
 fn command_profiles(arguments: &[String]) -> Result<(), String> {
     let mut launcher = Launcher::open();
     let flags = Flags::parse(arguments);
-    let action = flags.positional.first().map(String::as_str).unwrap_or("list");
+    let action = flags
+        .positional
+        .first()
+        .map(String::as_str)
+        .unwrap_or("list");
 
     let argument = |index: usize, usage: &str| -> Result<String, String> {
         flags
@@ -386,6 +394,18 @@ fn command_install(arguments: &[String]) -> Result<(), String> {
     let mut launcher = Launcher::open();
     let flags = Flags::parse(arguments);
 
+    // `--discard` closes an interrupted run instead of starting one: the journal and the partial
+    // files go, nothing else. The next `install` then starts from a known state.
+    if flag_set(&flags, "discard") {
+        let removed = launcher.discard_pending_installation()?;
+        emit(&serde_json::json!({
+            "ok": true,
+            "discarded": removed,
+            "pendingInstall": launcher.pending_installation(),
+        }));
+        return Ok(());
+    }
+
     // The interface asks for the stop by writing `cancel` on the standard input, the installation
     // runs in this process and has no other channel back to it.
     let cancel = Arc::new(AtomicBool::new(false));
@@ -429,6 +449,47 @@ fn command_install(arguments: &[String]) -> Result<(), String> {
             Ok(())
         }
     }
+}
+
+/// Checks the files of an installation and names the ones that are missing or altered.
+///
+/// `--repair` re-downloads only those files: the client, a library or an asset whose digest does
+/// not match is fetched again from the address its metadata gives, and nothing else is touched.
+fn command_verify(arguments: &[String]) -> Result<(), String> {
+    let launcher = Launcher::open();
+    let flags = Flags::parse(arguments);
+    let repair = flag_set(&flags, "repair");
+
+    let game = launcher
+        .verify_installation(flags.get("version"), repair)
+        .map_err(|error| error.to_string())?;
+
+    // A repair of the pack is a normal installation: every jar whose digest does not match is
+    // fetched again, the others are skipped.
+    if repair {
+        let report = launcher.install_optimisation(&[], |_| {});
+        if report.aborted || !report.failed.is_empty() {
+            emit(&serde_json::json!({ "type": "warning", "report": report }));
+        }
+    }
+
+    let mods = launcher.verify_optimisation();
+    let ok = game.is_clean() && mods.is_clean();
+
+    emit(&serde_json::json!({
+        "ok": ok,
+        "game": game,
+        "mods": mods,
+    }));
+
+    Ok(())
+}
+
+/// `true` for `--name` and `--name=true`, false for `--name=false`.
+fn flag_set(flags: &Flags, name: &str) -> bool {
+    flags
+        .get(name)
+        .is_some_and(|value| !value.eq_ignore_ascii_case("false"))
 }
 
 /// Sets the flag when the interface writes `cancel` on the standard input.
@@ -492,20 +553,47 @@ fn command_mods(arguments: &[String]) -> Result<(), String> {
     let flags = Flags::parse(arguments);
 
     match flags.positional.first().map(|value| value.as_str()) {
-		Some("search") => {
-			let query = flags.positional.get(1).map(String::as_str).unwrap_or("").trim();
-			if query.len() < 2 { return Err("Entre au moins deux caractères pour rechercher un mod.".to_string()); }
-			let version = flags.get("version").unwrap_or(&launcher.settings.game_version);
+        Some("search") => {
+            let query = flags
+                .positional
+                .get(1)
+                .map(String::as_str)
+                .unwrap_or("")
+                .trim();
+            if query.len() < 2 {
+                return Err("Entre au moins deux caractères pour rechercher un mod.".to_string());
+            }
+            let version = flags
+                .get("version")
+                .unwrap_or(&launcher.settings.game_version);
             let encoded = urlencoding::encode(query);
-			let url = format!("https://api.modrinth.com/v2/search?query={}&facets=%5B%5B%22project_type%3Amod%22%5D%5D&limit=24", encoded);
-			let result: serde_json::Value = ureq::get(&url).call().map_err(|e| e.to_string())?.into_json().map_err(|e| e.to_string())?;
-			let hits = result.get("hits").and_then(serde_json::Value::as_array).cloned().unwrap_or_default();
-			let mut mods = Vec::new();
-			for hit in hits {
-				let Some(slug) = hit.get("slug").and_then(serde_json::Value::as_str) else { continue };
-				let version_url = format!("https://api.modrinth.com/v2/project/{}/version?loaders=%5B%22fabric%22%5D&game_versions=%5B%22{}%22%5D", slug, version);
-				let compatible = ureq::get(&version_url).call().map(|response| response.into_json::<Vec<serde_json::Value>>().map(|versions| !versions.is_empty()).unwrap_or(false)).unwrap_or(false);
-				mods.push(serde_json::json!({
+            let url = format!("https://api.modrinth.com/v2/search?query={}&facets=%5B%5B%22project_type%3Amod%22%5D%5D&limit=24", encoded);
+            let result: serde_json::Value = ureq::get(&url)
+                .call()
+                .map_err(|e| e.to_string())?
+                .into_json()
+                .map_err(|e| e.to_string())?;
+            let hits = result
+                .get("hits")
+                .and_then(serde_json::Value::as_array)
+                .cloned()
+                .unwrap_or_default();
+            let mut mods = Vec::new();
+            for hit in hits {
+                let Some(slug) = hit.get("slug").and_then(serde_json::Value::as_str) else {
+                    continue;
+                };
+                let version_url = format!("https://api.modrinth.com/v2/project/{}/version?loaders=%5B%22fabric%22%5D&game_versions=%5B%22{}%22%5D", slug, version);
+                let compatible = ureq::get(&version_url)
+                    .call()
+                    .map(|response| {
+                        response
+                            .into_json::<Vec<serde_json::Value>>()
+                            .map(|versions| !versions.is_empty())
+                            .unwrap_or(false)
+                    })
+                    .unwrap_or(false);
+                mods.push(serde_json::json!({
 					"slug": slug,
 					"title": hit.get("title").and_then(serde_json::Value::as_str).unwrap_or(slug),
 					"description": hit.get("description").and_then(serde_json::Value::as_str).unwrap_or(""),
@@ -513,18 +601,41 @@ fn command_mods(arguments: &[String]) -> Result<(), String> {
 					"iconUrl": hit.get("icon_url").cloned().unwrap_or(serde_json::Value::Null),
 					"compatible": compatible
 				}));
-			}
-			emit(&serde_json::json!({"ok": true, "gameVersion": version, "mods": mods}));
-			Ok(())
-		}
-		Some("install") => {
-			let slug = flags.positional.get(1).ok_or_else(|| "usage: mods install <slug> [--version <version>]".to_string())?;
-			let version = flags.get("version").unwrap_or(&launcher.settings.game_version);
-			let report = aether_launcher::performance::install(&launcher.paths, version, std::slice::from_ref(slug), |_| {});
-			if !report.failed.is_empty() { return Err(report.failed[0].error.clone()); }
-			emit(&serde_json::json!({"ok": true, "installed": report.installed, "skipped": report.skipped, "mods": launcher.mods()}));
-			Ok(())
-		}
+            }
+            emit(&serde_json::json!({"ok": true, "gameVersion": version, "mods": mods}));
+            Ok(())
+        }
+        Some("install") => {
+            let slug = flags
+                .positional
+                .get(1)
+                .ok_or_else(|| "usage: mods install <slug> [--version <version>]".to_string())?;
+            let version = flags
+                .get("version")
+                .unwrap_or(&launcher.settings.game_version);
+            let report = aether_launcher::performance::install(
+                &launcher.paths,
+                version,
+                std::slice::from_ref(slug),
+                |_| {},
+            );
+            if report.aborted {
+                let reason = report
+                    .unresolved
+                    .iter()
+                    .find(|entry| entry.required)
+                    .map(|entry| entry.error.clone())
+                    .unwrap_or_else(|| "the dependency graph is incomplete".to_string());
+                return Err(reason);
+            }
+            if !report.failed.is_empty() {
+                return Err(report.failed[0].error.clone());
+            }
+            emit(
+                &serde_json::json!({"ok": true, "installed": report.installed, "skipped": report.skipped, "mods": launcher.mods()}),
+            );
+            Ok(())
+        }
         Some("list") | None => {
             emit(&serde_json::json!({
                 "ok": true,
@@ -534,9 +645,10 @@ fn command_mods(arguments: &[String]) -> Result<(), String> {
             Ok(())
         }
         Some("toggle") => {
-            let name = flags.positional.get(1).ok_or_else(|| {
-                "usage: mods toggle <file> [--enabled true|false]".to_string()
-            })?;
+            let name = flags
+                .positional
+                .get(1)
+                .ok_or_else(|| "usage: mods toggle <file> [--enabled true|false]".to_string())?;
             let enabled = flags
                 .get("enabled")
                 .map(|value| value == "true" || value == "1")
@@ -608,7 +720,8 @@ fn command_command(arguments: &[String]) -> Result<(), String> {
     let version = flags.get("version").map(|value| value.to_string());
     let server = flags.get("server").map(|value| value.to_string());
 
-    let options = launcher.launch_options_for(account.as_deref(), version.as_deref(), server.as_deref())?;
+    let options =
+        launcher.launch_options_for(account.as_deref(), version.as_deref(), server.as_deref())?;
     let built = game::build_command(&options);
     let mut displayed_arguments = built.arguments.clone();
     redact_access_token(&mut displayed_arguments, &options.access_token);
@@ -625,7 +738,11 @@ fn command_command(arguments: &[String]) -> Result<(), String> {
 fn command_servers(arguments: &[String]) -> Result<(), String> {
     let mut launcher = Launcher::open();
     let flags = Flags::parse(arguments);
-    let action = flags.positional.first().map(String::as_str).unwrap_or("list");
+    let action = flags
+        .positional
+        .first()
+        .map(String::as_str)
+        .unwrap_or("list");
 
     let address = || -> Result<String, String> {
         flags
@@ -643,10 +760,7 @@ fn command_servers(arguments: &[String]) -> Result<(), String> {
         }
         "add" => {
             let address = address()?;
-            let name = flags
-                .get("name")
-                .unwrap_or(address.as_str())
-                .to_string();
+            let name = flags.get("name").unwrap_or(address.as_str()).to_string();
             let entry = launcher.add_server(&name, &address)?;
             emit(&serde_json::json!({
                 "ok": true,
@@ -689,7 +803,12 @@ fn command_servers(arguments: &[String]) -> Result<(), String> {
                 "verdict": probe.verdict(),
             }));
         }
-        other => return Err(format!("usage: servers <list|add|remove|ping|probe> (got {})", other)),
+        other => {
+            return Err(format!(
+                "usage: servers <list|add|remove|ping|probe> (got {})",
+                other
+            ))
+        }
     }
 
     Ok(())
@@ -698,7 +817,11 @@ fn command_servers(arguments: &[String]) -> Result<(), String> {
 fn command_hosts(arguments: &[String]) -> Result<(), String> {
     let mut launcher = Launcher::open();
     let flags = Flags::parse(arguments);
-    let action = flags.positional.first().map(String::as_str).unwrap_or("list");
+    let action = flags
+        .positional
+        .first()
+        .map(String::as_str)
+        .unwrap_or("list");
 
     let name = || -> Result<String, String> {
         flags
@@ -716,12 +839,15 @@ fn command_hosts(arguments: &[String]) -> Result<(), String> {
             let name = name()?;
             let port = flags.number("port").unwrap_or(25565) as u16;
             let max_players = flags.number("max-players").unwrap_or(20);
-			if let Some(version) = flags.get("version") {
-				let server = launcher.create_hosted_server_for_version(&name, port, max_players, version)?;
-				let address = aether_launcher::hosting::local_address(server.port);
-				emit(&serde_json::json!({"ok": true, "server": server, "address": address, "servers": launcher.hosted_servers()}));
-				return Ok(());
-			}
+            if let Some(version) = flags.get("version") {
+                let server =
+                    launcher.create_hosted_server_for_version(&name, port, max_players, version)?;
+                let address = aether_launcher::hosting::local_address(server.port);
+                emit(
+                    &serde_json::json!({"ok": true, "server": server, "address": address, "servers": launcher.hosted_servers()}),
+                );
+                return Ok(());
+            }
             let online_mode = flags
                 .get("online-mode")
                 .map(|value| value == "true" || value == "1")
@@ -761,7 +887,12 @@ fn command_hosts(arguments: &[String]) -> Result<(), String> {
                 "servers": launcher.hosted_servers(),
             }));
         }
-        other => return Err(format!("usage: hosts <list|create|start|stop> (got {})", other)),
+        other => {
+            return Err(format!(
+                "usage: hosts <list|create|start|stop> (got {})",
+                other
+            ))
+        }
     }
 
     Ok(())
@@ -770,7 +901,11 @@ fn command_hosts(arguments: &[String]) -> Result<(), String> {
 fn command_performance(arguments: &[String]) -> Result<(), String> {
     let mut launcher = Launcher::open();
     let flags = Flags::parse(arguments);
-    let action = flags.positional.first().map(String::as_str).unwrap_or("list");
+    let action = flags
+        .positional
+        .first()
+        .map(String::as_str)
+        .unwrap_or("list");
 
     match action {
         "list" | "status" => {
@@ -808,7 +943,9 @@ fn command_performance(arguments: &[String]) -> Result<(), String> {
             });
 
             emit(&serde_json::json!({
-                "ok": report.failed.is_empty(),
+                // An incomplete graph installs nothing: it is a failure of the run, even when no
+                // individual download failed.
+                "ok": report.failed.is_empty() && !report.aborted,
                 "report": report,
                 "mods": launcher.optimisation_mods(),
                 "state": performance_state(&launcher),
@@ -829,12 +966,9 @@ fn command_performance(arguments: &[String]) -> Result<(), String> {
                 .get(1)
                 .cloned()
                 .or_else(|| flags.get("preset").map(|value| value.to_string()))
-                .ok_or_else(|| {
-                    "usage: performance jvm <balanced|performance|ultra>".to_string()
-                })?;
+                .ok_or_else(|| "usage: performance jvm <balanced|performance|ultra>".to_string())?;
 
-            if game::jvm_preset_flags(&preset).is_empty()
-                && !preset.eq_ignore_ascii_case("custom")
+            if game::jvm_preset_flags(&preset).is_empty() && !preset.eq_ignore_ascii_case("custom")
             {
                 return Err(format!("unknown JVM preset: {}", preset));
             }
@@ -886,6 +1020,9 @@ fn print_help() {
         "  versions [--limit N]          list the Minecraft versions",
         "  loaders [--version X]         list the Fabric loaders of a version",
         "  install [--version X]         download the game, the libraries and the assets",
+        "  install --discard             drop an interrupted installation and its partial files",
+        "  verify [--version X]          check every installed file against its published SHA-1",
+        "  verify --repair               download again only the missing or altered files",
         "  launch [--account ID]         start Minecraft",
         "  stop                          stop the game, even after a crashed launcher",
         "  mods list                     list the jars of the mods folder",
@@ -914,11 +1051,7 @@ fn print_help() {
 #[allow(dead_code)]
 fn read_lines() -> Vec<String> {
     let stdin = std::io::stdin();
-    stdin
-        .lock()
-        .lines()
-        .map_while(Result::ok)
-        .collect()
+    stdin.lock().lines().map_while(Result::ok).collect()
 }
 
 /// The version of Minecraft that is used by default.
@@ -926,7 +1059,6 @@ fn read_lines() -> Vec<String> {
 pub fn default_version() -> String {
     minecraft::VERSION_MANIFEST_URL.to_string()
 }
-
 
 #[cfg(test)]
 mod tests {

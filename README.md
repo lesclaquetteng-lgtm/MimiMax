@@ -1,5 +1,9 @@
 # Aether Client
 
+> **MimiMax is the development repository of Aether.** The GitHub project and the root
+> `MimiMax.exe` runner predate the product name; the code, the packages (`dev.aether.client`), the
+> data folder (`~/Aether`) and the documentation use **Aether**.
+
 A Minecraft client built on **Fabric**, with first-class **offline (cracked) mode** support and a
 launcher that installs, tunes and starts the game.
 
@@ -26,6 +30,10 @@ In game, with the optimisation pack and an offline account on a hosted server:
 
 ![HUD at 889 FPS](docs/images/fps-offline-hud.png)
 
+*Measured on 854×480, render distance 8, RTX 4060 Ti / Ryzen 7 5700X, empty local server. The frame
+rate depends on the machine and on the scene: the Performance page reports what your own game
+reaches, not this number.*
+
 ## What this client is, and what it is not
 
 It is a client for **singleplayer, offline servers and private servers you run or are allowed to
@@ -35,7 +43,11 @@ host, and a verified optimisation pack.
 It is **not** marketed as an anti-cheat-safe client. The Combat category really does contain
 Kill Aura, Auto Crystal and Anti Knockback (`docs/FEATURES.md`), and no module claims to be
 undetectable, to bypass a specific anti-cheat, or to be allowed on servers that forbid it. Those
-modules exist for the player's own worlds and for servers whose rules permit them.
+modules exist for the player's own worlds and for servers whose rules permit them. **Using them on a
+server that forbids them can get the account banned**, and a ban is not a bug of the client.
+
+Every combat module is **disabled by default** (`docs/FEATURES.md`): a new configuration starts with
+them off, and enabling one is a deliberate action.
 
 The launcher is the part with no asterisk: offline and Microsoft accounts, installation, servers,
 hosting, logs and the performance pack stay usable whatever the player does in game.
@@ -168,6 +180,19 @@ Fabric installer is downloaded once and shared by every hosted server), prints i
 the player join it with the same button as any other server. Stopping it goes through RCON so the
 world is saved before the process ends.
 
+An offline server accepts any name, so the generated `server.properties` never relies on that:
+
+- `server-ip=127.0.0.1` keeps it on the loopback interface, and RCON travels in clear text on the
+  same interface;
+- `white-list=true` and `enforce-whitelist=true` are always written, and `whitelist.json` is seeded
+  with every account of the launcher (a world created before the first account is whitelisted at
+  its first start), so a stranger who reaches the port cannot take the operator's name;
+- the RCON password is 32 random hexadecimal characters, written only in `server.properties` and
+  never shown in clear text or in the server metadata.
+
+Opening the server to the local network is not a one-click action: it requires editing
+`server.properties` on purpose, and the whitelist is already in place when you do.
+
 ## Maximum FPS
 
 The **Performance** page installs and verifies a pack of client-side optimisation mods from
@@ -289,6 +314,9 @@ cargo run --release -- account add-offline Notch
 cargo run --release -- account check Notch
 cargo run --release -- accounts
 cargo run --release -- install --version 1.21.11 --loader 0.20.1
+cargo run --release -- verify
+cargo run --release -- verify --repair
+cargo run --release -- install --discard
 cargo run --release -- command --account <account-id>
 cargo run --release -- launch --account <account-id>
 cargo run --release -- launch --server 127.0.0.1:25565
@@ -310,6 +338,35 @@ cargo run --release -- performance jvm ultra
 launcher was closed or killed; it answers `{"ok": false, "error": "no game is running"}` when there
 is nothing to close.
 
+`verify` recomputes the digest of every file an installation declares and answers with the files
+that are missing or altered; `--repair` re-downloads only those. `install --discard` closes an
+interrupted installation: it removes the journal and the partial downloads.
+
+## Verified, resumable installation
+
+- **Nothing is moved into place before its digest matches.** A download is hashed while it is
+  written, to `<file>.part`, and renamed only once the SHA-1 that Modrinth or Mojang publishes
+  matches. A corrupt body is discarded and fetched again; a failed download never replaces the
+  previous file.
+- **`verify` checks what is really on the disk.** The client jar, every library, the asset index,
+  every asset (named by its own digest) and the jars of the optimisation pack are hashed and
+  compared to their published digest. `verify --repair` fetches only the files that differ, from
+  the address their metadata gives.
+- **An interrupted installation is resumable.** `install` and `performance install` write
+  `install.pending.json` before the first request, advance it at every step and delete it at the
+  end. A cancelled or crashed run leaves it behind; the next run of the same command skips every
+  file whose digest already matches and fetches the rest. `info` reports it as `pendingInstall`,
+  and `install --discard` removes the journal with the leftover `.part` files.
+- **The optimisation pack is resolved as a graph before the first download.** The required
+  dependencies of Modrinth are read from the API, a dependency that pins a `version_id` is installed
+  at that exact version with the SHA-1 of that version, a project is downloaded once even when the
+  pack lists it and another mod requires it (Cloth Config for MoreCulling and Dynamic FPS), and an
+  incomplete graph stops the installation while nothing has been written — a pack missing a library
+  its mods need would not start. Optional, embedded and incompatible declarations are named in the
+  installation report instead of being silently ignored, two different pinned versions of one
+  project are reported as a conflict, and a build that does not announce the pack's Minecraft
+  version or Fabric is refused before any download.
+
 ## Data locations
 
 By default the launcher resolves paths under the user's home directory:
@@ -318,6 +375,7 @@ By default the launcher resolves paths under the user's home directory:
 | --- | --- |
 | Launcher data (settings/accounts/logs) | `<home>/Aether/aether` |
 | Record of the running game | `<home>/Aether/aether/game.pid` |
+| Journal of an unfinished installation | `<home>/Aether/aether/install.pending.json` |
 | Game directory (assets/libraries/versions/mods) | `<home>/Aether/.minecraft` |
 
 Environment overrides:
@@ -419,6 +477,10 @@ is refused in milliseconds without sending anything, a hit on a child counts as 
 - [`docs/FEATURES.md`](docs/FEATURES.md) – user-facing features and modules
 - [`docs/DESIGN-SYSTEM.md`](docs/DESIGN-SYSTEM.md) – palette, type scale and layout rules
 - [`docs/VERIFICATION.md`](docs/VERIFICATION.md) – verification checklist and measured results
+- [`SECURITY.md`](SECURITY.md) – how to report a vulnerability in private
+- [`CONTRIBUTING.md`](CONTRIBUTING.md) – prerequisites, checks and style
+- [`CHANGELOG.md`](CHANGELOG.md) – what changed, release by release
+- [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md) – the mods the optimisation pack installs
 - [`launcher/desktop/README.md`](launcher/desktop/README.md) – Tauri build, installer and CDP recipe
 - [`docs/rapports/ANALYSE-AMELIORATIONS.md`](docs/rapports/ANALYSE-AMELIORATIONS.md) – the improvement
   log, with the evidence of each change (in French)

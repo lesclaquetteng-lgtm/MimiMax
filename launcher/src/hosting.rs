@@ -130,7 +130,10 @@ pub fn list(paths: &Paths) -> Vec<HostedServer> {
 fn free_port(preferred: u16) -> u16 {
     if preferred != 0 {
         if let Ok(listener) = TcpListener::bind(("0.0.0.0", preferred)) {
-            let port = listener.local_addr().map(|address| address.port()).unwrap_or(preferred);
+            let port = listener
+                .local_addr()
+                .map(|address| address.port())
+                .unwrap_or(preferred);
             drop(listener);
             return port;
         }
@@ -185,6 +188,11 @@ fn properties(name: &str, port: u16, rcon_port: u16, password: &str, max_players
         "server-ip=127.0.0.1".to_string(),
         "online-mode=false".to_string(),
         "enforce-secure-profile=false".to_string(),
+        // An offline server accepts every name it is given: the whitelist is the only thing that
+        // keeps a stranger who reaches the port from joining under the operator's name.
+        "white-list=true".to_string(),
+        "enforce-whitelist=true".to_string(),
+        "op-permission-level=2".to_string(),
         format!("motd={}", property_value(name)),
         format!("max-players={}", max_players.max(1)),
         "view-distance=10".to_string(),
@@ -208,6 +216,67 @@ fn properties(name: &str, port: u16, rcon_port: u16, password: &str, max_players
     .join("\n")
 }
 
+/// The player names of the launcher, the only names a hosted server lets in.
+///
+/// The account catalogue is read without its protected token vault: a whitelist only needs the
+/// public identity of the accounts, never their session.
+fn whitelisted_players(paths: &Paths) -> Vec<(String, String)> {
+    let Ok(content) = fs::read_to_string(&paths.accounts_file) else {
+        return Vec::new();
+    };
+
+    let Ok(store) = serde_json::from_str::<crate::accounts::AccountStore>(&content) else {
+        return Vec::new();
+    };
+
+    store
+        .accounts
+        .iter()
+        .filter(|account| !account.username.trim().is_empty() && !account.uuid.trim().is_empty())
+        .map(|account| (account.username.clone(), account.uuid.clone()))
+        .collect()
+}
+
+/// Adds the accounts of the launcher to `whitelist.json`, keeping the entries already there.
+///
+/// Without this the generated `white-list=true` would shut the player out of the world it just
+/// created, and a world created before the first account would open with an empty whitelist.
+fn ensure_whitelist(directory: &Path, paths: &Paths) -> Result<(), String> {
+    let players = whitelisted_players(paths);
+    if players.is_empty() {
+        return Ok(());
+    }
+
+    let file = directory.join("whitelist.json");
+    let mut entries: Vec<serde_json::Value> = fs::read_to_string(&file)
+        .ok()
+        .and_then(|content| serde_json::from_str(&content).ok())
+        .unwrap_or_default();
+
+    let mut changed = false;
+    for (name, uuid) in players {
+        let known = entries.iter().any(|entry| {
+            entry
+                .get("name")
+                .and_then(serde_json::Value::as_str)
+                .is_some_and(|existing| existing.eq_ignore_ascii_case(&name))
+        });
+
+        if !known {
+            entries.push(serde_json::json!({ "uuid": uuid, "name": name }));
+            changed = true;
+        }
+    }
+
+    if changed || !file.exists() {
+        let content = serde_json::to_string_pretty(&entries).map_err(|error| error.to_string())?;
+        write_atomic(&file, &format!("{}\n", content))
+            .map_err(|error| format!("could not write the whitelist: {}", error))?;
+    }
+
+    Ok(())
+}
+
 /// Creates a server. An existing server keeps its properties and its world.
 #[allow(clippy::too_many_arguments)]
 pub fn create(
@@ -223,17 +292,25 @@ pub fn create(
     if !crate::minecraft::is_safe_path_component(game_version)
         || !crate::minecraft::is_safe_path_component(loader_version)
     {
-        return Err("invalid Minecraft or Fabric version identifier for the hosted server".to_string());
+        return Err(
+            "invalid Minecraft or Fabric version identifier for the hosted server".to_string(),
+        );
     }
 
     let directory = directory(paths, name);
-    fs::create_dir_all(&directory).map_err(|error| format!("could not create the folder: {}", error))?;
+    fs::create_dir_all(&directory)
+        .map_err(|error| format!("could not create the folder: {}", error))?;
 
     let metadata_file = metadata_path(&directory);
     let existing = read_metadata(&directory);
 
     let port = free_port(existing.as_ref().map(|server| server.port).unwrap_or(port));
-    let rcon_port = free_port(existing.as_ref().map(|server| server.rcon_port).unwrap_or(0));
+    let rcon_port = free_port(
+        existing
+            .as_ref()
+            .map(|server| server.rcon_port)
+            .unwrap_or(0),
+    );
     let properties_file = directory.join("server.properties");
     let stored_password = server_password(&directory);
     let needs_password = stored_password.is_empty();
@@ -253,11 +330,18 @@ pub fn create(
             // A server that already exists keeps its world, but the mode is explicit in the request.
             set_property(&properties_file, "online-mode", "true")?;
         }
+        // An offline world that already exists cannot keep its whitelist off either: the
+        // properties are repaired the same way a missing RCON secret is.
+        set_property(&properties_file, "white-list", "true")?;
+        set_property(&properties_file, "enforce-whitelist", "true")?;
         // Migrate an old or incomplete configuration without replacing an existing secret.
         if needs_password {
             set_property(&properties_file, "rcon.password", &password)?;
         }
     }
+
+    // Whitelist the accounts of the launcher so the player can join the world just created.
+    ensure_whitelist(&directory, paths)?;
 
     let eula = directory.join("eula.txt");
     if !eula.exists() {
@@ -280,8 +364,7 @@ pub fn create(
         pid: existing.and_then(|server| server.pid),
     };
 
-    let content = serde_json::to_string_pretty(&server)
-        .map_err(|error| error.to_string())?;
+    let content = serde_json::to_string_pretty(&server).map_err(|error| error.to_string())?;
     write_atomic(&metadata_file, &content).map_err(|error| error.to_string())?;
 
     Ok(server)
@@ -289,14 +372,31 @@ pub fn create(
 
 /// Creates a hosted world for a specific game version, using the configured Fabric loader.
 pub fn create_for_version(
-	paths: &Paths, name: &str, port: u16, max_players: u32, game_version: &str,
+    paths: &Paths,
+    name: &str,
+    port: u16,
+    max_players: u32,
+    game_version: &str,
 ) -> Result<HostedServer, String> {
-	if !crate::minecraft::is_safe_path_component(game_version) {
-		return Err("invalid Minecraft version identifier for the hosted server".to_string());
-	}
-	let loaders = crate::minecraft::fetch_fabric_loaders(game_version).map_err(|error| error.to_string())?;
-	let loader = loaders.into_iter().next().ok_or_else(|| "aucun loader Fabric disponible pour cette version".to_string())?;
-	create(paths, name, port, Some(name), max_players, false, game_version, &loader)
+    if !crate::minecraft::is_safe_path_component(game_version) {
+        return Err("invalid Minecraft version identifier for the hosted server".to_string());
+    }
+    let loaders =
+        crate::minecraft::fetch_fabric_loaders(game_version).map_err(|error| error.to_string())?;
+    let loader = loaders
+        .into_iter()
+        .next()
+        .ok_or_else(|| "aucun loader Fabric disponible pour cette version".to_string())?;
+    create(
+        paths,
+        name,
+        port,
+        Some(name),
+        max_players,
+        false,
+        game_version,
+        &loader,
+    )
 }
 
 /// Reads the RCON password from the properties, the metadata never stores it in clear.
@@ -363,13 +463,13 @@ fn server_artifact_directory(
     if !crate::minecraft::is_safe_path_component(game_version)
         || !crate::minecraft::is_safe_path_component(loader_version)
     {
-        return Err("the hosted server contains an unsafe Minecraft or Fabric version identifier".to_string());
+        return Err(
+            "the hosted server contains an unsafe Minecraft or Fabric version identifier"
+                .to_string(),
+        );
     }
 
-    Ok(root(paths).join(format!(
-        "fabric-server-{}-{}",
-        game_version, loader_version
-    )))
+    Ok(root(paths).join(format!("fabric-server-{}-{}", game_version, loader_version)))
 }
 
 /// The jar of the Fabric server, installed once and shared by every hosted server.
@@ -457,7 +557,14 @@ fn ensure_server_jar(
 
     if !output.status.success() {
         let text = String::from_utf8_lossy(&output.stderr);
-        let tail: String = text.chars().rev().take(600).collect::<Vec<char>>().into_iter().rev().collect();
+        let tail: String = text
+            .chars()
+            .rev()
+            .take(600)
+            .collect::<Vec<char>>()
+            .into_iter()
+            .rev()
+            .collect();
         return Err(format!("the Fabric installer failed: {}", tail.trim()));
     }
 
@@ -496,7 +603,6 @@ fn property_path(path: &Path) -> String {
         .replace(' ', "\\ ")
 }
 
-
 /// Finds the Java runtime of the game, the one the launcher already detected.
 fn java(paths: &Paths) -> Result<PathBuf, String> {
     let settings = crate::settings::Settings::load(&paths.settings_file);
@@ -517,6 +623,9 @@ pub fn start(paths: &Paths, name: &str) -> Result<HostedServer, String> {
     if server.running {
         return Ok(server);
     }
+
+    // A world created before the player added an account is whitelisted before it opens.
+    ensure_whitelist(&directory, paths)?;
 
     let game_version = if server.game_version.is_empty() {
         GAME_VERSION.to_string()
@@ -599,8 +708,8 @@ pub fn start(paths: &Paths, name: &str) -> Result<HostedServer, String> {
 /// Asks the server to stop through RCON, then kills it if it does not.
 pub fn stop(paths: &Paths, name: &str) -> Result<HostedServer, String> {
     let directory = directory(paths, name);
-    let mut server = read_metadata(&directory)
-        .ok_or_else(|| format!("unknown server: {}", name))?;
+    let mut server =
+        read_metadata(&directory).ok_or_else(|| format!("unknown server: {}", name))?;
 
     let Some(pid) = server.pid else {
         server.running = false;
@@ -688,7 +797,8 @@ pub fn process_alive(pid: u32) -> bool {
         match output {
             Ok(output) => {
                 let text = String::from_utf8_lossy(&output.stdout);
-                text.split_whitespace().any(|field| field == pid.to_string())
+                text.split_whitespace()
+                    .any(|field| field == pid.to_string())
             }
             Err(_) => false,
         }
@@ -785,7 +895,9 @@ pub fn rcon_command(port: u16, password: &str, command: &str) -> Result<String, 
 
     let address = format!("127.0.0.1:{}", port);
     let mut stream = TcpStream::connect_timeout(
-        &address.parse().map_err(|error| format!("invalid address: {}", error))?,
+        &address
+            .parse()
+            .map_err(|error| format!("invalid address: {}", error))?,
         Duration::from_secs(3),
     )
     .map_err(|error| format!("RCON is not reachable: {}", error))?;
@@ -847,7 +959,8 @@ mod tests {
 
     #[test]
     fn server_artifact_paths_reject_untrusted_version_components() {
-        let root = std::env::temp_dir().join(format!("aether-server-version-path-{}", std::process::id()));
+        let root =
+            std::env::temp_dir().join(format!("aether-server-version-path-{}", std::process::id()));
         let paths = test_paths(&root);
 
         let valid = server_artifact_directory(&paths, "1.21.11", "0.20.1").unwrap();
@@ -873,6 +986,10 @@ mod tests {
         assert!(content.contains("rcon.port=25575"));
         assert!(content.contains("rcon.password=secret"));
         assert!(content.contains("max-players=20"));
+        // An offline server trusts every name, so the whitelist cannot be optional.
+        assert!(content.contains("white-list=true"));
+        assert!(content.contains("enforce-whitelist=true"));
+        assert!(content.contains("op-permission-level=2"));
     }
 
     #[test]
@@ -912,6 +1029,36 @@ mod tests {
         assert!(!list[0].running);
 
         std::fs::remove_dir_all(&directory).ok();
+    }
+
+    #[test]
+    fn a_hosted_server_whitelists_every_account_of_the_launcher() {
+        let root =
+            std::env::temp_dir().join(format!("aether-host-whitelist-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(root.join("aether")).unwrap();
+        let paths = test_paths(&root);
+        fs::write(
+            &paths.accounts_file,
+            concat!(
+                "{\"accounts\":[{\"type\":\"offline\",\"id\":\"a\",\"username\":\"Player\",",
+                "\"uuid\":\"5627dd98-e6be-3c21-b8a8-e92344183641\"}],\"selected\":\"a\"}"
+            ),
+        )
+        .unwrap();
+
+        create(&paths, "Whitelist", 0, None, 4, false, "1.21.11", "0.20.1").unwrap();
+
+        let folder = directory(&paths, "Whitelist");
+        let whitelist = fs::read_to_string(folder.join("whitelist.json")).unwrap();
+        assert!(whitelist.contains("\"name\": \"Player\""), "{}", whitelist);
+        assert!(whitelist.contains("5627dd98-e6be-3c21-b8a8-e92344183641"));
+
+        let properties = fs::read_to_string(folder.join("server.properties")).unwrap();
+        assert!(properties.contains("white-list=true"));
+        assert!(properties.contains("enforce-whitelist=true"));
+
+        std::fs::remove_dir_all(&root).ok();
     }
 
     #[test]
@@ -996,7 +1143,9 @@ mod tests {
             stream.read_exact(&mut body).unwrap();
             assert_eq!(&body[8..body.len() - 2], b"stop");
             assert_eq!(&body[4..8], &2i32.to_le_bytes());
-            stream.write_all(&rcon_packet(2, 0, "Stopping the server")).unwrap();
+            stream
+                .write_all(&rcon_packet(2, 0, "Stopping the server"))
+                .unwrap();
         });
 
         let answer = rcon_command(port, "secret", "stop").expect("the command was sent");
@@ -1041,7 +1190,10 @@ mod tests {
         let content = properties("Test", 25565, 25575, "secret", 10);
 
         assert!(content.contains("\nserver-ip=127.0.0.1\n"));
-        assert!(!content.contains("server-ip=\n"), "the server would listen on 0.0.0.0");
+        assert!(
+            !content.contains("server-ip=\n"),
+            "the server would listen on 0.0.0.0"
+        );
     }
 
     #[test]
@@ -1055,7 +1207,10 @@ mod tests {
         );
 
         assert_eq!(
-            content.lines().filter(|line| line.starts_with("motd=")).count(),
+            content
+                .lines()
+                .filter(|line| line.starts_with("motd="))
+                .count(),
             1
         );
         assert_eq!(

@@ -274,9 +274,7 @@ fn connect(host: &str, port: u16) -> io::Result<TcpStream> {
         }
     }
 
-    Err(last.unwrap_or_else(|| {
-        io::Error::new(io::ErrorKind::NotFound, "the host has no address")
-    }))
+    Err(last.unwrap_or_else(|| io::Error::new(io::ErrorKind::NotFound, "the host has no address")))
 }
 
 /// Reads one framed packet and returns its body.
@@ -521,13 +519,17 @@ pub fn probe_login(address: &str, username: &str) -> LoginProbe {
             PACKET_LOGIN_SUCCESS => (true, false, "login success"),
             PACKET_SET_COMPRESSION => (true, false, "set compression"),
             PACKET_LOGIN_START => (false, false, "login start"),
-            id => (false, false, if id == 0x00 { "disconnect" } else { "unknown" }),
+            id => (
+                false,
+                false,
+                if id == 0x00 { "disconnect" } else { "unknown" },
+            ),
         };
 
         let detail = if identifier == 0x00 {
             let reason = read_string(&mut reader).unwrap_or_default();
-            let component: serde_json::Value = serde_json::from_str(&reason)
-                .unwrap_or(serde_json::Value::String(reason));
+            let component: serde_json::Value =
+                serde_json::from_str(&reason).unwrap_or(serde_json::Value::String(reason));
             let text = strip_formatting(&flatten_component(&component));
 
             let lowered = text.to_ascii_lowercase();
@@ -581,7 +583,18 @@ mod tests {
 
     #[test]
     fn varints_round_trip() {
-        for value in [0, 1, 127, 128, 255, 300, 2_097_151, i32::MAX, -1, -2_147_483_648] {
+        for value in [
+            0,
+            1,
+            127,
+            128,
+            255,
+            300,
+            2_097_151,
+            i32::MAX,
+            -1,
+            -2_147_483_648,
+        ] {
             let mut buffer = Vec::new();
             write_varint(value, &mut buffer);
 
@@ -599,8 +612,14 @@ mod tests {
 
     #[test]
     fn the_address_of_a_server_is_split() {
-        assert_eq!(split_address("mc.example.com"), ("mc.example.com".to_string(), 25565));
-        assert_eq!(split_address("mc.example.com:25566"), ("mc.example.com".to_string(), 25566));
+        assert_eq!(
+            split_address("mc.example.com"),
+            ("mc.example.com".to_string(), 25565)
+        );
+        assert_eq!(
+            split_address("mc.example.com:25566"),
+            ("mc.example.com".to_string(), 25566)
+        );
         assert_eq!(split_address(" [::1]:25567 "), ("::1".to_string(), 25567));
         assert_eq!(split_address("::1"), ("::1".to_string(), 25565));
         assert_eq!(split_address(""), (String::new(), 25565));
@@ -613,7 +632,10 @@ mod tests {
             "extra": [{ "text": "§7Network\n" }, { "text": "§fWelcome" }]
         });
 
-        assert_eq!(strip_formatting(&flatten_component(&motd)), "Aether Network Welcome");
+        assert_eq!(
+            strip_formatting(&flatten_component(&motd)),
+            "Aether Network Welcome"
+        );
     }
 
     #[test]
@@ -664,14 +686,20 @@ mod tests {
         assert_eq!(store.servers.len(), 2);
         assert_eq!(store.address_of("main"), "mc.example.com:25565");
         assert_eq!(store.address_of("SECOND.EXAMPLE.COM"), "second.example.com");
-        assert_eq!(store.address_of("unknown.example.com"), "unknown.example.com");
+        assert_eq!(
+            store.address_of("unknown.example.com"),
+            "unknown.example.com"
+        );
 
         // The same address replaces the entry instead of being listed twice.
         store.add("Renamed", "MC.EXAMPLE.COM:25565").unwrap();
         assert_eq!(store.servers.len(), 2);
         assert_eq!(store.address_of("renamed"), "MC.EXAMPLE.COM:25565");
 
-        assert_eq!(store.remove("mc.example.com:25565").unwrap().name, "Renamed");
+        assert_eq!(
+            store.remove("mc.example.com:25565").unwrap().name,
+            "Renamed"
+        );
         assert!(store.remove("Renamed").is_err());
     }
 

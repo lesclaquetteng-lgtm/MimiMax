@@ -103,7 +103,12 @@ mod tests {
     #[test]
     fn matches_the_reference_implementation_of_minecraft() {
         for (name, expected) in REFERENCE {
-            assert_eq!(offline_player_uuid(name), expected, "uuid mismatch for {}", name);
+            assert_eq!(
+                offline_player_uuid(name),
+                expected,
+                "uuid mismatch for {}",
+                name
+            );
         }
     }
 

@@ -318,7 +318,12 @@ fn a_cut_in_the_middle_only_costs_the_missing_bytes() {
     );
 
     let ranges = server.ranges();
-    assert_eq!(ranges.len(), 2, "the transfer was not resumed: {:?}", ranges);
+    assert_eq!(
+        ranges.len(),
+        2,
+        "the transfer was not resumed: {:?}",
+        ranges
+    );
 
     let resumed_from = ranges[1].expect("the second request carried no range");
     assert!(
@@ -544,5 +549,8 @@ fn a_session_builds_a_single_http_client() {
         "the session built more than one HTTP client"
     );
 
-    println!("clients built for three downloads: {}", clients_built() - before);
+    println!(
+        "clients built for three downloads: {}",
+        clients_built() - before
+    );
 }

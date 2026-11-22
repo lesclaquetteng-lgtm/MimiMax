@@ -7,7 +7,8 @@ use serde::{Deserialize, Serialize};
 use crate::http::{get_json, HttpError};
 
 /// The address of the version manifest.
-pub const VERSION_MANIFEST_URL: &str = "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json";
+pub const VERSION_MANIFEST_URL: &str =
+    "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json";
 /// The address of the metadata of Fabric.
 pub const FABRIC_META_URL: &str = "https://meta.fabricmc.net/v2";
 /// The address the assets are downloaded from.
@@ -145,7 +146,10 @@ fn regex_lite_match(pattern: &str, text: &str) -> bool {
         if part.is_empty() {
             continue;
         }
-        if let Some(expected) = part.strip_prefix('(').and_then(|value| value.strip_suffix(')')) {
+        if let Some(expected) = part
+            .strip_prefix('(')
+            .and_then(|value| value.strip_suffix(')'))
+        {
             let expected = expected.replace("\\", "");
             if !text[index..].starts_with(&expected) {
                 return false;
@@ -362,9 +366,7 @@ pub fn is_safe_relative_path(value: &str) -> bool {
         && !value.contains('\\')
         && !value.contains(':')
         && !value.contains('\0')
-        && value
-            .split('/')
-            .all(is_safe_path_component)
+        && value.split('/').all(is_safe_path_component)
 }
 
 /// Minecraft asset object names are SHA-1 digests.
@@ -398,14 +400,16 @@ pub fn maven_path(coordinate: &str) -> String {
 /// (`org.lwjgl:lwjgl:3.3.3:natives-windows`) instead of using the legacy `natives` key.
 pub fn is_native_coordinate(coordinate: &str) -> bool {
     match parse_maven_coordinate(coordinate).classifier {
-        Some(classifier) => classifier.starts_with("natives-")
-            || classifier.starts_with("natives.")
-            || classifier.starts_with("linux-")
-            || classifier.starts_with("linux.")
-            || classifier.starts_with("osx-")
-            || classifier.starts_with("osx.")
-            || classifier.starts_with("windows-")
-            || classifier.starts_with("windows."),
+        Some(classifier) => {
+            classifier.starts_with("natives-")
+                || classifier.starts_with("natives.")
+                || classifier.starts_with("linux-")
+                || classifier.starts_with("linux.")
+                || classifier.starts_with("osx-")
+                || classifier.starts_with("osx.")
+                || classifier.starts_with("windows-")
+                || classifier.starts_with("windows.")
+        }
         None => false,
     }
 }
@@ -440,7 +444,10 @@ pub fn released_versions(manifest: &Manifest, limit: usize) -> Vec<VersionEntry>
 /// Downloads the description of a version.
 pub fn fetch_version_json(version_id: &str) -> Result<VersionJson, HttpError> {
     if !is_safe_path_component(version_id) {
-        return Err(HttpError::Uri(format!("invalid Minecraft version identifier: {}", version_id)));
+        return Err(HttpError::Uri(format!(
+            "invalid Minecraft version identifier: {}",
+            version_id
+        )));
     }
     let manifest = fetch_manifest()?;
     let entry = manifest
@@ -458,7 +465,9 @@ pub fn fetch_fabric_profile(
     loader_version: &str,
 ) -> Result<VersionJson, HttpError> {
     if !is_safe_path_component(game_version) || !is_safe_path_component(loader_version) {
-        return Err(HttpError::Uri("invalid Minecraft or Fabric version identifier".to_string()));
+        return Err(HttpError::Uri(
+            "invalid Minecraft or Fabric version identifier".to_string(),
+        ));
     }
     let url = format!(
         "{}/versions/loader/{}/{}/profile/json",
@@ -482,7 +491,10 @@ pub struct FabricLoader {
 /// Lists the loaders of a version.
 pub fn fetch_fabric_loaders(game_version: &str) -> Result<Vec<String>, HttpError> {
     if !is_safe_path_component(game_version) {
-        return Err(HttpError::Uri(format!("invalid Minecraft version identifier: {}", game_version)));
+        return Err(HttpError::Uri(format!(
+            "invalid Minecraft version identifier: {}",
+            game_version
+        )));
     }
     let url = format!("{}/versions/loader/{}", FABRIC_META_URL, game_version);
     let entries: Vec<FabricLoaderEntry> = get_json(&url)?;
@@ -675,7 +687,11 @@ pub fn resolve_libraries(version: &VersionJson, os: &OsContext) -> Vec<ResolvedL
                     resolved.push(ResolvedLibrary {
                         name: coordinate,
                         path: relative.clone(),
-                        url: format!("{}/{}", base.trim_end_matches('/'), relative.replace('\\', "/")),
+                        url: format!(
+                            "{}/{}",
+                            base.trim_end_matches('/'),
+                            relative.replace('\\', "/")
+                        ),
                         sha1: None,
                         size: None,
                         native: true,
@@ -785,10 +801,25 @@ mod tests {
     #[test]
     fn rejects_path_components_that_could_escape_launcher_directories() {
         for invalid in [
-            "", ".", "..", "../outside", "C:\\outside", "/outside", "folder\\file", "a:b",
-            "CON", "con.txt", "NUL.json", "COM1", "LPT9.jar", "trailing.",
+            "",
+            ".",
+            "..",
+            "../outside",
+            "C:\\outside",
+            "/outside",
+            "folder\\file",
+            "a:b",
+            "CON",
+            "con.txt",
+            "NUL.json",
+            "COM1",
+            "LPT9.jar",
+            "trailing.",
         ] {
-            assert!(!is_safe_path_component(invalid), "accepted component: {invalid}");
+            assert!(
+                !is_safe_path_component(invalid),
+                "accepted component: {invalid}"
+            );
         }
         assert!(is_safe_path_component("1.21.11"));
         assert!(is_safe_path_component("0.141.6+1.21.11"));
@@ -796,7 +827,9 @@ mod tests {
 
     #[test]
     fn validates_library_paths_and_asset_hashes() {
-        assert!(is_safe_relative_path("org/ow2/asm/asm/9.10.1/asm-9.10.1.jar"));
+        assert!(is_safe_relative_path(
+            "org/ow2/asm/asm/9.10.1/asm-9.10.1.jar"
+        ));
         assert!(!is_safe_relative_path("../outside.jar"));
         assert!(!is_safe_relative_path("org/../../outside.jar"));
         assert!(!is_safe_relative_path("/absolute/file.jar"));
@@ -819,7 +852,9 @@ mod tests {
 
     #[test]
     fn detects_native_libraries() {
-        assert!(is_native_coordinate("org.lwjgl:lwjgl:3.3.3:natives-windows"));
+        assert!(is_native_coordinate(
+            "org.lwjgl:lwjgl:3.3.3:natives-windows"
+        ));
         assert!(is_native_coordinate(
             "io.netty:netty-transport-native-epoll:4.2.7:linux-x86_64"
         ));
@@ -838,7 +873,11 @@ mod tests {
             }),
             features: None,
         }];
-        assert!(!evaluate_rules(&allow_osx, &windows(), &FeatureContext::default()));
+        assert!(!evaluate_rules(
+            &allow_osx,
+            &windows(),
+            &FeatureContext::default()
+        ));
         assert!(evaluate_rules(&[], &windows(), &FeatureContext::default()));
     }
 

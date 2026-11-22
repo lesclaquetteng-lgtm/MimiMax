@@ -1,0 +1,67 @@
+name: release
+
+# A tag is the only way to publish: the files of a release are always built from the commit it
+# points at, and the SHA256SUMS file next to them is produced by the same run.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    name: Installers and mod jar
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "25"
+          cache: gradle
+
+      - name: Test the launcher core
+        working-directory: launcher
+        run: |
+          cargo test --release --locked
+          cargo clippy --release --locked --all-targets -- -D warnings
+
+      - name: Build the Fabric client
+        working-directory: aether-client
+        run: .\gradlew.bat --no-daemon build
+
+      # The shell embeds the core and the mod at compile time, so both exist before it is built.
+      - name: Build the launcher core
+        working-directory: launcher
+        run: cargo build --release --locked
+
+      - name: Install the Tauri CLI
+        run: cargo install tauri-cli --version "^2" --locked
+
+      - name: Build the installer and the portable executable
+        working-directory: launcher/desktop
+        run: cargo tauri build
+
+      - name: Collect the artefacts and their checksums
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force published | Out-Null
+          Get-ChildItem -Recurse launcher/desktop/target/release/bundle -Include *.exe |
+            Copy-Item -Destination published
+          Copy-Item aether-client/build/libs/*.jar published
+          Get-ChildItem published -File | Where-Object { $_.Name -ne "SHA256SUMS" } | ForEach-Object {
+            "$((Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower())  $($_.Name)"
+          } | Out-File published/SHA256SUMS -Encoding ascii
+          Get-Content published/SHA256SUMS
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: published/*
+          generate_release_notes: true

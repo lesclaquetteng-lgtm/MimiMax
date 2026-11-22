@@ -71,7 +71,9 @@ pub fn save(accounts_file: &Path, accounts: &AccountStore) -> Result<(), String>
             Ok(()) => return Ok(()),
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
             Err(error) => {
-                return Err(format!("could not remove old Microsoft credentials: {error}"));
+                return Err(format!(
+                    "could not remove old Microsoft credentials: {error}"
+                ));
             }
         }
     }
@@ -87,8 +89,8 @@ pub fn save(accounts_file: &Path, accounts: &AccountStore) -> Result<(), String>
             token.zeroize();
         }
     }
-    let mut plaintext = serialized
-        .map_err(|error| format!("could not encode Microsoft credentials: {error}"))?;
+    let mut plaintext =
+        serialized.map_err(|error| format!("could not encode Microsoft credentials: {error}"))?;
     let protected = protect(&plaintext);
     plaintext.zeroize();
     let protected = protected?;
@@ -378,7 +380,10 @@ fn protect(_plaintext: &[u8]) -> Result<Vec<u8>, String> {
 
 #[cfg(not(windows))]
 fn unprotect(_ciphertext: &[u8]) -> Result<Vec<u8>, String> {
-    Err("Microsoft credentials protected with Windows DPAPI can only be read on Windows".to_string())
+    Err(
+        "Microsoft credentials protected with Windows DPAPI can only be read on Windows"
+            .to_string(),
+    )
 }
 
 #[cfg(test)]
@@ -418,7 +423,8 @@ mod tests {
 
     #[test]
     fn empty_store_does_not_leave_a_credentials_file_behind() {
-        let root = std::env::temp_dir().join(format!("aether-credentials-empty-{}", std::process::id()));
+        let root =
+            std::env::temp_dir().join(format!("aether-credentials-empty-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(&root).unwrap();
         let accounts_file = root.join("accounts.json");
@@ -432,7 +438,10 @@ mod tests {
     #[cfg(not(windows))]
     #[test]
     fn non_windows_builds_refuse_to_persist_microsoft_tokens_in_clear_text() {
-        let root = std::env::temp_dir().join(format!("aether-credentials-unsupported-{}", std::process::id()));
+        let root = std::env::temp_dir().join(format!(
+            "aether-credentials-unsupported-{}",
+            std::process::id()
+        ));
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(&root).unwrap();
         let accounts_file = root.join("accounts.json");
@@ -474,7 +483,10 @@ mod tests {
         apply_document(document, &mut store).unwrap();
 
         assert_eq!(store.accounts[0].access_token, "vault-access");
-        assert_eq!(store.accounts[0].refresh_token.as_deref(), Some("vault-refresh"));
+        assert_eq!(
+            store.accounts[0].refresh_token.as_deref(),
+            Some("vault-refresh")
+        );
         assert!(store.accounts[1].access_token.is_empty());
         assert!(store.accounts[1].refresh_token.is_none());
     }
@@ -507,7 +519,8 @@ mod tests {
     #[cfg(windows)]
     #[test]
     fn dpapi_credentials_round_trip_without_writing_tokens_to_the_catalogue() {
-        let root = std::env::temp_dir().join(format!("aether-credentials-dpapi-{}", std::process::id()));
+        let root =
+            std::env::temp_dir().join(format!("aether-credentials-dpapi-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(&root).unwrap();
         let accounts_file = root.join("accounts.json");
@@ -521,7 +534,10 @@ mod tests {
         saved.accounts[0].access_token.clear();
         saved.accounts[0].refresh_token = None;
         assert!(load(&accounts_file, &mut saved).unwrap());
-        assert_eq!(saved.accounts[0].access_token, "access-token-never-write-as-plain-text");
+        assert_eq!(
+            saved.accounts[0].access_token,
+            "access-token-never-write-as-plain-text"
+        );
         assert_eq!(
             saved.accounts[0].refresh_token.as_deref(),
             Some("refresh-token-never-write-as-plain-text")

@@ -40,6 +40,17 @@ tools/e2e/pids-replay.txt
 tools/ui-home/
 tools/test-home/
 
+# Binaries built at the repository root by build.bat. GitHub Releases (with SHA256SUMS) is the
+# delivery channel, so the repository never carries a binary it cannot prove comes from the source.
+# The two E2E helpers in tools/e2e/ stay tracked: they are fixtures compiled from the .rs files
+# next to them, and the manual replay needs them without a Rust toolchain.
+/*.exe
+
+# Real Fabric/Minecraft server installations used during local testing: libraries, logs, worlds and
+# a fabric-server-launcher.properties that names an absolute path of the machine that ran the test.
+/tools/fabric-host-test/
+/tools/fabric-server-test/
+
 # Logs and temporary files
 *.log
 *.pdb
@@ -51,6 +62,7 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
+tools/installed-shots*/
 tools/mc/
 tools/mc-sources/
 tools/fapi-modules/

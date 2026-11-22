@@ -79,12 +79,15 @@ Prints the version of the client and the type of the session.
 
 ### Combat
 
-| Module | Description | Settings |
-| --- | --- | --- |
-| Auto Tool | Switches to the tool that fits the block that is mined. | Switch back |
-| Kill Aura | Attacks the closest enemy while the attack key is held (`G`). | Range, Cooldown, Rotate, Only players, Indicator |
-| Auto Crystal | Breaks and places end crystals (`V`). | Place, Break, Range, Place delay, Break delay |
-| Anti Knockback | Reduces the knockback the player receives. | Horizontal, Vertical |
+Every module of this category is **disabled by default**. Using one on a server that forbids it can
+get the account banned: the last column is a reminder, not an authorisation.
+
+| Module | Description | Settings | On public servers |
+| --- | --- | --- | --- |
+| Auto Tool | Switches to the tool that fits the block that is mined. | Switch back | Allowed by most, check the rules |
+| Kill Aura | Attacks the closest enemy while the attack key is held (`G`). | Range, Cooldown, Rotate, Only players, Indicator | Forbidden by most |
+| Auto Crystal | Breaks and places end crystals (`V`). | Place, Break, Range, Place delay, Break delay | Forbidden by most |
+| Anti Knockback | Reduces the knockback the player receives. | Horizontal, Vertical | Forbidden by most |
 
 ### Movement
 
