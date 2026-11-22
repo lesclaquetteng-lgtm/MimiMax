@@ -20,12 +20,12 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 # The time of the logs is the local time of the player, the standard library only knows UTC.
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
-ureq = { version = "2", features = ["json"] }
+ureq = { version = "3", features = ["json"] }
 urlencoding = "2"
-getrandom = "0.3"
+getrandom = "0.4"
 zeroize = "1"
-md-5 = "0.10"
-zip = "2"
+md-5 = "0.11"
+zip = "9"
 
 [dev-dependencies]
 serde_json = "1"
