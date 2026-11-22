@@ -1,550 +1,493 @@
-# Remarque.md — Analyse du dépôt MimiMax (Aether Client / Aether Launcher)
+# Remarque.md — Revue critique pré-publication de MimiMax / Aether
 
-> Dépôt analysé : https://github.com/lesclaquetteng-lgtm/MimiMax
-> Date de l'analyse : 22 novembre 2026
+> **Décision au 22 novembre 2026 : NO-GO — ne pas publier de release utilisateur à partir du commit audité.**
+>
+> Dépôt : https://github.com/lesclaquetteng-lgtm/MimiMax  
+> Branche : `main`  
+> Commit examiné : `a392ad0bd38d132837d6a64c0639a9b03e5d07de`  
+> Périmètre : launcher Rust, shell Tauri, interface HTML/CSS/JS, mod Fabric, hébergement local, documentation, configuration GitHub Actions et état CI visible au moment de l'audit.
 
----
-
-## 0. Périmètre et limites (à lire d'abord)
-
-**Ce qui a été lu :**
-
-- la page d'accueil du dépôt et le `README.md`
-- `ANALYSE-AMELIORATIONS.md` (1140 lignes, lu jusqu'au §8.7)
-- `RAPPORT-FINAL.md` (en entier)
-- la liste des fichiers à la racine
-
-**Ce qui n'a pas pu être lu :**
-
-- le **code source** (`aether-client/src`, `launcher/src`, `launcher/gui`) : l'accès GitHub aux sous-dossiers est refusé aux outils automatisés
-- les **workflows** `.github/workflows` et la **Pull Request ouverte**
-- le contenu des binaires `.exe`
-
-Conséquence : cette analyse porte sur **l'architecture, la documentation, l'hygiène du dépôt et les risques déduits de ce que le projet décrit lui-même**. Chaque remarque est étiquetée :
-
-| Étiquette | Signification |
-|---|---|
-| ✅ **Constaté** | visible directement sur le dépôt ou dans ses documents |
-| 🔎 **À vérifier** | risque plausible d'après la documentation, à confirmer dans le code |
+Ce document remplace l'ancienne analyse. Plusieurs remarques de l'ancienne version étaient devenues fausses après les changements récents : les fichiers de sécurité et de contribution existent maintenant, le workflow de release existe, le stockage DPAPI des jetons est implémenté et les anciens exécutables à la racine ne figurent plus dans l'arbre actuel. Les constats ci-dessous sont réévalués sur le commit indiqué, pas recopiés depuis l'ancien rapport.
 
 ---
 
-## 1. Verdict en bref
+## 1. Synthèse exécutive
 
-Le projet est **sérieux et bien outillé** : un cœur Rust testé (151 tests, clippy à 0 avertissement), un mod Fabric testé (42 tests d'après la dernière révision), des tests E2E pilotant la vraie interface, et surtout une culture de la preuve rare pour un projet de cette taille (chaque correctif est accompagné de sa vérification).
+Le projet a une base technique sérieuse : séparation entre le cœur Rust et l'interface, shell Tauri avec CSP restrictive, protections de chemins et d'extraction, vérification de téléchargements, tests unitaires et d'intégration, stockage protégé des jetons Microsoft sous Windows, et workflows automatisés.
 
-Les faiblesses ne sont pas dans la qualité du code mais dans **l'hygiène du dépôt, la sécurité de la distribution, la cohérence de la documentation et quelques risques liés au périmètre fonctionnel**.
+Cela ne suffit toutefois pas pour déclarer le logiciel prêt à être distribué au grand public.
 
-| # | Remarque | Gravité | Effort |
+### Bloquants confirmés
+
+| ID | Sévérité | Problème | Décision |
 |---|---|---|---|
-| R1 | Binaires `.exe` commités dans le dépôt | 🔴 Haute | Faible |
-| R2 | Données locales / secrets possibles dans `tools/` et les docs | 🔴 Haute | Faible |
-| R3 | Serveur hébergé en `online-mode=false` : exposition si le port est ouvert | 🔴 Haute | Faible |
-| R4 | Modules de combat + mode hors-ligne : risque de ban et de réputation | 🟠 Moyenne | Moyen |
-| R5 | Jetons Microsoft : coffre DPAPI et migration — ✅ **traité** (§R5) | 🟠 Moyenne | Moyen |
-| R6 | Aucune release, aucune signature, aucune mise à jour | 🟠 Moyenne | Moyen |
-| R7 | Nom du projet incohérent (MimiMax / Aether) | 🟡 Faible | Faible |
-| R8 | Documentation divergente (Electron vs Tauri) et fichiers `.md` trop lourds à la racine | 🟡 Faible | Faible |
-| R9 | Chiffres de FPS présentés sans leur contexte | 🟡 Faible | Faible |
-| R10 | Dépendance à des versions de mods figées — ✅ **traité** (§R10) | 🟡 Faible | Moyen |
-| R11 | Windows uniquement, CI non vérifiée | 🟡 Faible | Moyen |
-| R12 | Dette technique — 🟡 **partiellement traitée** : installation faite, reste les points « client » (§R12) | 🟡 Faible | Variable |
-| R13 | Interface en anglais uniquement, accessibilité clavier partielle | 🟡 Faible | Moyen |
+| A-01 | **BLOQUANT** | La CI de `main` échoue sur Clippy à cause d'un import inutilisé | Corriger avant tout merge/release |
+| A-02 | **CRITIQUE** | Le choix `onlineMode=true` n'est pas correctement appliqué à un nouveau serveur hébergé | Corriger et tester les deux modes |
+| A-03 | **CRITIQUE** | Recréer un serveur déjà actif peut enregistrer de nouveaux ports sans modifier les ports réellement utilisés | Corriger la gestion des ports et des serveurs actifs |
+| A-04 | **CRITIQUE** | La whitelist d'un serveur offline ne prouve pas l'identité du joueur ; la documentation donne une garantie excessive | Corriger le modèle de sécurité et les avertissements |
+| A-05 | **ÉLEVÉ** | L'arrêt du jeu peut supprimer le fichier PID et retourner un succès sans confirmer l'arrêt du processus | Corriger et tester les échecs d'arrêt |
+| A-06 | **ÉLEVÉ** | Les processus persistants sont retrouvés uniquement par PID, sans preuve qu'il s'agit encore du processus lancé par Aether | Vérifier l'identité du processus avant toute terminaison |
+| A-07 | **ÉLEVÉ** | Le workflow de release ne reproduit pas l'ensemble des contrôles de la CI | Bloquer les releases sur une validation complète |
+| A-08 | **ÉLEVÉ** | Les scénarios E2E de l'interface ne sont pas exécutés par les workflows CI visibles | Ajouter des tests automatisés de l'application installée |
+
+**Conclusion :** tant que A-01 à A-08 ne sont pas traités ou explicitement résolus par une décision technique documentée, je déconseille de distribuer le launcher ou le mod comme version stable.
+
+### Ce que cette revue prouve — et ne prouve pas
+
+L'analyse porte sur l'arbre GitHub du commit identifié, les sources consultées, les fichiers de configuration et les journaux CI disponibles. Elle comprend une revue statique ciblée ; elle ne constitue pas une exécution indépendante du logiciel sur un PC Windows propre, une session Minecraft réelle ou un serveur public.
+
+Je ne prétends donc pas avoir prouvé l'absence de toutes les autres erreurs. Un audit statique ne peut jamais garantir mathématiquement « zéro bug ». L'objectif réaliste est de rendre les défauts connus bloquants, d'augmenter la couverture des scénarios réels et d'exiger des preuves reproductibles avant chaque publication.
 
 ---
 
-## 2. Points forts à conserver
+## 2. Défauts et risques détaillés
 
-- **Architecture saine** : le cœur Rust ne contient pas de logique dans l'interface ; tout passe par des documents JSON, donc tout est testable en ligne de commande.
-- **Téléchargements robustes** : reprise par `Range`, backoff, vérification SHA-1, protection zip-slip, index d'assets corrompu non cru sur parole.
-- **Sonde de login réelle** (`servers probe`) plutôt qu'une heuristique sur le MOTD : on sait avant de lancer le jeu si le serveur accepte un compte hors-ligne.
-- **Honnêteté du projet** : les limites sont écrites (« hors-ligne ≠ sécurisé », « aucun contournement d'`online-mode=true` »).
-- **Sécurité Electron correcte** : `contextBridge`, pas de `nodeIntegration`, navigation externe en HTTPS uniquement, tests de régression (`npm run test:security`).
-- **Bugs graves trouvés ET corrigés avec preuve** : preset JVM `balanced` qui empêchait le démarrage, crash au démarrage dû à la config appliquée avant `minecraft.options`, BOM UTF-8 qui faisait perdre les réglages, `Settings` sans `#[serde(default)]`.
+### A-01 — La CI de `main` est rouge : Clippy bloque le commit
 
----
+<badge> BLOQUANT </badge>
 
-## 3. Remarques détaillées et solutions
+**Preuve :** exécution GitHub Actions `45074946784`, sur le commit audité. Le job `Rust core (ubuntu-latest)` a terminé en échec.
 
-### R1 — Binaires `.exe` commités à la racine · 🔴 ✅ Constaté
+- La suite `cargo test --locked` a réussi.
+- L'étape `cargo clippy --locked --all-targets -- -D warnings` a échoué.
+- Erreur exacte : import inutilisé `aether_launcher::logs::SessionLog`.
+- Emplacement : `launcher/tests/integration.rs:13`.
 
-**Constat.** `MimiMax.exe` et `Aether-Launcher.exe` sont versionnés à la racine. Les documents mentionnent aussi un dossier `dist/` avec un installateur NSIS et un exe portable.
+Avec `-D warnings`, un simple avertissement devient une erreur de compilation. Une branche qui échoue à cette règle ne doit pas être considérée comme validée.
 
-**Risques.**
+**Correctif exigé :**
+1. Supprimer l'import s'il n'est plus utilisé, ou l'utiliser si le test devait réellement s'en servir.
+2. Relancer localement `cargo clippy --locked --all-targets -- -D warnings`.
+3. Relancer la CI complète sur Windows et Linux.
+4. Vérifier que tous les jobs du commit final sont verts, pas uniquement le job Rust Linux.
 
-- Impossible de prouver que le binaire correspond au code source.
-- Chaque nouvelle version alourdit l'historique Git de plusieurs Mo, définitivement.
-- Les empreintes SHA-256 publiées dans `dist/LISEZ-MOI.txt` sont dans **le même dépôt** que les binaires : elles ne prouvent rien si le dépôt est compromis.
-- Les exe non signés déclenchent SmartScreen et des faux positifs antivirus, qui nuisent à la confiance.
+**Critère de clôture :** aucun job en échec, annulé ou ignoré sans justification sur le commit candidat à la release.
 
-**Solutions.**
+### A-02 — Le paramètre de mode premium du serveur n'est pas respecté à la création
 
-1. Retirer les binaires du suivi Git et les ignorer :
+<badge> CRITIQUE </badge>
 
-```bash
-git rm --cached MimiMax.exe Aether-Launcher.exe
-git rm -r --cached dist/ 2>/dev/null || true
-printf '\n*.exe\n/dist/\n/launcher/target/\n/launcher/desktop/target/\n/aether-client/build/\n/aether-client/.gradle/\nnode_modules/\n' >> .gitignore
-git add .gitignore && git commit -m "Retire les binaires du suivi Git"
-```
+**Fichiers :** `launcher/src/hosting.rs`, fonctions `properties` et `create` ; `launcher/desktop/src/commands.rs`, commande `hosts_create`.
 
-2. Publier les binaires via **GitHub Releases**, construits par GitHub Actions (voir l'annexe A), avec le fichier `SHA256SUMS` en pièce jointe.
-3. Pour alléger l'historique déjà alourdi :
+La commande Tauri accepte explicitement `onlineMode=true` et transmet l'option au cœur. Cependant :
 
-```bash
-pip install git-filter-repo
-git filter-repo --invert-paths --path MimiMax.exe --path Aether-Launcher.exe --path dist/
-# puis force-push : à faire UNE fois, en prévenant les éventuels contributeurs
-```
+- la fonction qui génère un nouveau fichier `server.properties` écrit en dur `online-mode=false` ;
+- l'appel de cette fonction lors de la création ne lui transmet pas le paramètre `online_mode` ;
+- la branche qui traite un fichier déjà existant ne force `online-mode=true` que lorsque l'option est vraie ;
+- lorsqu'on demande le mode offline pour un serveur existant, le fichier n'est pas nécessairement remis à `online-mode=false` ;
+- les métadonnées peuvent donc annoncer un mode qui ne correspond pas à la configuration effective du serveur.
 
-4. À moyen terme : signature de code Windows (voir R6).
+**Impact :** l'utilisateur peut croire qu'il a créé un serveur avec authentification premium alors que le serveur démarre en offline, ou inversement retrouver une configuration ancienne qui ne correspond pas à son choix.
 
----
+**Correctif exigé :**
+1. Faire de la valeur demandée une donnée effectivement utilisée lors de la génération du fichier.
+2. Définir une politique explicite pour les serveurs existants : appliquer le choix, ou refuser la modification et demander une confirmation claire. Ne jamais afficher un état différent de celui du fichier réellement utilisé.
+3. Relire et valider le contenu final de `server.properties` avant d'écrire les métadonnées.
+4. Distinguer le mode demandé, le mode configuré et le mode réellement observé lorsque le serveur tourne.
 
-### R2 — Données locales et secrets possibles dans le dépôt · 🔴 🔎 À vérifier
+**Tests obligatoires :**
 
-**Constat.** Le README décrit `tools/` comme « scripts et références locaux utilisés pendant le développement ». Les documents mentionnent `tools/aether-home` (une vraie installation avec `accounts.json`, `settings.json`, logs de session), `tools/ui-shots`, des captures `tools/*.png` et des logs `tools/tauri-bundle*.log`.
-
-Par ailleurs, `ANALYSE-AMELIORATIONS.md` contient des chemins personnels (`C:\Users\ee\Aether`, `%LOCALAPPDATA%\...`) et le matériel de la machine de test.
-
-**Risques.**
-
-- Si `tools/aether-home` est versionné, il peut contenir des **identifiants de compte** et, si une connexion Microsoft y a déjà été faite, des **jetons d'accès/rafraîchissement**.
-- Même supprimé, un secret reste lisible dans l'historique Git.
-
-**Solutions.**
-
-1. Chercher les secrets dans tout l'historique, pas seulement dans la version actuelle :
-
-```bash
-# gitleaks
-gitleaks detect --source . --log-opts="--all" -v
-# ou trufflehog
-trufflehog git file://. --since-commit "$(git rev-list --max-parents=0 HEAD)"
-```
-
-2. Vérifier explicitement les fichiers à risque :
-
-```bash
-git ls-files | grep -Ei 'accounts|token|session|\.env|aether-home|settings\.json|home\.txt'
-git log --all --oneline -- tools/aether-home
-```
-
-3. Si un jeton Microsoft a déjà été commité : **le révoquer** (compte Microsoft → sécurité → applications autorisées), puis purger l'historique avec `git filter-repo`.
-4. Ajouter à `.gitignore` : `tools/aether-home/`, `tools/ui-shots/`, `tools/*.log`, `tools/*.png`, `**/accounts.json`, `**/home.txt`.
-5. Activer **GitHub Secret Protection / push protection** (gratuit sur les dépôts publics) dans *Settings → Code security*.
-6. Anonymiser les chemins personnels dans les `.md` (`C:\Users\<vous>\...`).
-
----
-
-### R3 — Hébergement local en `online-mode=false` : exposition réseau · 🔴 🔎 À vérifier
-
-**Constat.** La page Servers lance un serveur Fabric local en `online-mode=false` « en un clic », administré par RCON.
-
-**Risque.** Un serveur hors-ligne accepte **n'importe quel pseudo**. Si le port 25565 est joignable depuis l'extérieur (box ouverte, UPnP, tunnel), n'importe qui peut se connecter sous le pseudo d'un opérateur et obtenir les droits `op`. Le rapport prévoit d'ailleurs « ouverture de port assistée (UPnP) » et « tunnel playit.gg » comme améliorations futures : sans garde-fous, elles aggraveraient le problème. Le mot de passe RCON est l'autre point sensible.
-
-**Solutions (valeurs par défaut à imposer à la création d'un hôte).**
-
-```properties
-# server.properties généré par le launcher
-online-mode=false
-white-list=true
-enforce-whitelist=true
-server-ip=127.0.0.1          # LAN/local uniquement par défaut
-enable-rcon=true
-rcon.password=<généré aléatoirement, 32 caractères, jamais affiché en clair>
-broadcast-rcon-to-ops=false
-op-permission-level=2
-```
-
-- Ajouter dans l'interface un bouton « Autoriser le réseau local » distinct, avec un avertissement clair : *« N'importe qui qui atteint ce serveur peut usurper n'importe quel joueur. »*
-- Ne **jamais** proposer l'ouverture UPnP sans liste blanche activée.
-- Faire écouter RCON uniquement sur `127.0.0.1` et refuser de démarrer si le port RCON est exposé.
-- Test à ajouter : un test d'intégration qui lit le `server.properties` généré et échoue si `white-list` est faux ou si `rcon.password` est vide.
-
----
-
-### R4 — Modules de combat et mode hors-ligne · 🟠 ✅ Constaté
-
-**Constat.** Le mod embarque des modules de type *Kill Aura*, *Auto Crystal*, *Anti Knockback*, *No Fall*, *Safe Walk*, *Auto Jump*, *Auto Tool*. Le README compare pourtant le projet à Lunar, Badlion et Feather, qui n'en contiennent pas. Le rapport reconnaît lui-même que le mode « fair play » n'est « pas encore implémenté ».
-
-**Risques.**
-
-- Ces modules sont interdits par la quasi-totalité des serveurs publics : **bannissement du compte** de l'utilisateur.
-- Combinés au compte hors-ligne, ils ouvrent la porte à des usages abusifs sur des serveurs tiers, ce qui expose le projet à des signalements.
-- Message de positionnement confus : « client d'optimisation et de confort » d'un côté, outils de triche de l'autre.
-
-**Solutions.**
-
-1. **Séparer** : sortir les modules de combat dans un second jar (`aether-combat.jar`), non installé par défaut, ou au minimum derrière un réglage « Modules avancés » désactivé par défaut.
-2. **Exploiter la sonde existante** : le launcher sait déjà si un serveur est `premium` ou `offline`. Passer au jeu un indicateur de mode et verrouiller les modules de combat quand le serveur n'est pas celui de l'utilisateur :
-
-```text
-# Launcher → JVM
--Daether.fairplay=true
-```
-
-```java
-// Côté mod : refus d'activation en mode fair play
-public boolean canEnable() {
-    return !(category == ModuleCategory.COMBAT
-             && Boolean.getBoolean("aether.fairplay"));
-}
-```
-
-3. **Documenter** chaque module (page `docs/FEATURES.md`) avec une colonne « Autorisé sur serveurs publics ? ».
-4. **Clarifier le README** : une section « Usage responsable » (serveurs privés, solo, serveurs qui l'autorisent) et la phrase *« Utiliser ces modules sur un serveur qui les interdit peut entraîner un bannissement. »*
-
----
-
-### R5 — Stockage des jetons Microsoft · 🟠 ✅ Traité
-
-> **État au 22 novembre 2026 — ✅ traité**, prouvé par des tests exécutés.
->
-> `launcher/src/accounts.rs` ne sérialise ni `accessToken` ni `refreshToken` (`skip_serializing`) et
-> son `Debug` les remplace par `<redacted>`. Les jetons vivent dans `accounts.credentials`, chiffré
-> par **DPAPI** (portée utilisateur Windows, `launcher/src/credentials.rs`) ; `accounts.json` ne
-> garde que l'identité du compte. Au démarrage, un catalogue historique encore en clair est **migré**
-> : le coffre est écrit d'abord, puis le catalogue est réécrit sans les jetons
-> (`migrate_legacy_secrets`). Si le coffre ne peut être écrit ou lu, les jetons sont effacés et le
-> joueur se reconnecte (`drop_secrets`) : jamais de repli en clair.
->
-> | Solution proposée ci-dessous | État |
-> | --- | --- |
-> | 1. Vérifier comment `access_token`/`refresh_token` sont écrits | **Fait** — `#[serde(skip_serializing)]` sur les deux champs ; test `account_catalogue_serialization_never_contains_session_tokens` |
-> | 2. Coffre du système | **Fait** — DPAPI (`CryptProtectData`/`CryptUnprotectData`, portée utilisateur) plutôt que la crate `keyring` : aucune dépendance supplémentaire, même protection sous Windows. Test `dpapi_credentials_round_trip_without_writing_tokens_to_the_catalogue` (le fichier chiffré ne contient aucun jeton et se relit). |
-> | 3. Ne garder que l'identifiant dans `accounts.json` | **Fait** — le catalogue réécrit ne contient ni `accessToken` ni `refreshToken` ; test `a_legacy_catalogue_is_migrated_into_the_vault_and_scrubbed` |
-> | 4. Ne jamais journaliser un jeton | **Fait** — `Debug` de `Account`/`Session` masque les jetons (`debug_output_never_exposes_microsoft_session_tokens`), l'aperçu CLI écrit `<redacted>` (`command_preview_redacts_tokens_embedded_in_arguments`), et le journal de session ne reçoit que la sortie du jeu : `a_session_log_never_contains_the_access_token` lance un vrai processus dont la ligne de commande porte un jeton et vérifie que le journal n'en contient aucune trace. |
-> | 5. Migration au premier lancement | **Fait** — `migrate_legacy_secrets` écrit le coffre **puis** réécrit le catalogue ; test `a_legacy_catalogue_is_migrated_into_the_vault_and_scrubbed` (catalogue source en clair → coffre → catalogue nettoyé → jetons relus). Un coffre inutilisable efface les jetons au lieu de les laisser en clair : `a_catalogue_loses_its_tokens_when_the_vault_cannot_be_written`. |
->
-> Limite assumée : le coffre est spécifique à Windows (DPAPI, portée utilisateur) ; sur les autres
-> cibles, le launcher refuse d'écrire les jetons au lieu de retomber sur un fichier en clair
-> (`non_windows_builds_refuse_to_persist_microsoft_tokens_in_clear_text`).
-
-**Constat.** Le rapport liste « jetons stockés via DPAPI/Keychain » comme amélioration *à venir* (§6.4), ce qui laisse penser qu'ils ne le sont pas encore. Le README annonce pourtant un support des comptes Microsoft.
-
-**Risque.** Un jeton de rafraîchissement en clair dans `accounts.json` permet à tout logiciel tournant sous le même utilisateur de prendre le compte Minecraft.
-
-**Solutions.**
-
-1. Vérifier dans `launcher/src/accounts.rs` comment les champs `access_token` / `refresh_token` sont écrits.
-2. Les stocker via le coffre du système : crate Rust [`keyring`](https://crates.io/crates/keyring) (Windows Credential Manager / DPAPI, Keychain macOS, Secret Service Linux).
-3. Ne garder dans `accounts.json` que l'identifiant du compte et une référence vers le coffre.
-4. Ne jamais journaliser un jeton : ajouter un test qui parcourt les logs d'une session simulée et échoue si une chaîne ressemblant à un jeton apparaît.
-5. Prévoir une migration : au premier lancement, déplacer les jetons existants vers le coffre puis les effacer du JSON.
-
----
-
-### R6 — Aucune release, aucune signature, aucune mise à jour · 🟠 ✅ Constaté
-
-**Constat.** « Releases » et « Packages » sont vides. Les installateurs sont exposés comme fichiers du dépôt. Le point « Mise à jour du launcher » est ouvert dans l'analyse. Le dépôt n'a ni description ni *topics*.
-
-**Solutions.**
-
-1. **Releases GitHub automatisées** sur tag `v*` (annexe A), avec `SHA256SUMS`.
-2. **Signature de code Windows** : certificat OV/EV, ou signature via Azure Trusted Signing. Sans signature, SmartScreen avertira à chaque téléchargement.
-3. **Mise à jour** : le plugin `tauri-plugin-updater` gère un manifeste signé (clé Ed25519). Le rapport décrit déjà ce besoin ; c'est la solution la plus directe puisque la coquille livrée est Tauri.
-4. **Fiche du dépôt** : ajouter une description (« Fabric Minecraft client + launcher with first-class offline mode »), des topics (`minecraft`, `fabric`, `launcher`, `rust`, `tauri`, `electron`), une capture dans le README.
-
----
-
-### R7 — Nom du projet incohérent · 🟡 ✅ Constaté
-
-**Constat.** Dépôt : `MimiMax`. README et code : `Aether Client` / `Aether Launcher` / paquet `dev.aether.client`. Binaire racine : `MimiMax.exe`. Un utilisateur ne sait pas quel est le nom du produit.
-
-**Solutions.**
-
-- Choisir **un** nom public. Soit renommer le dépôt en `aether-client` (GitHub redirige automatiquement l'ancienne URL), soit ajouter en tête du README une ligne « *MimiMax est le dépôt de développement d'Aether* ».
-- Aligner le nom du binaire, du dossier de données (`~/Aether`) et du titre de fenêtre.
-
----
-
-### R8 — Documentation divergente et fichiers volumineux · 🟡 ✅ Constaté
-
-**Constat.**
-
-- Le README décrit une interface **Electron** (`npm start`), alors que le journal d'analyse indique que « le shell livré est **Tauri** » (`launcher/desktop/`, `cargo tauri build`). La procédure de construction du produit réellement livré n'est donc pas dans le README.
-- `ANALYSE-AMELIORATIONS.md` fait **1140 lignes / 87 Ko** et mélange état courant, historique, journal de session et listes de propositions. Certaines sections sont barrées mais conservées.
-- Trois comptes de tests différents circulent (87, 127, 151) selon la date du document.
-- `RAPPORT-FINAL.md` (14/11) et `ANALYSE-AMELIORATIONS.md` (14→17/11) se recoupent.
-
-**Solutions.**
-
-1. README : ajouter « Construire le launcher livré (Tauri) » avec `cargo build --release` puis `cargo tauri build`, et préciser clairement le rôle d'Electron (GUI de développement ou héritage).
-2. Créer un **`CHANGELOG.md`** (format *Keep a Changelog*) et y déplacer le journal daté ; garder dans `docs/` un seul document « État et backlog » de moins de 200 lignes.
-3. Déplacer `ANALYSE-AMELIORATIONS.md`, `RAPPORT-FINAL.md`, `NETTOYAGE.md` dans `docs/archive/` ; ne laisser à la racine que `README`, `LICENSE`, `CHANGELOG`, `CONTRIBUTING`, `SECURITY`.
-4. Ne citer les chiffres de tests qu'à **un seul endroit**, ou les remplacer par un badge CI.
-5. Ajouter `SECURITY.md` (comment signaler une faille) et `CONTRIBUTING.md`.
-
----
-
-### R9 — Chiffres de FPS présentés sans contexte · 🟡 ✅ Constaté
-
-**Constat.** Le README montre « HUD at 889 FPS ». Le rapport précise que ce chiffre est obtenu en **854×480, distance de rendu 8, RTX 4060 Ti, serveur local vide**.
-
-**Risque.** Impression de promesse irréaliste ; un utilisateur avec une machine modeste sera déçu.
-
-**Solutions.**
-
-- Légender la capture : « *Conditions : 854×480, render distance 8, RTX 4060 Ti / Ryzen 7 5700X, monde vide.* »
-- Implémenter le **benchmark A/B** déjà prévu (même scène, preset *restore* vs *max*, p50/p99) et publier le **gain relatif** (« +X % sur votre machine ») plutôt qu'un FPS absolu.
-- Mesurer aussi en 1080p, sinon l'évaluation reste peu représentative.
-
----
-
-### R10 — Pack d'optimisation à versions figées · 🟡 ✅ Traité
-
-> **État au 22 novembre 2026 — ✅ traité**, prouvé par des tests exécutés contre un serveur Modrinth
-> local (`launcher/src/test_server.rs`), pas par lecture.
->
-> `launcher/src/performance.rs` construit le graphe **avant le premier octet** :
->
-> - **Version épinglée respectée.** Une dépendance `required` qui porte un `version_id` est lue par
->   `/version/{id}` et installée dans **cette** version, avec le SHA-1 publié par cette version ; la
->   version Fabric la plus récente n'est jamais substituée. Le repli « plus récente compatible » ne
->   sert que lorsque la dépendance n'épingle aucun `version_id`.
-> - **Dédoublonnage par `project_id`.** Cloth Config, listé dans le pack **et** requis par
->   MoreCulling, ne produit qu'un nœud et un téléchargement. Deux dépendances qui épinglent la même
->   version partagent ce nœud ; deux versions épinglées **différentes** du même projet gardent la
->   première et produisent un `Conflict` explicite dans le rapport (`reconcile`), jamais un choix
->   silencieux. Un pin explicite remplace la « plus récente » que le graphe aurait choisie seul.
-> - **Validation de la version de jeu et du loader.** Chaque nœud est contrôlé contre le pack :
->   `game_versions` doit contenir sa version et `loaders` doit contenir `fabric`. Une version
->   épinglée qui n'annonce ni l'un ni l'autre est refusée (rien ne prouve qu'elle tourne sur ce
->   Minecraft) ; une réponse non épinglée dont un de ces champs manque est acceptée, car la requête
->   qui l'a produite filtrait déjà sur les deux. Un nœud non supporté devient `unresolved`, le graphe
->   est `aborted` et **aucun fichier n'est téléchargé**.
-> - **Déclarations explicites.** `optional` et `embedded` sont consignées dans le rapport et ne sont
->   pas installées ; `incompatible` produit un `Conflict`.
->
-> | Solution proposée ci-dessous | État |
-> | --- | --- |
-> | 1. Résolution automatique des dépendances, échec **avant** l'installation | **Fait** — `build_graph` / `reconcile` / `install_from` ; tests `a_pinned_dependency_is_installed_at_its_exact_version` (version 1.0 épinglée téléchargée avec son SHA-1 alors que 2.0 existe), `a_pin_replaces_the_newest_build_the_pack_would_have_installed` (l'entrée du pack est remplacée par le pin, puis `verify` propre), `two_pinned_versions_of_one_project_are_an_explicit_conflict` (une seule version posée, conflit rapporté), `two_mods_that_pin_the_same_version_download_it_once`, `a_dependency_that_does_not_support_the_pack_version_aborts_the_graph` et `a_pinned_version_published_for_another_loader_aborts_the_graph` (zéro requête `/files/` dans les deux cas), `the_pack_is_installed_from_its_dependency_graph_without_a_duplicate` (Cloth Config explicite, sans doublon, puis `verify` propre) et `a_missing_required_dependency_downloads_nothing_at_all` |
-> | 2. Tester la compatibilité du pack à chaque changement de version de jeu | **Partiel** — la résolution refuse désormais hors ligne tout nœud qui n'annonce pas la version de jeu ou le loader du pack (prouvé par `a_dependency_that_does_not_support_the_pack_version_aborts_the_graph`, `a_pinned_version_published_for_another_loader_aborts_the_graph` et `a_newest_build_published_for_another_loader_is_refused`) ; il reste une tâche planifiée qui interroge la **vraie** API Modrinth pour lister ce qui existe déjà lors d'une montée de version, ce qu'un test hors ligne ne peut pas établir |
-> | 3. `THIRD-PARTY-NOTICES.md` | **Fait** (racine du dépôt) |
-> | 4. Mode dégradé : installer le reste et nommer le mod manquant | **Partiel, volontairement** — un mod **optionnel** qui échoue n'empêche pas le reste et le rapport le nomme ; un mod requis, une dépendance requise non résolue, une version de jeu ou un loader non supporté arrêtent tout, pour ne pas produire un pack qui ne démarre pas |
->
-> Limite restante, écrite telle quelle : un pin qui contredit un autre pin est signalé mais la
-> première déclaration l'emporte, puisqu'aucune des deux ne peut satisfaire l'autre.
-
-**Constat.** Le pack Modrinth contient 11 mods, vérifiés par SHA-1. Un défaut réel est déjà survenu : `MoreCulling` et `Dynamic FPS` exigeaient `Cloth Config`, absent du pack, donc **le jeu ne démarrait pas**.
-
-**Risques.** À chaque nouvelle version de Minecraft, un mod peut ne pas exister encore ; une dépendance oubliée casse le lancement ; les licences des mods diffèrent.
-
-**Solutions.**
-
-1. **Résolution automatique des dépendances** via l'API Modrinth (`/version/{id}` → champ `dependencies` avec `dependency_type: "required"`) et échec **avant** l'installation si une dépendance manque (c'est exactement le point 6.1-7 du rapport).
-2. Tester la compatibilité du pack lors d'un changement de version de jeu dans la CI (liste des mods disponibles pour la version cible).
-3. Ajouter un fichier `THIRD-PARTY-NOTICES.md` listant licence et source de chaque mod. Le launcher télécharge les mods depuis Modrinth au lieu de les redistribuer : c'est la bonne approche, à conserver.
-4. Mode dégradé : si un mod est indisponible, installer le reste et afficher lequel manque.
-
----
-
-### R11 — Windows uniquement et CI non vérifiée · 🟡 🔎 À vérifier
-
-**Constat.** Les outils de test reposent sur des `.exe` (`fake-core.exe`, `hang.exe`), PowerShell (`tools/setup.ps1`, `tools/gui.ps1`), `%APPDATA%`, `makensis`. Le dossier `.github/workflows` existe mais n'a pas pu être inspecté ; la checklist E2E est décrite comme manuelle.
-
-**Solutions.**
-
-1. Vérifier ce que font réellement les workflows et les inscrire dans le README (badge de statut).
-2. Matrice de CI minimale :
-
-```yaml
-strategy:
-  matrix:
-    os: [windows-latest, ubuntu-latest]
-```
-
-   avec `cargo test --release` et `cargo clippy --all-targets -- -D warnings` sur les deux, `gradle test` pour le mod, `npm run test:security` pour la GUI.
-3. Rendre `fake-core` compilable sur toutes les plateformes (pas d'extension `.exe` en dur) pour pouvoir lancer les E2E sous `xvfb-run` sur Linux.
-4. Ajouter `cargo fmt --check` : le journal signale **97 écarts de formatage** laissés en place ; un passage unique de `cargo fmt` les supprime.
-5. Dependabot (`cargo`, `npm`, `gradle`, `github-actions`) + `cargo audit` / `npm audit` dans la CI.
-
----
-
-### R12 — Dette technique déjà identifiée · 🟡 ✅ Partiellement traitée
-
-> **État au 22 novembre 2026 — 🟡 partiellement traitée** : la partie « installation » est faite et
-> prouvée par des tests exécutés ; les points d'interface en fin de tableau restent ouverts.
->
-> | Point | État |
-> | --- | --- |
-> | **Vérifier les fichiers, pas seulement les tailles** | **Fait** — `aether-launcher verify` recalcule le SHA-1 du client, des bibliothèques, de l'index d'assets et de chaque asset, ainsi que celui des jars du pack (`performance::verify`). `verify --repair` ne retélécharge que les fichiers faux (`installer::repair_from`). Test : `a_verification_reports_a_missing_client_and_an_altered_asset`, qui vérifie aussi que le fichier valide n'est **pas** redemandé au serveur. |
-> | **Annulation au milieu d'un fichier** | **Fait** — `AtomicBool` passé à `Client::download_cancellable` et lu **après chaque chunk** ; le `.part` est conservé, donc la reprise repart de ces octets. Test : `a_cancelled_download_stops_within_one_chunk_and_keeps_its_partial_file`. |
-> | **Reprise après installation interrompue** | **Fait** — `install.pending.json` (`launcher/src/pending.rs`) est écrit avant le premier octet, avancé à chaque étape, supprimé à la fin ; `info` l'expose (`pendingInstall`) et `install --discard` le nettoie avec les `.part`. Test : `an_interrupted_pack_installation_resumes_from_its_journal` (jar déjà vérifié non retéléchargé, jar manquant téléchargé, journal effacé, `verify` propre). |
-> | **Processus orphelin** | **Fait** — `game.pid` + `stop` (déjà présent avant cette passe). |
-> | **`close_on_launch`** | **Non fait** — détacher le jeu du cycle de vie de la coquille reste à concevoir ; hors périmètre de cette passe. |
-> | **Tests JavaScript** | **Partiel** — `formatBytes` et `paintRange` sont extraits dans `launcher/gui/src/ui/format.js` et couverts par `node --test launcher/gui/src/ui/format.test.mjs` (ajouté à la CI). `crashReport` construit du DOM et reste couvert par l'E2E : ce n'est pas une fonction pure. |
-> | **Mise à jour du launcher** | **Non fait** — le workflow de release existe (R6), `tauri-plugin-updater` n'est pas branché. |
-> | **`prefers-reduced-motion`** | **Fait** — règle globale déjà présente dans `styles.css`. |
-> | **Écran de config incohérent**, **conflits de touches**, **HUD 4K** | **Non fait** — points du client Java, hors de cette passe. |
-
-Tirée de la propre liste du projet, avec une solution concrète pour chacune.
-
-| Point ouvert | Pourquoi c'est utile | Solution |
+| État initial | Choix demandé | Résultat attendu |
 |---|---|---|
-| **Vérifier les fichiers, pas seulement les tailles** (`install_assets` compare `metadata.len()`) | Un asset tronqué à la bonne taille passe | Commande `verify` qui recalcule le SHA-1 de chaque asset selon l'index et ne retélécharge que les fichiers faux |
-| **Annulation au milieu d'un fichier** | Un gros jar finit son téléchargement après « Cancel » | Passer le `AtomicBool` à `Client::download` et le tester à chaque chunk de la boucle de lecture ; conserver le `.part` |
-| **Reprise après installation interrompue** | L'utilisateur ne sait pas qu'une installation est en attente | Écrire un `install.pending.json` au début, le supprimer à la fin ; au démarrage, proposer « Reprendre » |
-| **Processus orphelin** (jeu actif après redémarrage du launcher) | `game:stop` répond « No game is running » | Fichier PID `game.pid` ; au démarrage, vérifier le PID et proposer de l'arrêter |
-| **`close_on_launch`** | Fonction demandée, retirée faute de conception | Détacher le jeu du cycle de vie de la coquille (processus indépendant) et rediriger la sortie vers un fichier plutôt qu'un tube |
-| **Tests JavaScript** (aucun fichier `*.test.js`) | `paintRange`, `formatBytes`, `crashReport` ne sont testés que par l'E2E, lent | Extraire ces fonctions pures dans un module et utiliser `node --test` |
-| **Mise à jour du launcher** | Les correctifs ne parviennent pas aux utilisateurs | Voir R6 |
-| **`prefers-reduced-motion`** : 1 seule règle pour 16 transitions et 6 animations | Accessibilité | Une règle globale `@media (prefers-reduced-motion: reduce) { *{animation:none!important;transition:none!important} }` |
-| **Client : écran de config incohérent** (`ConfigScreen` n'utilise pas `RenderUtil.card`) | Aspect disparate | Réutiliser la palette de `RenderUtil` |
-| **Client : conflits de touches** (deux modules sur la même touche) | Réglages « qui ne répondent pas » | Détecter à l'enregistrement et afficher une pastille rouge |
-| **HUD non validé en 4K / échelle GUI 4** | Positions possiblement fausses | Ajouter un test de positionnement paramétré sur les échelles 1 à 4 |
+| Nouveau serveur | Offline | `online-mode=false` |
+| Nouveau serveur | Premium | `online-mode=true` |
+| Serveur existant offline | Premium | Mode effectif premium, ou refus explicite |
+| Serveur existant premium | Offline | Mode effectif offline, ou refus explicite |
 
-**Piège de fond à surveiller dans le mod.** L'incident « la config activée faisait planter le démarrage » (`minecraft.options == null`) vient d'une règle générale : *rien ne doit toucher à `options` avant le premier tick*. Au lieu de le corriger module par module, ajouter une garde centrale et un test :
+Les tests doivent lire le fichier généré, pas uniquement vérifier les métadonnées JSON.
 
-```java
-// ModuleManager
-public void enable(Module m) {
-    if (Minecraft.getInstance().options == null) {
-        pendingEnable.add(m);          // différé jusqu'au premier tick
-        return;
-    }
-    m.onEnable();
-}
-```
+### A-03 — Les ports peuvent être désynchronisés lors de la recréation d'un serveur actif
 
----
+<badge> CRITIQUE </badge>
 
-### R13 — Langue et accessibilité · 🟡 ✅ Constaté
+**Fichier :** `launcher/src/hosting.rs`, fonction `create`, allocation des ports et mise à jour des métadonnées.
 
-**Constat.** Interface du launcher en anglais seulement, alors que le projet et sa documentation sont rédigés en français ; navigation clavier incomplète ; pas de thème clair ; pas de filtre dans les listes de serveurs et de mods.
+Lors d'un nouvel appel à `create`, le code réessaie de réserver le port existant à travers `free_port`. Si le serveur tourne encore, le port est déjà occupé : la fonction peut alors choisir un autre port libre.
 
-**Solutions.**
+Or, pour un fichier `server.properties` déjà présent, le code met à jour certaines propriétés — whitelist et éventuellement mot de passe RCON — mais ne réécrit pas nécessairement `server-port` ni `rcon.port`. Les nouvelles valeurs peuvent pourtant être enregistrées dans les métadonnées du serveur.
 
-1. i18n minimale : `gui/src/i18n/en.json` + `fr.json`, fonction `t('key')` partout où l'UI écrit du texte en dur, langue choisie d'après `navigator.language`. Se mettre d'accord d'abord sur le fichier maître (anglais) pour éviter la dérive.
-2. Ordre de tabulation et focus visible sur tous les contrôles ; test `a11y.mjs` étendu aux pages Servers et Performance.
-3. Champ de filtre dans les listes dès 10 entrées.
-4. Variables CSS pour le thème (accent, fond, rayon) afin de préparer le thème clair sans réécrire `styles.css`.
+**Conséquence concrète :** le processus continue d'écouter sur ses anciens ports alors que le launcher enregistre de nouveaux ports. L'adresse affichée devient fausse et l'arrêt via RCON peut viser le mauvais port ; le launcher finit alors par tenter de tuer le processus.
 
----
+**Correctif exigé :**
+- Interdire la recréation ou la modification des ports d'un serveur en cours d'exécution.
+- Pour un serveur arrêté, synchroniser atomiquement les propriétés et les métadonnées.
+- Ne jamais choisir un nouveau port uniquement parce que le port historique est occupé par le serveur que l'on gère déjà.
+- Séparer « vérifier qu'un port est libre » de « attribuer et persister un port ».
+- Gérer explicitement le conflit de port au démarrage et afficher le port réellement utilisé.
 
-## 4. Plan d'action recommandé
+**Tests obligatoires :**
+1. Créer un serveur, le démarrer, rappeler la commande de création : les ports doivent rester cohérents.
+2. Arrêter puis redémarrer le serveur : mêmes ports tant qu'aucune modification n'a été demandée.
+3. Simuler un port occupé par un autre processus.
+4. Vérifier que le bouton Stop utilise le vrai port RCON et que le monde est sauvegardé.
 
-### Cette semaine (≈ 1 journée)
+### A-04 — La whitelist ne protège pas l'identité sur un serveur offline exposé
 
-1. **R2** : scan de secrets sur tout l'historique, révocation si nécessaire, `.gitignore`.
-2. **R1** : retirer les `.exe` du suivi Git.
-3. **R3** : imposer `white-list=true`, `server-ip=127.0.0.1` et un mot de passe RCON aléatoire.
-4. **R7 / R8** : décider du nom public, corriger le README (Tauri), ajouter la description et les topics.
+<badge> CRITIQUE — SÉCURITÉ </badge>
 
-### Ce mois-ci
+**Fichiers :** `launcher/src/hosting.rs`, fonctions `properties`, `ensure_whitelist` et `create` ; documentation « Offline servers » du README.
 
-5. **R6** : workflow de release avec `SHA256SUMS`.
-6. **R5** : jetons dans le coffre du système. — ✅ **fait**
-7. **R4** : modules de combat dans un jar séparé ou désactivés par défaut, indicateur `-Daether.fairplay`.
-8. **R11** : CI sur Windows et Linux, `cargo fmt`, Dependabot.
-9. **R10** : résolution des dépendances Modrinth avant installation. — ✅ **fait**
+Le projet utilise des serveurs `online-mode=false`. Dans ce mode, le serveur ne vérifie pas auprès de Microsoft/Mojang que le joueur contrôle réellement le compte correspondant au pseudo. L'identité offline est dérivée du nom envoyé par le joueur.
 
-### Ensuite
+La whitelist peut donc filtrer les noms non autorisés, mais **elle ne constitue pas une authentification** : un client qui peut atteindre le serveur peut tenter de se présenter sous le nom offline d'un joueur autorisé. Le UUID offline étant déterministe à partir du nom, il ne prouve pas que le client est le propriétaire légitime de ce nom.
 
-10. Signature de code et mise à jour automatique (R6).
-11. Points techniques du tableau R12 (vérification SHA-1, reprise, processus orphelin). — ✅ vérification, reprise et commande `verify` faits ; restent `close_on_launch`, `crashReport` et les points « client »
-12. i18n et accessibilité (R13), benchmark A/B (R9).
+Le README indique que la whitelist empêche un tiers de prendre le nom d'un opérateur. Cette formulation est trop forte et peut donner un faux sentiment de sécurité.
 
----
+Autre point : les nouveaux fichiers générés sont configurés avec `server-ip=127.0.0.1`, mais la branche qui traite un `server.properties` déjà présent ne réimpose pas cette valeur. Un ancien fichier ou un fichier modifié peut donc conserver une adresse d'écoute plus large. Il ne faut pas généraliser la protection loopback à tous les serveurs existants.
 
-## 5. Checklist de validation
+**Correctif exigé :**
+1. Réécrire la documentation : whitelist offline = filtre de noms, pas preuve d'identité.
+2. Pour le mode offline, conserver le loopback comme valeur par défaut et vérifier l'adresse d'écoute effective avant le démarrage.
+3. Pour toute exposition au LAN ou à Internet, afficher un avertissement explicite sur l'usurpation de pseudo.
+4. Ne jamais présenter un serveur offline exposé comme sécurisé par la seule whitelist.
+5. Pour un serveur public, recommander une authentification réelle côté serveur/proxy et une configuration réseau maîtrisée. À défaut, ne pas autoriser l'exposition publique depuis le launcher.
+6. Définir comment le launcher traite les serveurs existants dont les propriétés sont anciennes ou incohérentes.
 
-- [ ] `gitleaks detect --log-opts="--all"` ne trouve rien
-- [ ] `git ls-files | grep -i '\.exe$'` ne renvoie rien
-- [ ] Un `server.properties` généré contient `white-list=true` et un `rcon.password` non vide
-- [x] `accounts.json` ne contient aucun jeton en clair, la migration et l'absence de jeton dans les journaux sont testées (22 novembre 2026)
-- [ ] Une release GitHub contient les installateurs **et** `SHA256SUMS`
-- [ ] Le README décrit la construction du produit réellement livré (Tauri)
-- [ ] Les modules de combat sont désactivés par défaut ou absents du jar principal
-- [ ] La CI passe sur Windows **et** Linux
-- [x] `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings` et `cargo test` sont verts (22 novembre 2026)
-- [x] Un jar dont le SHA-1 ne correspond pas est refusé et n'est jamais posé
-- [x] Une dépendance requise absente arrête l'installation avant tout téléchargement
-- [x] Cloth Config n'est résolu qu'une fois quand le pack le liste et qu'un mod le requiert
-- [x] Une installation interrompue laisse `install.pending.json` et reprend sans retélécharger les fichiers vérifiés
-- [x] `verify` signale les fichiers manquants/altérés et `verify --repair` ne retélécharge que ceux-là
-- [x] `node --test launcher/gui/src/ui/format.test.mjs` est vert (4 tests)
-- [x] Une annulation au milieu d'un fichier laisse un `.part` repris par l'installation suivante
-- [ ] `gradle test` et `npm run test:security` restent à vérifier sur une machine avec la toolchain Java
+**Test de sécurité obligatoire :** sur un serveur de test isolé, tenter de joindre le serveur avec un client offline utilisant le pseudo d'un joueur autorisé. Documenter le résultat réel et adapter les garanties affichées à ce comportement.
 
----
+### A-05 — L'arrêt du jeu peut annoncer un succès alors que le jeu tourne toujours
 
-## Annexe A — Workflow de release (point de départ)
+<badge> ÉLEVÉ </badge>
 
-À placer dans `.github/workflows/release.yml` :
+**Fichier :** `launcher/src/game.rs`, fonction `stop`.
 
-```yaml
-name: release
-on:
-  push:
-    tags: ['v*']
+Après avoir demandé l'arrêt du processus, le code vérifie son état pendant une durée limitée. À la fin de cette boucle, il supprime le fichier PID et retourne le PID comme résultat sans vérifier une dernière fois que le processus a effectivement disparu.
 
-jobs:
-  windows:
-    runs-on: windows-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v4
+Si l'arrêt échoue ou prend plus longtemps que le délai prévu, le launcher peut :
+- afficher un arrêt réussi ;
+- supprimer la seule référence persistante au processus ;
+- laisser Minecraft tourner en arrière-plan ;
+- ne plus pouvoir retrouver ce processus lors de la prochaine session du launcher.
 
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: actions/setup-java@v4
-        with: { distribution: temurin, java-version: '21' }
-      - uses: actions/setup-node@v4
-        with: { node-version: '22' }
+C'est particulièrement problématique parce que la logique d'arrêt du serveur hébergé adopte une meilleure politique : elle conserve le PID lorsqu'elle n'a pas réussi à arrêter le processus.
 
-      - name: Tests
-        working-directory: launcher
-        run: |
-          cargo test --release
-          cargo clippy --release --all-targets -- -D warnings
+**Correctif exigé :**
+- Après le délai, vérifier une dernière fois l'état du processus.
+- Ne supprimer le PID qu'après confirmation de l'arrêt.
+- En cas d'échec, retourner une erreur explicite et conserver l'enregistrement.
+- Faire remonter à l'interface « arrêt demandé », « arrêt confirmé » et « arrêt impossible » comme trois états distincts.
 
-      - name: Mod Fabric
-        working-directory: aether-client
-        run: gradle build
+**Tests obligatoires :** arrêt normal, processus lent à s'arrêter, refus d'arrêt, processus déjà terminé, échec de la commande système et fermeture du launcher pendant l'arrêt.
 
-      - name: Launcher (cœur + coquille Tauri)
-        working-directory: launcher
-        run: |
-          cargo build --release
-          cd desktop
-          cargo install tauri-cli --version "^2" --locked
-          cargo tauri build
+### A-06 — Un PID seul ne prouve pas que le processus appartient encore au launcher
 
-      - name: Empreintes
-        shell: pwsh
-        run: |
-          $files = Get-ChildItem -Recurse launcher/desktop/target/release/bundle -Include *.exe
-          $files | ForEach-Object {
-            "$((Get-FileHash $_ -Algorithm SHA256).Hash.ToLower())  $($_.Name)"
-          } | Out-File SHA256SUMS -Encoding ascii
+<badge> ÉLEVÉ — RISQUE PROCESSUS </badge>
 
-      - uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            launcher/desktop/target/release/bundle/nsis/*.exe
-            aether-client/build/libs/*.jar
-            SHA256SUMS
-```
+**Fichiers :** `launcher/src/game.rs`, `launcher/src/hosting.rs`, fonctions de lecture PID et `process_alive`.
 
-> Les chemins exacts (`bundle/nsis`, nom des jars) sont déduits de la documentation : à ajuster après un premier essai.
+Le launcher persiste un nombre PID puis vérifie essentiellement si ce PID existe :
+- sous Windows, via `tasklist` ;
+- sur les autres systèmes, via `kill -0`.
 
----
+Un PID peut être réutilisé après la fermeture du processus initial. Un ancien fichier `game.pid` ou `server.pid` peut alors pointer vers un processus sans rapport avec Minecraft ou Aether. Une commande Stop pourrait tenter de tuer ce processus.
 
-## Annexe B — Fichiers à ajouter à la racine
+**Correctif exigé :**
+- Stocker une identité de processus plus robuste que le PID seul : PID, date/heure de création, exécutable attendu et identifiant de session généré au lancement.
+- Vérifier cette identité avant toute commande de terminaison.
+- En cas de doute, ne pas tuer le processus ; demander une action manuelle et préserver le diagnostic.
+- Nettoyer les enregistrements orphelins sans toucher aux processus qui ne peuvent pas être identifiés avec certitude.
 
-| Fichier | Contenu minimal |
-|---|---|
-| `SECURITY.md` | Comment signaler une faille en privé, versions supportées |
-| `CONTRIBUTING.md` | Prérequis, commandes de test, style (`cargo fmt`) |
-| `CHANGELOG.md` | Une entrée par release, à partir du journal du 14 au 17 novembre |
-| `THIRD-PARTY-NOTICES.md` | Licence et source de chaque mod du pack et de chaque dépendance |
-| `.github/dependabot.yml` | `cargo`, `npm`, `gradle`, `github-actions`, rythme hebdomadaire |
-| `docs/archive/` | Anciens rapports (`ANALYSE-AMELIORATIONS.md`, `RAPPORT-FINAL.md`, `NETTOYAGE.md`) |
+**Test obligatoire :** simuler un fichier PID obsolète dont le numéro est réutilisé par un autre processus. Le launcher ne doit jamais tuer ce dernier.
+
+### A-07 — Le workflow de release n'impose pas tous les contrôles de la CI
+
+<badge> ÉLEVÉ </badge>
+
+**Fichier :** `.github/workflows/release.yml`.
+
+Le workflow de release existe désormais et crée un fichier `SHA256SUMS`, ce qui est une bonne amélioration. Mais il ne reproduit pas toute la validation du workflow CI.
+
+La release exécute notamment les tests et Clippy du cœur, construit le mod Fabric et le shell Tauri. En revanche, le workflow de release ne reprend pas l'ensemble des contrôles de la CI visibles :
+- vérification de formatage Rust ;
+- tests du shell Tauri ;
+- contrats et vérifications de l'interface JavaScript ;
+- vérification des tokens CSS, de l'Identity Studio et de la parité du design system ;
+- validation de l'ensemble des jobs de la matrice Windows/Linux.
+
+La CI principale est déclenchée par les PR et les pushes de la branche principale, tandis que la release est déclenchée par un tag. Le workflow de release ne vérifie pas à lui seul que le commit pointé par ce tag possède une CI complètement verte.
+
+**Correctif exigé :**
+1. Faire dépendre la publication d'une validation complète du commit tagué.
+2. Ne jamais publier si un contrôle requis est absent, en échec ou annulé.
+3. Ajouter un contrôle de cohérence entre tag, version Gradle, version Cargo, version Tauri, nom du JAR et version affichée dans l'application.
+4. Empêcher la publication accidentelle d'un tag sur un commit non validé.
+5. Conserver les empreintes SHA-256, mais ajouter la signature des exécutables Windows et une provenance de build vérifiable.
+
+**État de distribution :** l'API GitHub ne retourne actuellement aucune release publiée pour ce dépôt. Le workflow est présent, mais cela ne prouve pas encore qu'une release complète et installable a été publiée et vérifiée.
+
+### A-08 — Les tests E2E de l'interface ne sont pas branchés à la CI visible
+
+<badge> ÉLEVÉ </badge>
+
+**Fichiers :** `.github/workflows/ci.yml`, `tools/e2e/`, `CONTRIBUTING.md`, `docs/VERIFICATION.md`.
+
+Le dépôt dispose de scripts E2E, de captures d'écran, de vérifications d'accessibilité et de scripts pilotant l'interface. Cependant, le workflow CI visible exécute principalement :
+- les tests Rust ;
+- la compilation et les tests du shell ;
+- la compilation et les tests du mod ;
+- des contrôles de syntaxe et de contrats de l'interface.
+
+Il ne lance pas une véritable session automatisée de l'application installée avec WebView2 pour parcourir les écrans et tester les interactions comme le fera un utilisateur.
+
+**Risque :** une compilation réussie et des contrats statiques ne détectent pas nécessairement une fenêtre blanche, un bouton inactif, un événement IPC mal relié, une régression de navigation, un débordement visuel ou une différence entre l'environnement de test et le build livré.
+
+**Correctif exigé :**
+- Ajouter un job Windows qui construit puis lance l'application dans un environnement isolé.
+- Exécuter les parcours critiques : installation, compte offline, compte Microsoft (lorsque les secrets de test sont disponibles), sélection de version, installation/annulation/reprise, mods, serveurs, performance, logs, lancement/arrêt du jeu.
+- Tester au minimum les tailles de fenêtre supportées et un affichage à mise à l'échelle Windows élevée.
+- Conserver les captures et rapports comme artefacts CI pour chaque PR importante.
 
 ---
 
-## Conclusion
+## 3. Autres remarques importantes avant publication
 
-Le fond est bon : l'architecture est propre, les tests sont nombreux et les défauts sont corrigés avec des preuves. Les actions à plus fort rendement sont **de l'hygiène et de la sécurité**, pas du code applicatif : sortir les binaires du dépôt, s'assurer qu'aucun secret n'y traîne, sécuriser les valeurs par défaut du serveur hébergé, clarifier le périmètre des modules de combat, puis automatiser les releases. Une fois cela fait, le projet est présentable publiquement et les améliorations fonctionnelles de la liste (vérification SHA-1, reprise, mise à jour automatique) pourront s'appuyer sur une base de distribution fiable.
+### B-01 — Identité de marque incohérente
+
+**Fichiers :** README, `launcher/desktop/tauri.conf.json`, historique du dépôt.
+
+L'identité publique n'est pas uniformisée :
+- dépôt GitHub : MimiMax ;
+- README et packages : Aether Client / Aether Launcher ;
+- produit et titre de fenêtre Tauri : CUBE Launcher ;
+- éditeur/publisher : Aether ;
+- l'introduction du README mentionne encore un ancien `MimiMax.exe` à la racine, absent de l'arbre actuel.
+
+**À faire :**
+- choisir un nom public unique ;
+- aligner nom de fenêtre, nom du produit, éditeur, identifiant d'application, dossier de données, installateur, README, releases et captures ;
+- supprimer les références aux anciens exécutables lorsqu'elles ne décrivent plus le fonctionnement courant ;
+- vérifier le nom affiché dans Applications installées, le menu Démarrer, le désinstalleur et les propriétés du binaire.
+
+Ce n'est pas seulement cosmétique : une identité différente entre l'installateur et l'application réduit la confiance de l'utilisateur et complique le support.
+
+### B-02 — La documentation de vérification ne reflète pas toujours l'état réel du commit
+
+**Fichier :** `docs/VERIFICATION.md`.
+
+Le document contient des résultats locaux et des nombres de tests qui ne sont pas identiques à ceux visibles dans les derniers logs CI. Il annonce notamment une validation Clippy réussie pour les vérifications locales, alors que la CI du commit audité échoue sur Clippy.
+
+Il faut distinguer explicitement :
+- résultat local et date de la machine ;
+- résultat CI et SHA exact ;
+- test automatisé à chaque PR ;
+- vérification manuelle non exécutée à chaque commit ;
+- test réel en jeu ;
+- résultat historique qui n'est plus représentatif.
+
+**À faire :** ajouter un tableau de preuve contenant commande, plateforme, SHA, date, résultat et lien CI. Ne jamais laisser un ancien résultat « vert » être interprété comme preuve que le commit courant est vert.
+
+### B-03 — Le dépôt contient beaucoup de captures et de fichiers de validation historiques
+
+L'arbre actuel représente environ 24,6 Mo de fichiers suivis, dont environ 19,9 Mo de PNG. Plusieurs répertoires semblent contenir des séries de captures ou des états de QA successifs : `tools/theme-pages/`, `tools/theme-pages-clair/`, `tools/qa/`, `tools/ui-shots-*/`, `tools/e2e/shots-verify/` et `tools/installed-shots2/`.
+
+Les deux exécutables sous `tools/e2e/` semblent être des fixtures de test accompagnées de leurs sources Rust : ne pas les supprimer aveuglément. Il faut plutôt séparer les fixtures nécessaires des captures temporaires et des exports historiques.
+
+**À faire :**
+- conserver les captures réellement utiles à la documentation et aux tests ;
+- déplacer les résultats temporaires et les gros rapports vers les artefacts CI ;
+- compresser les images qui n'ont pas besoin d'une définition élevée ;
+- vérifier les fichiers déjà suivis malgré leur présence dans `.gitignore` ;
+- éviter d'ajouter des captures redondantes à chaque itération.
+
+### B-04 — Scan de secrets de tout l'historique Git non prouvé par cette revue
+
+Le dépôt contient maintenant des règles d'ignorance pour plusieurs répertoires locaux et le coffre DPAPI est implémenté. Cela ne prouve pas qu'aucun secret n'a été commité dans le passé.
+
+Je n'ai pas exécuté Gitleaks ou TruffleHog sur l'intégralité de l'historique Git. Je ne conclus donc ni qu'un secret est présent, ni qu'il n'y en a aucun.
+
+**Obligation avant diffusion :**
+1. scanner tout l'historique, toutes les branches et tous les tags ;
+2. inspecter les fichiers de test contenant des comptes JSON, journaux, chemins utilisateur et configurations de serveurs ;
+3. révoquer immédiatement tout secret qui aurait été publié, puis purger l'historique si nécessaire ;
+4. activer la protection contre les secrets et le push protection ;
+5. ajouter un job automatisé de scan à la CI.
+
+Un fichier ignoré aujourd'hui peut toujours exister dans un ancien commit.
+
+### B-05 — Dépendances et licences tierces : rendre la conformité vérifiable
+
+**Fichier :** `THIRD-PARTY-NOTICES.md`.
+
+Le document identifie les principales familles de dépendances et donne des liens vers les projets Modrinth. C'est une bonne base, mais une distribution publique doit permettre d'identifier précisément ce qui est effectivement utilisé.
+
+**À faire :**
+- publier un inventaire des dépendances effectivement incluses dans chaque release ;
+- conserver version exacte, source, licence déclarée et attribution requise ;
+- différencier les bibliothèques intégrées au JAR, les dépendances téléchargées à l'installation et les dépendances utilisées uniquement à la compilation ;
+- vérifier les conditions de redistribution des captures, polices, icônes et ressources graphiques ;
+- inclure les notices nécessaires dans le package lorsque les licences l'exigent.
+
+Ne pas supposer que le lien vers la page d'accueil du projet suffit pour toutes les obligations d'une version donnée.
+
+### B-06 — Signature et mise à jour du logiciel
+
+Le workflow de release construit les exécutables et calcule leurs empreintes SHA-256. C'est utile, mais une empreinte publiée à côté d'un binaire ne remplace pas une signature de code vérifiable.
+
+Je ne vois pas de signature de code Windows dans le workflow de release consulté ni de mécanisme d'auto-mise à jour effectivement branché dans le shell.
+
+**À faire :**
+- signer les installateurs et exécutables Windows ;
+- vérifier la signature dans le processus de publication ;
+- publier les empreintes depuis le workflow de build ;
+- documenter la procédure de vérification pour l'utilisateur ;
+- concevoir le mécanisme de mise à jour avec manifeste signé, contrôle de version, gestion des erreurs et possibilité de revenir à une version connue ;
+- ne jamais installer silencieusement un binaire qui n'a pas passé la vérification cryptographique.
+
+### B-07 — Les modules de combat restent un risque de réputation et de support
+
+Le README annonce clairement les fonctions Kill Aura, Auto Crystal et Anti Knockback et indique qu'elles peuvent entraîner un bannissement. Il précise aussi que les modules de combat sont désactivés par défaut.
+
+C'est transparent, mais « désactivé par défaut » ne constitue pas une limitation technique : l'utilisateur peut les activer et les utiliser sur un serveur qui les interdit.
+
+**À faire :**
+- séparer clairement le client de confort/optimisation et les modules de combat dans la présentation produit ;
+- ne jamais faire de promesse de compatibilité anti-cheat ou d'indétectabilité ;
+- conserver l'avertissement avant activation et le rendre impossible à manquer ;
+- tester explicitement qu'une nouvelle configuration n'active aucun module de combat ;
+- documenter les risques de bannissement dans l'interface, pas uniquement dans le README.
+
+### B-08 — Le support système doit être annoncé sans ambiguïté
+
+Le shell livré est construit autour de Tauri et WebView2 sous Windows. Le stockage sécurisé des jetons Microsoft repose sur DPAPI ; les autres plateformes refusent de persister ces secrets plutôt que de les écrire en clair.
+
+Cette stratégie est préférable à un stockage non sécurisé, mais la matrice de support doit être nette : système officiellement supporté, système compilable uniquement pour développement, fonctionnalités indisponibles et comportement attendu.
+
+**À faire :** publier une matrice Windows 10/11 validée, préciser le statut des autres systèmes, puis ne pas afficher une fonctionnalité Microsoft comme disponible là où le coffre n'est pas pris en charge.
+
+### B-09 — Versions et artefacts de build trop liés à des noms figés
+
+**Fichier :** `launcher/desktop/build.rs`.
+
+Le script de build attend le JAR précis `aether-client-1.0.0.jar`. Cette dépendance au nom exact est fragile lors d'une future montée de version : un changement de version Gradle qui n'est pas répercuté au même endroit peut empêcher la compilation du shell ou lui faire embarquer un artefact incorrect.
+
+**À faire :**
+- centraliser les versions du produit ;
+- faire vérifier que la version du JAR, du cœur, du shell et du tag sont identiques ;
+- éviter les noms de fichier codés en dur lorsque le système de build peut fournir l'artefact explicitement ;
+- ajouter un test qui échoue dès qu'une version diverge.
+
+### B-10 — Portabilité de l'arrêt des processus
+
+**Fichier :** `launcher/src/hosting.rs`, fonction `kill_tree`.
+
+Sur Windows, la commande utilise `taskkill /T /F`. Sur les autres systèmes, la branche observée envoie `TERM` au PID ciblé ; elle ne démontre pas qu'elle termine toute l'arborescence de processus, malgré les commentaires qui parlent de l'ensemble de l'arbre.
+
+Si Linux ou macOS restent des cibles de compilation ou d'exécution, ce comportement doit être corrigé ou clairement déclaré non supporté. Les tests Linux de la bibliothèque ne remplacent pas une validation du comportement de terminaison.
+
+---
+
+## 4. Points positifs à préserver
+
+Ces éléments sont utiles et ne doivent pas être cassés lors des corrections :
+
+- Séparation du cœur Rust, du shell natif Tauri et de l'interface.
+- CSP restrictive et permissions Tauri limitées à la fenêtre principale.
+- Téléchargements en fichiers temporaires, reprise et vérification de hash avant remplacement.
+- Contrôles de chemins et protections contre l'extraction ZIP hors du répertoire cible.
+- Écritures atomiques et sauvegardes de configuration.
+- Coffre DPAPI pour les jetons Microsoft sous Windows, avec refus de stockage en clair sur les plateformes non prises en charge.
+- Protections contre plusieurs installations ou lancements concurrents.
+- Tests de récupération de configuration, de téléchargement, de session et de modules.
+- Documentation des limites du mode offline et des risques des modules de combat.
+
+Le but n'est pas de refaire l'architecture, mais de corriger les comportements qui ne respectent pas les garanties annoncées.
+
+---
+
+## 5. Plan de correction prioritaire
+
+### Phase 0 — Avant toute publication
+
+- [ ] Corriger A-01 et obtenir une CI totalement verte sur le commit exact.
+- [ ] Corriger A-02 : le mode d'authentification doit correspondre à la demande et au fichier serveur.
+- [ ] Corriger A-03 : plus aucune divergence entre ports persistés, propriétés et processus actif.
+- [ ] Corriger A-04 : supprimer la fausse garantie de sécurité liée à la whitelist offline et valider les serveurs existants.
+- [ ] Corriger A-05 : ne jamais annoncer un arrêt réussi sans confirmation.
+- [ ] Corriger A-06 : vérifier l'identité du processus avant de le terminer.
+- [ ] Corriger A-07 : le workflow de release doit exiger toutes les validations.
+- [ ] Corriger A-08 : ajouter les parcours E2E Windows à la CI.
+- [ ] Effectuer le scan de secrets de l'historique complet.
+- [ ] Uniformiser le nom public du produit.
+
+### Phase 1 — Validation fonctionnelle réelle
+
+- [ ] Installer sur un Windows 10 propre.
+- [ ] Installer sur un Windows 11 propre.
+- [ ] Tester sans Java installé, avec Java incompatible et avec Java valide.
+- [ ] Tester une installation neuve, une réparation, une annulation et une reprise après interruption.
+- [ ] Tester les réponses réseau 404, 429, 500, timeout, coupure et téléchargement corrompu.
+- [ ] Tester les comptes offline et Microsoft, le renouvellement de session et la déconnexion.
+- [ ] Tester les versions Minecraft/Fabric réellement annoncées.
+- [ ] Tester le serveur offline neuf et existant, le mode premium, les conflits de ports, les redémarrages et les arrêts.
+- [ ] Tester la fermeture du launcher pendant une installation et pendant une partie.
+- [ ] Tester la récupération après crash du launcher et du jeu.
+- [ ] Tester les écrans réels, les boutons, les modales, la navigation clavier, la mise à l'échelle Windows et les petites fenêtres.
+- [ ] Tester l'installation, la mise à jour et la désinstallation depuis le package final, pas depuis l'environnement de développement.
+
+### Phase 2 — Publication fiable
+
+- [ ] Choisir et uniformiser le nom et les métadonnées du produit.
+- [ ] Valider la nomenclature des versions sur Cargo, Gradle, Tauri et le tag.
+- [ ] Générer une release depuis un commit complètement validé.
+- [ ] Signer les binaires Windows.
+- [ ] Vérifier les hashes et la signature sur une machine propre.
+- [ ] Fournir les notices de licences exactes des composants livrés.
+- [ ] Publier les notes de version, les prérequis, les limites et une procédure de signalement de bugs.
+- [ ] Faire une installation pilote avant l'annonce publique.
+
+---
+
+## 6. Portes de sortie — conditions minimales pour déclarer une version publiable
+
+Une version ne doit être marquée stable que si toutes les conditions suivantes sont satisfaites :
+
+| Porte | Condition obligatoire | Preuve attendue |
+|---|---|---|
+| Build | Tous les artefacts sont construits depuis le commit tagué | Logs CI et SHA du commit |
+| Qualité | Tests, Clippy et formatage sont verts | Résultats CI complets |
+| Interface | Parcours E2E critiques réussis sur Windows | Rapport et captures CI |
+| Jeu | Minecraft démarre, rejoint un monde et s'arrête correctement | Logs de test réels |
+| Serveurs | Modes d'authentification et ports vérifiés | Tests de propriétés et intégration |
+| Sécurité | Aucune faiblesse critique non résolue, aucun secret publié | Rapport de scan et revue |
+| Processus | Aucun processus étranger ne peut être tué par un PID obsolète | Tests de réutilisation PID |
+| Distribution | Installateur, désinstallateur et mise à jour vérifiés | Test sur machine propre |
+| Intégrité | Signature et hashes vérifiables | Signature valide et SHA-256 |
+| Documentation | README, notices, prérequis et changelog alignés avec le binaire | Revue de release |
+
+**Règle stricte :** un test non exécuté n'est pas un test réussi. Un résultat historique n'est pas une preuve pour un nouveau commit. Un avertissement ignoré doit être justifié et accepté explicitement ; il ne doit pas être masqué.
+
+---
+
+## 7. Sources internes consultées
+
+- `.github/workflows/ci.yml`
+- `.github/workflows/release.yml`
+- `.github/dependabot.yml`
+- `README.md`
+- `SECURITY.md`
+- `CONTRIBUTING.md`
+- `THIRD-PARTY-NOTICES.md`
+- `docs/ARCHITECTURE.md`
+- `docs/FEATURES.md`
+- `docs/VERIFICATION.md`
+- `launcher/src/hosting.rs`
+- `launcher/src/game.rs`
+- `launcher/src/credentials.rs`
+- `launcher/src/accounts.rs`
+- `launcher/src/installer.rs`
+- `launcher/src/logs.rs`
+- `launcher/src/http.rs`
+- `launcher/desktop/src/commands.rs`
+- `launcher/desktop/src/main.rs`
+- `launcher/desktop/src/state.rs`
+- `launcher/desktop/tauri.conf.json`
+- `launcher/desktop/capabilities/default.json`
+- `launcher/desktop/build.rs`
+- `launcher/gui/src/ui/bridge.js`
+- `aether-client/build.gradle`
+- `aether-client/src/main/java/dev/aether/client/module/Module.java`
+- `aether-client/src/main/java/dev/aether/client/module/ModuleManager.java`
+- `aether-client/src/main/java/dev/aether/client/config/AetherConfig.java`
+- `aether-client/src/main/java/dev/aether/client/module/modules/CombatModules.java`
+
+**État final de cette revue :** le dépôt possède de bonnes fondations et plusieurs protections réelles, mais le commit audité ne satisfait pas encore un niveau de qualité acceptable pour une release publique stable. Corriger les défauts prouvés, automatiser les tests manquants, puis refaire une revue sur le commit candidat à la publication.
