@@ -10,6 +10,8 @@
 		"GuiMixin",
 		"MouseHandlerMixin",
 		"MinecraftMixin",
+		"RealmsAvailabilityMixin",
+		"RealmsClientMixin",
 		"ScreenEffectRendererMixin",
 		"ScreenMixin",
 		"TitleScreenMixin"

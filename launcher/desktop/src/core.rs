@@ -382,7 +382,7 @@ pub async fn run_core(app: AppHandle, args: Vec<String>) -> Value {
 	blocking(move || run_core_blocking(&app, &args))
 		.await
 		.unwrap_or_else(|| {
-			json!({ "ok": false, "error": "The launcher core stopped unexpectedly." })
+			json!({ "ok": false, "error": "Le cœur du launcher s'est arrêté de façon inattendue." })
 		})
 }
 
@@ -525,7 +525,7 @@ pub fn run_core_streaming(
 				"crashed": true,
 				"exitCode": status.code(),
 				"error": format!(
-					"The launcher core stopped with the code {}.",
+					"Le cœur du launcher s'est arrêté avec le code {}.",
 					status.code().map(|code| code.to_string()).unwrap_or_else(|| "?".to_string())
 				)
 			}),

@@ -102,7 +102,11 @@ test('the documentation gives the number of guarded scripts the code has', () =>
 	const french = ['zéro', 'un', 'deux', 'trois', 'quatre', 'cinq', 'six', 'sept', 'huit', 'neuf', 'dix'];
 	const english = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten'];
 	const forms = [french[CLICKING.length], english[CLICKING.length]];
-	const docs = ['../../README.md', '../../ANALYSE-AMELIORATIONS.md', '../../docs/VERIFICATION.md'];
+	const docs = [
+		'../../README.md',
+		'../../docs/rapports/ANALYSE-AMELIORATIONS.md',
+		'../../docs/VERIFICATION.md'
+	];
 
 	for (const doc of docs) {
 		const text = source(doc);

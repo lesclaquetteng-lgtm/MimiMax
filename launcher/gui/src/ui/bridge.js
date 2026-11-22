@@ -92,7 +92,9 @@
 		mods: {
 			list: () => invoke('mods_list'),
 			toggle: (name, enabled) => invoke('mods_toggle', { name, enabled }),
-			openFolder: () => invoke('mods_open_folder')
+			openFolder: () => invoke('mods_open_folder'),
+			search: (query, gameVersion) => invoke('mods_search', { query, game_version: gameVersion }),
+			install: (slug, gameVersion) => invoke('mods_install', { slug, game_version: gameVersion })
 		},
 
 		servers: {

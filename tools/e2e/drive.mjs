@@ -229,7 +229,7 @@ const stopped = await evaluate('window.aether.stop()');
 check('stop: the request is accepted', stopped?.ok === true, stopped?.error || '');
 
 await waitFor(
-	`document.querySelector('#status-text').textContent === 'Ready'
+	`document.querySelector('#status-text').textContent === 'Prêt'
 		&& document.querySelector('#btn-launch').disabled === false
 		&& document.querySelector('#btn-stop').hidden === true`,
 	'the interface to come back to the ready state',
@@ -242,7 +242,7 @@ const restored = await evaluate(`(() => ({
 	stopHidden: document.querySelector('#btn-stop').hidden
 }))()`);
 
-check('stop: the interface is ready again', restored.status === 'Ready' && restored.launchDisabled === false && restored.stopHidden === true, JSON.stringify(restored));
+check('stop: the interface is ready again', restored.status === 'Prêt' && restored.launchDisabled === false && restored.stopHidden === true, JSON.stringify(restored));
 
 // The kill is asynchronous on Windows, both processes have a few seconds to disappear.
 let dead = false;

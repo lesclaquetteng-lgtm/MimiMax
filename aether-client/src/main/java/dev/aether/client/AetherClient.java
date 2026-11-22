@@ -5,6 +5,7 @@ import dev.aether.client.config.AetherConfig;
 import dev.aether.client.config.ClientRecoveryGuard;
 import dev.aether.client.gui.ClickGuiScreen;
 import dev.aether.client.gui.ConfigScreen;
+import dev.aether.client.gui.HudEditorScreen;
 import dev.aether.client.hud.HudManager;
 import dev.aether.client.module.HudElement;
 import dev.aether.client.module.Module;
@@ -25,6 +26,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.ConfirmScreen;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.KeyEvent;
 import net.minecraft.network.chat.Component;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -61,6 +63,7 @@ public class AetherClient implements ClientModInitializer {
 	private Path recoveryMarker;
 
 	private KeyMapping clickGuiKey;
+	private KeyMapping configKey;
 	private KeyMapping hudEditorKey;
 
 	@Override
@@ -103,6 +106,20 @@ public class AetherClient implements ClientModInitializer {
 	}
 
 	/**
+	 * @return the key currently bound to the click GUI, as the controls screen prints it.
+	 */
+	public String getClickGuiKeyLabel() {
+		return clickGuiKey == null ? "R-SHIFT" : clickGuiKey.getTranslatedKeyMessage().getString();
+	}
+
+	/**
+	 * @return whether the event matches the key currently bound to the click GUI.
+	 */
+	public boolean isClickGuiKey(KeyEvent event) {
+		return clickGuiKey != null && clickGuiKey.matches(event);
+	}
+
+	/**
 	 * Creates the keybinds of the client.
 	 */
 	private void registerKeyBindings() {
@@ -112,14 +129,23 @@ public class AetherClient implements ClientModInitializer {
 				InputConstants.KEY_RSHIFT,
 				CATEGORY
 		);
+		configKey = new KeyMapping(
+				"key.aether.config",
+				InputConstants.Type.KEYSYM,
+				InputConstants.KEY_J,
+				CATEGORY
+		);
+		// This mapping used to open ConfigScreen: its name promised a HUD editor and its action
+		// opened another screen. It now opens the editor it names; ConfigScreen has its own key.
 		hudEditorKey = new KeyMapping(
 				"key.aether.hud_editor",
 				InputConstants.Type.KEYSYM,
-				InputConstants.UNKNOWN.getValue(),
+				InputConstants.KEY_H,
 				CATEGORY
 		);
 
 		KeyBindingHelper.registerKeyBinding(clickGuiKey);
+		KeyBindingHelper.registerKeyBinding(configKey);
 		KeyBindingHelper.registerKeyBinding(hudEditorKey);
 
 		// Every module gets its mapping here, once. Fabric refuses a mapping registered after the
@@ -256,9 +282,15 @@ public class AetherClient implements ClientModInitializer {
 			}
 		}
 
-		while (hudEditorKey.consumeClick()) {
+		while (configKey.consumeClick()) {
 			if (minecraft.screen == null && !recoverySafeMode) {
 				minecraft.setScreen(new ConfigScreen());
+			}
+		}
+
+		while (hudEditorKey.consumeClick()) {
+			if (minecraft.screen == null && !recoverySafeMode) {
+				minecraft.setScreen(new HudEditorScreen(minecraft.screen));
 			}
 		}
 

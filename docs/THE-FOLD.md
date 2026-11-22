@@ -38,8 +38,8 @@ Run:
 \`\`\`sh
 node --check launcher/gui/src/ui/app.js
 node --check launcher/gui/src/ui/bridge.js
-node tools/check-the-fold.mjs
-node tools/check-theme-tokens.mjs
+node tools/checks/check-the-fold.mjs
+node tools/checks/check-theme-tokens.mjs
 \`\`\`
 
 The Theme tokens CI job runs these checks. The Fold contract script verifies the new navigation destinations and confirms the legacy launcher DOM hooks remain present.

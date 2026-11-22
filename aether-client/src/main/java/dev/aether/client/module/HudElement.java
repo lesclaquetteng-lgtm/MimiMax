@@ -17,6 +17,8 @@ public abstract class HudElement extends Module {
 	public static final int FRAME_MARGIN = 3;
 	/** The height of the band that carries the name of the element above its frame. */
 	private static final int LABEL_H = 11;
+	/** From the top of the element to the top of the frame the editor draws around it. */
+	public static final int FRAME_TOP = FRAME_MARGIN + LABEL_H;
 
 	private int x;
 	private int y;

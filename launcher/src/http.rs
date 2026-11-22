@@ -33,7 +33,7 @@ pub const RETRY_BASE_DELAY: Duration = Duration::from_millis(250);
 /// The longest delay between two attempts.
 pub const RETRY_MAX_DELAY: Duration = Duration::from_secs(4);
 /// The number of bytes of an error body that are kept.
-const MAX_ERROR_BODY: usize = 2048;
+const MAX_ERROR_BODY_BYTES: usize = 2048;
 /// The size of the chunks that are read and hashed at once.
 const CHUNK_SIZE: usize = 64 * 1024;
 
@@ -150,14 +150,7 @@ fn backoff_delay(retry: u32) -> Duration {
 fn map_error(url: &str, error: ureq::Error) -> HttpError {
     match error {
         ureq::Error::Status(status, response) => {
-            let body = response.into_string().ok().map(|text| {
-                let text = text.trim();
-                if text.chars().count() > MAX_ERROR_BODY {
-                    text.chars().take(MAX_ERROR_BODY).collect()
-                } else {
-                    text.to_string()
-                }
-            });
+            let body = read_error_body(response.into_reader());
             HttpError::Status {
                 url: url.to_string(),
                 status,
@@ -166,6 +159,21 @@ fn map_error(url: &str, error: ureq::Error) -> HttpError {
         }
         other => HttpError::Io(std::io::Error::other(other.to_string())),
     }
+}
+
+/// Reads at most [`MAX_ERROR_BODY_BYTES`] from an error response.
+///
+/// Truncating after `into_string()` still allocates the complete remote body. Bound the read
+/// itself so a server error cannot make the launcher allocate an arbitrary amount of memory.
+fn read_error_body(reader: impl Read) -> Option<String> {
+    let mut bytes = Vec::with_capacity(MAX_ERROR_BODY_BYTES);
+    reader
+        .take(MAX_ERROR_BODY_BYTES as u64)
+        .read_to_end(&mut bytes)
+        .ok()?;
+
+    let text = String::from_utf8_lossy(&bytes);
+    Some(text.trim().to_string())
 }
 
 /// Runs a request and retries it while the failure is transient.
@@ -379,11 +387,6 @@ impl Client {
                     // attempt, or the next installation, resumes.
                     if !error.is_retryable() || matches!(error, HttpError::Checksum { .. }) {
                         let _ = fs::remove_file(&temporary);
-                    }
-
-                    // The destination only exists when its checksum did not match, it is replaced.
-                    if expected_sha1.is_some() {
-                        let _ = fs::remove_file(destination);
                     }
 
                     if !error.is_retryable() {
@@ -910,6 +913,14 @@ mod tests {
     }
 
     #[test]
+    fn an_error_body_is_bounded_while_reading() {
+        let body = vec![b'x'; MAX_ERROR_BODY_BYTES * 8];
+        let text = read_error_body(body.as_slice()).expect("the body is readable");
+
+        assert_eq!(text.len(), MAX_ERROR_BODY_BYTES);
+    }
+
+    #[test]
     fn a_download_is_retried_after_a_server_error() {
         use std::io::{Read, Write};
         use std::net::TcpListener;
@@ -1012,6 +1023,60 @@ mod tests {
             std::fs::read(&destination).unwrap(),
             b"a good jar",
             "the file of the player was deleted"
+        );
+
+        std::fs::remove_dir_all(&directory).ok();
+    }
+
+    #[test]
+    fn a_failed_checked_download_preserves_the_previous_file() {
+        use std::io::{Read, Write};
+        use std::net::TcpListener;
+
+        let listener = TcpListener::bind("127.0.0.1:0").expect("a free loopback port");
+        let address = listener.local_addr().expect("the address of the listener");
+
+        let server = std::thread::spawn(move || {
+            for _ in 0..MAX_ATTEMPTS {
+                let Ok((mut stream, _)) = listener.accept() else {
+                    return;
+                };
+                let mut buffer = [0u8; 4096];
+                let _ = stream.read(&mut buffer);
+                let _ = stream.write_all(
+                    b"HTTP/1.1 503 Service Unavailable\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+                );
+                let _ = stream.flush();
+            }
+        });
+
+        let directory =
+            std::env::temp_dir().join(format!("aether-keep-checksum-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&directory);
+        std::fs::create_dir_all(&directory).unwrap();
+
+        let destination = directory.join("client.jar");
+        let previous = b"previous verified client";
+        std::fs::write(&destination, previous).unwrap();
+        let expected = hex_digest(&sha1_digest(b"new client"));
+
+        let result = download(
+            &format!("http://{}/client.jar", address),
+            &destination,
+            Some(&expected),
+            |_, _| {},
+        );
+
+        server.join().unwrap();
+
+        assert!(
+            result.is_err(),
+            "the failed update was reported as successful"
+        );
+        assert_eq!(
+            std::fs::read(&destination).unwrap(),
+            previous,
+            "the existing client was removed before the replacement was verified"
         );
 
         std::fs::remove_dir_all(&directory).ok();

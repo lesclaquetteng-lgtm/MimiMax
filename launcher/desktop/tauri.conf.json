@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Aether Launcher",
+  "productName": "CUBE Launcher",
   "version": "1.0.0",
   "identifier": "dev.aether.launcher",
   "build": {
@@ -10,7 +10,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "Aether Launcher",
+        "title": "CUBE Launcher",
         "width": 1180,
         "height": 760,
         "minWidth": 940,
@@ -36,8 +36,8 @@
     "publisher": "Aether",
     "copyright": "Copyright (c) 2026 Aether",
     "category": "Game",
-    "shortDescription": "A Minecraft client with first-class offline mode.",
-    "longDescription": "The launcher of the Aether Client: offline and Microsoft accounts, Fabric installation, servers, local hosting and a verified optimisation pack.",
+    "shortDescription": "Le launcher Minecraft de CUBE : comptes hors-ligne, Fabric et serveurs locaux.",
+    "longDescription": "CUBE Launcher installe et lance Minecraft avec Fabric : comptes hors-ligne et Microsoft, serveurs, hébergement local et pack d'optimisation vérifié.",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -53,15 +53,18 @@
         "type": "embedBootstrapper"
       },
       "nsis": {
+        "template": "installer/installer.nsi",
         "installerIcon": "icons/icon.ico",
+        "uninstallerIcon": "icons/icon.ico",
         "headerImage": "installer/header.bmp",
         "sidebarImage": "installer/sidebar.bmp",
+        "uninstallerHeaderImage": "installer/header.bmp",
         "languages": [
           "French"
         ],
         "displayLanguageSelector": false,
         "installMode": "currentUser",
-        "startMenuFolder": "Aether",
+        "startMenuFolder": "CUBE",
         "compression": "lzma"
       }
     }

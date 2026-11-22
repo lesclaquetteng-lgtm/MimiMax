@@ -287,6 +287,18 @@ pub fn create(
     Ok(server)
 }
 
+/// Creates a hosted world for a specific game version, using the configured Fabric loader.
+pub fn create_for_version(
+	paths: &Paths, name: &str, port: u16, max_players: u32, game_version: &str,
+) -> Result<HostedServer, String> {
+	if !crate::minecraft::is_safe_path_component(game_version) {
+		return Err("invalid Minecraft version identifier for the hosted server".to_string());
+	}
+	let loaders = crate::minecraft::fetch_fabric_loaders(game_version).map_err(|error| error.to_string())?;
+	let loader = loaders.into_iter().next().ok_or_else(|| "aucun loader Fabric disponible pour cette version".to_string())?;
+	create(paths, name, port, Some(name), max_players, false, game_version, &loader)
+}
+
 /// Reads the RCON password from the properties, the metadata never stores it in clear.
 fn server_password(directory: &Path) -> String {
     fs::read_to_string(directory.join("server.properties"))
@@ -562,8 +574,21 @@ pub fn start(paths: &Paths, name: &str) -> Result<HostedServer, String> {
         .map_err(|error| format!("could not start the Java server: {}", error))?;
 
     let pid = child.id();
-    write_atomic(&pid_path(&directory), &pid.to_string())
-        .map_err(|error| format!("could not write the pid: {}", error))?;
+    if let Err(error) = write_atomic(&pid_path(&directory), &pid.to_string()) {
+        // Do not leave a server running without the record that lets the launcher stop it later.
+        kill_tree(pid);
+        if wait_for_exit(pid, Duration::from_secs(5)) {
+            return Err(format!(
+                "could not record the hosted server process ({}); the server was stopped",
+                error
+            ));
+        }
+
+        return Err(format!(
+            "could not record the hosted server process ({}); PID {} is still running and must be stopped manually",
+            error, pid
+        ));
+    }
 
     server.pid = Some(pid);
     server.running = true;
@@ -600,15 +625,37 @@ pub fn stop(paths: &Paths, name: &str) -> Result<HostedServer, String> {
         std::thread::sleep(Duration::from_millis(400));
     }
 
-    if !wait_for_exit(pid, Duration::from_secs(20)) {
+    let stopped = if wait_for_exit(pid, Duration::from_secs(20)) {
+        true
+    } else {
         kill_tree(pid);
-        let _ = wait_for_exit(pid, Duration::from_secs(5));
+        wait_for_exit(pid, Duration::from_secs(5))
+    };
+
+    finish_stop(&directory, server, name, pid, stopped)
+}
+
+/// Clears the process record only after the server has actually exited.
+fn finish_stop(
+    directory: &Path,
+    mut server: HostedServer,
+    name: &str,
+    pid: u32,
+    stopped: bool,
+) -> Result<HostedServer, String> {
+    if !stopped {
+        // Keep the PID record so the player can retry Stop after fixing the underlying problem.
+        server.running = true;
+        server.pid = Some(pid);
+        return Err(format!(
+            "hosted server {} (PID {}) did not stop; its process record was kept",
+            name, pid
+        ));
     }
 
-    let _ = fs::remove_file(pid_path(&directory));
+    let _ = fs::remove_file(pid_path(directory));
     server.running = false;
     server.pid = None;
-
     Ok(server)
 }
 
@@ -865,6 +912,33 @@ mod tests {
         assert!(!list[0].running);
 
         std::fs::remove_dir_all(&directory).ok();
+    }
+
+    #[test]
+    fn a_failed_stop_keeps_the_server_process_record() {
+        let directory =
+            std::env::temp_dir().join(format!("aether-host-stop-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&directory);
+        std::fs::create_dir_all(&directory).unwrap();
+        let pid = 1234;
+        fs::write(pid_path(&directory), pid.to_string()).unwrap();
+        let server = HostedServer {
+            name: "Test Server".to_string(),
+            directory: directory.to_string_lossy().to_string(),
+            port: 25565,
+            rcon_port: 25575,
+            online_mode: false,
+            game_version: "1.21.11".to_string(),
+            loader_version: "0.20.1".to_string(),
+            running: true,
+            pid: Some(pid),
+        };
+
+        let error = finish_stop(&directory, server, "Test Server", pid, false).unwrap_err();
+
+        assert!(error.contains("process record was kept"));
+        assert_eq!(read_pid(&directory), Some(pid));
+        fs::remove_dir_all(&directory).unwrap();
     }
 
     #[test]

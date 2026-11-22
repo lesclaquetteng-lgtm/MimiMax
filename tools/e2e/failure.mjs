@@ -174,7 +174,7 @@ if (mode === 'documents') {
 	record('install: the progress bar is empty again', failed.fill === '0%' || failed.fill === '', `fill=${failed.fill}`);
 	record('install: the controls are thawed', failed.versionDisabled === false && failed.loaderDisabled === false && failed.cardBusy === false);
 	record('install: the flag is back to its initial state', failed.installing === false);
-	record('install: the status reports the error', failed.status === 'Error', failed.status);
+	record('install: the status reports the error', failed.status === 'Erreur', failed.status);
 	record('install: the panels are still filled', failed.paths === paths && paths.length > 0);
 
 	// The failure opens a report built from install.log, like the crash report does for a session.
@@ -185,10 +185,10 @@ if (mode === 'documents') {
 		confirm: document.querySelector('#modal-confirm').textContent,
 		openLogs: Boolean(document.querySelector('#report-open-logs'))
 	}))()`);
-	record('install: the report opens by itself', report.title === 'The installation failed', report.title);
-	record('install: the report says what happened', /problem\s+.*failed on purpose/.test(report.text), report.text.split('\n')[2] || '');
-	record('install: the report names the version and the log', /version\s+\d/.test(report.text) && /log\s+.*install\.log/.test(report.text));
-	record('install: the report is offered for copying', report.confirm === 'Copy report', report.confirm);
+	record('install: the report opens by itself', report.title === "L'installation a échoué", report.title);
+	record('install: the report says what happened', /problème\s+.*failed on purpose/.test(report.text), report.text.split('\n')[2] || '');
+	record('install: the report names the version and the log', /version\s+\d/.test(report.text) && /journal\s+.*install\.log/.test(report.text));
+	record('install: the report is offered for copying', report.confirm === 'Copier le rapport', report.confirm);
 	record('install: the report links to the logs', report.openLogs);
 
 	// Escape gives the interface back, the retry must not be blocked by the dialog.
@@ -225,7 +225,7 @@ await clickElement('#btn-launch');
 const launched = await launchState();
 const launchToast = await lastErrorToast();
 const expected = mode === 'crash'
-	? launched.status === 'Error' && /stopped with the code 3/.test(launchToast?.text || '')
+	? launched.status === 'Erreur' && /arrêté avec le code 3/.test(launchToast?.text || '')
 	: /failed on purpose/.test(launchToast?.text || '');
 
 record('launch: an error toast is shown', Boolean(launchToast) && expected, JSON.stringify(launchToast));
@@ -233,7 +233,7 @@ record('launch: the toast is announced as an alert', launchToast?.role === 'aler
 record('launch: the launch button is clickable again', launched.buttonDisabled === false);
 record('launch: the stop button is hidden again', launched.stopHidden === true);
 record('launch: the flag is back to its initial state', launched.launching === false);
-record('launch: the status reports the error', launched.status === 'Error', launched.status);
+record('launch: the status reports the error', launched.status === 'Erreur', launched.status);
 
 socket.close();
 await sleep(200);

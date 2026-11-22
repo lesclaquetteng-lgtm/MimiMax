@@ -1,5 +1,18 @@
 use std::path::PathBuf;
 
+fn watch_tree(path: &std::path::Path) {
+	println!("cargo:rerun-if-changed={}", path.display());
+	let Ok(entries) = std::fs::read_dir(path) else { return };
+	for entry in entries.flatten() {
+		let child = entry.path();
+		if child.is_dir() {
+			watch_tree(&child);
+		} else {
+			println!("cargo:rerun-if-changed={}", child.display());
+		}
+	}
+}
+
 fn main() {
 	// The core is embedded in the shell, so that a portable build stays a single file. Building
 	// the shell before the core would embed a stale binary, and that defect is silent: the two
@@ -35,7 +48,10 @@ fn main() {
 	println!("cargo:rerun-if-changed={}", core.display());
 	println!("cargo:rerun-if-changed={}", client.display());
 	println!("cargo:rerun-if-changed=tauri.conf.json");
-	println!("cargo:rerun-if-changed=../gui/src/ui/index.html");
+	// Tauri embeds the full frontend. Watch every nested asset (including JS, CSS and fonts),
+	// otherwise a release rebuild can silently ship the previous interface.
+	watch_tree(&manifest.join("../gui/src/ui"));
+	watch_tree(&manifest.join("installer"));
 
 	tauri_build::build();
 }

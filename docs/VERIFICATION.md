@@ -7,6 +7,40 @@ last recorded full local run (19 November 2026, Minecraft 1.21.11 / Fabric 0.20.
 > hardening change has been exercised locally. The current branch is additionally checked by the
 > locked GitHub Actions tests, Clippy, Fabric build, native-shell build and theme-token workflow.
 
+## Current branch smoke check (22 November 2026)
+
+- `aether-client`: **111 tests passed, 0 failed**; `gradlew --no-daemon build` succeeded after the
+  latest client changes.
+- Launcher core: **189 tests passed, 0 failed** across unit, download and integration suites;
+  `cargo clippy --workspace --all-targets --locked -- -D warnings` succeeded. HTTP error responses
+  are now read with a 2 KiB limit at the stream; failed updates preserve the existing artifact, and
+  hosted-server shutdown keeps its PID record when the process will not exit. Recovery cases have
+  regression tests.
+- Launcher shell: **10 release tests passed, 0 failed**; the release executable was rebuilt with the
+  current client JAR. Rust Clippy and the launcher-interface contract checks passed.
+- Real client: Minecraft 1.21.11 / Fabric 0.20.1 started through `runClient`, reached the title
+  screen, opened a generated single-player world, saved it and exited normally. The test used a
+  disposable run directory under Gradle's ignored `build/` folder, preserving `aether-client/run`.
+- On the test PC (Ryzen 7 5700X, RTX 4060 Ti, 16 GB RAM), the in-game HUD showed **256–452 FPS** in
+  the sampled frames at 854×480, 16 chunks, Fancy graphics, VSync off and the FPS cap set to
+  unlimited. This is an observed range, not a repeatable average or a multi-entity stress result.
+- Entity/ESP smoke test: a disposable Creative world held **53 cows**. With the same scene and
+  graphics settings, one focused HUD sample showed **592 FPS with ESP off** and **532 FPS with ESP
+  enabled for mobs**; the mob outline rendered, and the game saved and exited normally. These are
+  single frame-counter observations, not averages or a multiplayer/load-capacity benchmark.
+- The second live run reached the world with **0 WARN and 0 ERROR** in `latest.log`; no Realms
+  authentication error appeared. The temporary profile's ESP setting was restored after the run.
+- The offline test session starts without sending the `FabricMC` placeholder token to Realms. Its
+  log has **0 ERROR, 0 WARN and 0 Realms authentication failures**; offline sessions still receive
+  an authentication-required result and an empty Realms feature set.
+
+To start a disposable client profile without touching the developer's saved worlds:
+
+```powershell
+cd aether-client
+.\gradlew.bat --no-daemon --offline -PclientRunDir=build/runtime-validation runClient
+```
+
 ## 0. Results at a glance
 
 | Check | Command | Result |
@@ -16,7 +50,7 @@ last recorded full local run (19 November 2026, Minecraft 1.21.11 / Fabric 0.20.
 | Release binary | `cargo build --release` | 2.1 MB |
 | Mod tests | `gradle build` | **87 passed, 0 failed** (16 suites) |
 | Mod jar | `gradle build` | `aether-client-1.0.0.jar`, 159.8 KB |
-| Interface layout | `node tools/ui-check.mjs` | **16 checks, 0 overflow, 0 offending element** |
+| Interface layout | `node tools/checks/ui-check.mjs` | **16 checks, 0 overflow, 0 offending element** |
 | Real server ping | `servers ping mc.hypixel.net` | online, 26 863 / 200 000, 458 ms, protocol 774 |
 | Offline probe, premium server | `servers probe mc.hypixel.net` | `premium`, first packet `encryption request` |
 | Offline probe, hosted server | `servers probe 127.0.0.1:25565` | `offline` accepted, first packet `set compression` |
@@ -29,9 +63,11 @@ last recorded full local run (19 November 2026, Minecraft 1.21.11 / Fabric 0.20.
 | Game with the full pack | `launch --server 127.0.0.1:25565` | joined as `Notch`, **889 FPS** in the HUD, 1044 FPS peak |
 | Options preset after a session | `performance tune --preset max` | `options.txt` **identical** after the game closed |
 | Installer, silent | `Aether-Launcher-Setup-1.0.0.exe /S` | exit 0 in **1.6 s**, shortcuts + uninstall entry written |
-| Installer, five pages | `tools/installer-capture.ps1` | welcome 0.2 s, licence 1.3 s, folder 2.4 s, install 4.8 s, finish 5.5 s |
+| Installer, custom page | `tools/checks/installer-test.ps1` | states welcome -> licence -> folder -> progress -> finish, captures in `docs/images/installer-{1..5}-*.png`, exit 0 |
+| Installer, passive | `CUBE-Launcher-Setup.exe /P` | brand progress sheet only, install written, exits **code 0** after ~4 s |
+| Installer, update | `CUBE-Launcher-Setup.exe /UPDATE` | progress sheet, no done page, exits **code 0** in ~2.7 s |
 | Uninstaller | `uninstall.exe /S` | exit 0 in **1.3 s**, folder gone in 1 s |
-| Clean machine, no sources | `tools/clean-install-check.ps1` | core alone: `the Aether client jar was not found`; shell: mod extracted (SHA-256 match), installation starts |
+| Clean machine, no sources | `tools/checks/clean-install-check.ps1` | core alone: `the Aether client jar was not found`; shell: mod extracted (SHA-256 match), installation starts |
 
 ## 1. Offline UUID compatibility (critical)
 
@@ -163,7 +199,7 @@ The window itself is covered by the checks below.
 - **No orphan after a crash**: the core records the game in `<home>/aether/game.pid`, so `stop` (and
   the Stop button of the next session) still kills the tree of a launcher that was killed.
 
-Measured on the installed build (`%LOCALAPPDATA%\Aether Launcher\aether-desktop.exe`), from an empty
+Measured on the installed build (`%LOCALAPPDATA%\CUBE Launcher\aether-desktop.exe`), from an empty
 folder and an empty home:
 
 ```text
@@ -183,7 +219,7 @@ $env:AETHER_HOME = "tools/ui-home"
 $env:AETHER_SHARED_DIR = "tools/aether-home/.minecraft"
 $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = "--remote-debugging-port=9233"
 & launcher/desktop/target/release/aether-desktop.exe
-node tools/ui-check.mjs 9233 tools/ui-shots
+node tools/checks/ui-check.mjs 9233 tools/ui-shots
 ```
 
 What is measured on every page, at **1180×760** and **940×620**:
@@ -301,13 +337,13 @@ launcher as a designed workspace rather than a collection of unrelated skin sett
 
 The palette values live once in gui/src/ui/tokens.css. The interface switches twelve palette
 aliases at runtime; it does not redefine colour tokens in separate theme blocks. This keeps the
-same single-source-of-truth rule that tools/check-theme-tokens.mjs enforces.
+same single-source-of-truth rule that tools/checks/check-theme-tokens.mjs enforces.
 
 ```powershell
 node --check launcher/gui/src/ui/app.js
 node --check launcher/gui/src/ui/bridge.js
-node tools/check-theme-tokens.mjs
-node tools/check-identity-studio.mjs
+node tools/checks/check-theme-tokens.mjs
+node tools/checks/check-identity-studio.mjs
 ```
 
 The Identity Studio contract check verifies unique control IDs, all 48 colourway channel definitions,

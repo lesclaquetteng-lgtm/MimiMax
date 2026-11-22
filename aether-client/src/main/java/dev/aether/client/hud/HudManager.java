@@ -36,8 +36,10 @@ public final class HudManager {
 			if (!element.isEnabled()) {
 				continue;
 			}
-			if (measure) {
-				element.updateSize();
+			// Measuring calls module code too (font access, world/player state). Give it its own
+			// breaker so successful draw frames do not reset repeated measurement failures.
+			if (measure && !element.invokeSafely("measureSize", element::updateSize)) {
+				continue;
 			}
 			element.invokeSafely("onRender", () -> element.render(graphics, partialTick));
 		}

@@ -1,443 +1,616 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="fr">
 <head>
 	<meta charset="utf-8" />
-	<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost; object-src 'none'; base-uri 'self'; form-action 'self'" />
-	<title>Aether Launcher</title>
+	<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' ipc: http://ipc.localhost; object-src 'none'; base-uri 'self'; form-action 'self'" />
+	<title>CUBE Launcher</title>
 	<link rel="stylesheet" href="tokens.css" />
 	<link rel="stylesheet" href="styles.css" />
 </head>
-<body>
+<body data-page="play">
 	<div class="titlebar" data-tauri-drag-region>
-		<button type="button" class="titlebar-brand nav-item" data-page="play" aria-label="Return to The Gate">
-			<svg class="titlebar-fold-mark" viewBox="0 0 32 32" aria-hidden="true">
-				<path d="M15 3 4 28h6l7-16z" />
-				<path d="m17 3 11 25h-6L15 11z" />
-				<path d="m10 28 5-11h7l3 11z" />
-			</svg>
-			<span class="titlebar-wordmark">AETHER</span>
-			<span class="titlebar-edition">THE FOLD</span>
-		</button>
+		<div class="titlebar-brand" data-tauri-drag-region>
+			<span class="titlebar-cube" aria-hidden="true">
+				<svg viewBox="0 0 24 24"><path d="M12 2 3 7v10l9 5 9-5V7l-9-5Z" /><path d="m3 7 9 5 9-5M12 12v10" /></svg>
+			</span>
+			<span class="titlebar-wordmark">CUBE LAUNCHER</span>
+			<span class="titlebar-edition">VOXEL EDITION</span>
+		</div>
 		<div class="titlebar-actions">
-			<button type="button" class="gate-menu-toggle" id="btn-gate-menu" aria-controls="gate-menu" aria-expanded="false">
-				<span>EXPLORE</span>
-				<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 5h14M3 10h14M3 15h14" /></svg>
-			</button>
-			<button class="win-button" data-window="minimize" aria-label="Minimize">
+			<span class="titlebar-hint">MINECRAFT · FABRIC</span>
+			<button class="win-button" data-window="minimize" aria-label="Réduire">
 				<svg viewBox="0 0 12 12"><path d="M2 6h8" /></svg>
 			</button>
-			<button class="win-button" data-window="maximize" aria-label="Maximize">
+			<button class="win-button" data-window="maximize" aria-label="Agrandir">
 				<svg viewBox="0 0 12 12"><rect x="2.5" y="2.5" width="7" height="7" rx="1" /></svg>
 			</button>
-			<button class="win-button win-button--close" data-window="close" aria-label="Close">
+			<button class="win-button win-button--close" data-window="close" aria-label="Fermer">
 				<svg viewBox="0 0 12 12"><path d="M3 3l6 6M9 3l-6 6" /></svg>
 			</button>
 		</div>
 	</div>
 
-	<div class="voxel-atmosphere" aria-hidden="true"><canvas id="voxel-backdrop" class="voxel-backdrop"></canvas><div class="voxel-atmosphere-vignette"></div></div>
-	<aside class="voxel-dock" aria-label="Aether navigation">
-		<button type="button" class="voxel-dock-brand nav-item" data-page="play" aria-label="Aether home" title="Aether home"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 3 4 28h6l6-14 6 14h6L16 3Z" fill="currentColor" stroke="none"/></svg></button>
-		<div class="voxel-dock-divider"></div>
-		<nav class="voxel-dock-nav" aria-label="Pages">
-			<button type="button" class="voxel-dock-item nav-item is-active" data-page="play" aria-label="Play"><svg viewBox="0 0 24 24"><path d="m8 5 11 7-11 7z" fill="currentColor" stroke="none"/></svg><span class="voxel-tooltip">Play</span></button>
-			<button type="button" class="voxel-dock-item nav-item" data-page="accounts" aria-label="Accounts"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.5"/><path d="M4.5 20c.7-3.7 3.2-5.5 7.5-5.5s6.8 1.8 7.5 5.5"/></svg><span class="voxel-tooltip">Accounts</span></button>
-			<button type="button" class="voxel-dock-item nav-item" data-page="versions" aria-label="Versions"><svg viewBox="0 0 24 24"><path d="m12 3 8 4.5v9L12 21l-8-4.5v-9L12 3Z"/><path d="m4.5 7.8 7.5 4.4 7.5-4.4M12 12.2V21"/></svg><span class="voxel-tooltip">Versions</span></button>
-			<button type="button" class="voxel-dock-item nav-item" data-page="mods" aria-label="Mods"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><rect x="14" y="14" width="6" height="6" rx="1"/></svg><span class="voxel-tooltip">Mods</span></button>
-			<button type="button" class="voxel-dock-item nav-item" data-page="servers" aria-label="Servers"><svg viewBox="0 0 24 24"><rect x="4" y="3.5" width="16" height="7" rx="1.5"/><rect x="4" y="13.5" width="16" height="7" rx="1.5"/><path d="M8 7h.01M8 17h.01M12 7h4M12 17h4"/></svg><span class="voxel-tooltip">Servers</span></button>
-			<button type="button" class="voxel-dock-item nav-item" data-page="performance" aria-label="Performance"><svg viewBox="0 0 24 24"><path d="M4.5 18a9 9 0 1 1 15 0"/><path d="m12 13 4-5M7 18h10"/></svg><span class="voxel-tooltip">Performance</span></button>
-			<button type="button" class="voxel-dock-item nav-item" data-page="logs" aria-label="Diagnostics"><svg viewBox="0 0 24 24"><path d="M3 12h4l2.2-6 4.2 12 2.2-6H21"/></svg><span class="voxel-tooltip">Diagnostics</span></button>
+	<!-- ============================ VOXEL SCENE ============================ -->
+	<div class="voxel-scene" id="voxel-scene" aria-hidden="true">
+		<div class="scene-sky"></div>
+		<div class="scene-stars"></div>
+		<div class="scene-sun"></div>
+		<div class="scene-grid"></div>
+		<div class="scene-cubes">
+			<span class="voxel-cube voxel-cube--a"><i class="face face--top"></i><i class="face face--left"></i><i class="face face--right"></i></span>
+			<span class="voxel-cube voxel-cube--b"><i class="face face--top"></i><i class="face face--left"></i><i class="face face--right"></i></span>
+			<span class="voxel-cube voxel-cube--c"><i class="face face--top"></i><i class="face face--left"></i><i class="face face--right"></i></span>
+			<span class="voxel-cube voxel-cube--d"><i class="face face--top"></i><i class="face face--left"></i><i class="face face--right"></i></span>
+		</div>
+		<div class="scene-particles">
+			<i style="--x: 9%; --d: 0s; --t: 18s; --s: 3px;"></i>
+			<i style="--x: 18%; --d: 4s; --t: 23s; --s: 2px;"></i>
+			<i style="--x: 27%; --d: 8s; --t: 19s; --s: 4px;"></i>
+			<i style="--x: 37%; --d: 2s; --t: 26s; --s: 2px;"></i>
+			<i style="--x: 48%; --d: 11s; --t: 21s; --s: 3px;"></i>
+			<i style="--x: 58%; --d: 6s; --t: 25s; --s: 2px;"></i>
+			<i style="--x: 68%; --d: 13s; --t: 18s; --s: 4px;"></i>
+			<i style="--x: 78%; --d: 3s; --t: 24s; --s: 2px;"></i>
+			<i style="--x: 88%; --d: 9s; --t: 20s; --s: 3px;"></i>
+			<i style="--x: 95%; --d: 5s; --t: 27s; --s: 2px;"></i>
+		</div>
+		<div class="scene-hills">
+			<div class="hill hill--far"></div>
+			<div class="hill hill--mid"></div>
+			<div class="hill hill--near"></div>
+		</div>
+		<div class="scene-fog"></div>
+	</div>
+
+	<!-- ============================== RAIL ============================== -->
+	<aside class="app-rail" aria-label="Navigation CUBE">
+		<button type="button" class="rail-brand nav-item" data-page="play" aria-label="Accueil CUBE">
+			<span class="rail-cube" aria-hidden="true">
+				<svg viewBox="0 0 24 24"><path d="M12 2 3 7v10l9 5 9-5V7l-9-5Z" /><path d="m3 7 9 5 9-5M12 12v10" /></svg>
+			</span>
+			<span class="rail-brand-copy"><strong>CUBE</strong><small>LAUNCHER</small></span>
+		</button>
+
+		<nav class="rail-nav" aria-label="Destinations">
+			<span class="rail-label">JOUER</span>
+			<button type="button" class="rail-item nav-item is-active" data-page="play">
+				<svg viewBox="0 0 24 24"><path d="M4 10.5 12 3l8 7.5V20a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1v-9.5Z" /></svg>
+				<span>Accueil</span>
+			</button>
+			<button type="button" class="rail-item nav-item" data-page="accounts">
+				<svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.5" /><path d="M4.5 20c.7-3.7 3.2-5.5 7.5-5.5s6.8 1.8 7.5 5.5" /></svg>
+				<span>Comptes</span>
+			</button>
+			<button type="button" class="rail-item nav-item" data-page="worlds">
+				<svg viewBox="0 0 24 24"><path d="M3 7 12 2l9 5v10l-9 5-9-5V7Z"/><path d="m3 7 9 5 9-5M12 12v10"/></svg>
+				<span>Mes mondes</span>
+			</button>
+			<button type="button" class="rail-item nav-item" data-page="servers">
+				<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5h.01M7 16.5h.01M11 7.5h6M11 16.5h6"/></svg>
+				<span>Serveurs</span>
+			</button>
+
+			<span class="rail-label">ATELIER</span>
+			<button type="button" class="rail-item nav-item" data-page="mods">
+				<svg viewBox="0 0 24 24"><rect x="4" y="4" width="6" height="6" rx="1" /><rect x="14" y="4" width="6" height="6" rx="1" /><rect x="4" y="14" width="6" height="6" rx="1" /><rect x="14" y="14" width="6" height="6" rx="1" /></svg>
+				<span>Mods</span>
+			</button>
+			<button type="button" class="rail-item nav-item" data-page="performance">
+				<svg viewBox="0 0 24 24"><path d="M4.5 18a9 9 0 1 1 15 0" /><path d="m12 13 4-5M7 18h10" /></svg>
+				<span>Performance</span>
+			</button>
+
+			<span class="rail-label">SYSTÈME</span>
+			<button type="button" class="rail-item nav-item" data-page="logs">
+				<svg viewBox="0 0 24 24"><path d="M3 12h4l2.2-6 4.2 12 2.2-6H21" /></svg>
+				<span>Journaux</span>
+			</button>
+			<button type="button" class="rail-item nav-item" data-page="settings">
+				<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2" /><path d="m19.3 13.5 1.2.8-1.5 2.5-1.4-.5a7.4 7.4 0 0 1-1.5.9l-.3 1.5h-3l-.3-1.5a7.4 7.4 0 0 1-1.5-.9l-1.4.5-1.5-2.5 1.2-.8a7 7 0 0 1 0-3L8.1 9.7l1.5-2.5 1.4.5a7.4 7.4 0 0 1 1.5-.9l.3-1.5h3l.3 1.5a7.4 7.4 0 0 1 1.5.9l1.4-.5 1.5 2.5-1.2.8a7 7 0 0 1 0 3Z" /></svg>
+				<span>Réglages</span>
+			</button>
 		</nav>
-		<div class="voxel-dock-bottom"><button type="button" class="voxel-dock-item nav-item" data-page="settings" aria-label="Settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="m19.3 13.5 1.2.8-1.5 2.5-1.4-.5a7.4 7.4 0 0 1-1.5.9l-.3 1.5h-3l-.3-1.5a7.4 7.4 0 0 1-1.5-.9l-1.4.5-1.5-2.5 1.2-.8a7 7 0 0 1 0-3L8.1 9.7l1.5-2.5 1.4.5a7.4 7.4 0 0 1 1.5-.9l.3-1.5h3l.3 1.5a7.4 7.4 0 0 1 1.5.9l1.4-.5 1.5 2.5-1.2.8a7 7 0 0 1 0 3Z"/></svg><span class="voxel-tooltip">Settings</span></button></div>
+
+		<div class="rail-player">
+			<div class="rail-player-card">
+				<div class="avatar avatar--rail" id="dock-avatar">?</div>
+				<div class="rail-player-copy">
+					<span>JOUEUR</span>
+					<strong id="dock-account-name">Aucun compte</strong>
+					<small id="session-badge">aucun compte</small>
+				</div>
+				<button type="button" class="rail-player-change nav-item" data-page="accounts" aria-label="Gérer les comptes">↗</button>
+			</div>
+			<details class="player-switcher">
+				<summary><span>CHANGER DE JOUEUR</span><span id="gate-account-summary">AUCUN COMPTE</span></summary>
+				<div id="play-accounts" class="account-list"></div>
+				<div class="inline-actions">
+					<button type="button" class="btn btn--ghost btn--small" id="play-add-offline">Compte hors ligne</button>
+					<button type="button" class="btn btn--ghost btn--small nav-item" data-page="accounts">Gérer</button>
+				</div>
+			</details>
+			<div class="rail-runtime">
+				<span id="dock-version">1.21.11</span>
+				<span id="dock-memory">4096 MB</span>
+			</div>
+			<span class="rail-indicator" id="dock-indicator" aria-hidden="true"></span>
+		</div>
 	</aside>
 
-	<div class="gate-menu-backdrop" id="gate-menu-backdrop" hidden></div>
-	<nav class="gate-menu" id="gate-menu" aria-label="Aether destinations" hidden>
-		<div class="gate-menu-head">
-			<div><span class="gate-menu-kicker">AETHER / CONTROL</span><strong>Go somewhere.</strong></div>
-			<button type="button" class="gate-menu-close" id="btn-gate-menu-close" aria-label="Close menu">×</button>
-		</div>
-		<div class="gate-menu-group">
-			<span class="gate-menu-label">PLAYER</span>
-			<button type="button" class="nav-item" data-page="accounts"><span class="gate-menu-index">01</span><span>Accounts</span><span class="gate-menu-arrow">↗</span></button>
-			<button type="button" class="nav-item" data-page="versions"><span class="gate-menu-index">02</span><span>Versions & profiles</span><span class="gate-menu-arrow">↗</span></button>
-		</div>
-		<div class="gate-menu-group">
-			<span class="gate-menu-label">YOUR WORLD</span>
-			<button type="button" class="nav-item" data-page="mods"><span class="gate-menu-index">03</span><span>Mods</span><span class="gate-menu-arrow">↗</span></button>
-			<button type="button" class="nav-item" data-page="servers"><span class="gate-menu-index">04</span><span>Servers</span><span class="gate-menu-arrow">↗</span></button>
-		</div>
-		<div class="gate-menu-group">
-			<span class="gate-menu-label">SYSTEM</span>
-			<button type="button" class="nav-item" data-page="performance"><span class="gate-menu-index">05</span><span>Performance</span><span class="gate-menu-arrow">↗</span></button>
-			<button type="button" class="nav-item" data-page="logs"><span class="gate-menu-index">06</span><span>Diagnostics</span><span class="gate-menu-arrow">↗</span></button>
-			<button type="button" class="nav-item" data-page="settings"><span class="gate-menu-index">07</span><span>Appearance</span><span class="gate-menu-arrow">↗</span></button>
-		</div>
-		<div class="gate-menu-foot"><span>ESC</span><span>BACK TO THE GATE</span></div>
-	</nav>
-
 	<div class="shell">
-
 		<main class="content">
-			<!-- ============================= THE GATE ============================= -->
-			<section class="page gate-page is-active" data-page="play">
-				<div class="gate-orbit gate-orbit--one" aria-hidden="true"></div>
-				<div class="gate-orbit gate-orbit--two" aria-hidden="true"></div>
-				<div class="gate-content">
-					<header class="gate-header">
-						<div class="gate-heading">
-							<span class="gate-overline">AETHER / THE FOLD</span>
+
+			<!-- ============================== HOME ============================== -->
+			<section class="page page--home is-active" data-page="play">
+				<div class="home">
+					<header class="home-hero">
+						<div class="hero-copy">
+							<span class="hero-kicker">CUBE / LAUNCHER</span>
+							<h1>CUBE <span>LAUNCHER</span></h1>
+							<p class="hero-lede">Choisis ton monde, ajuste ton skin et plonge dans le voxel.</p>
 						</div>
-						<div class="gate-status" id="status-pill" aria-live="polite">
-							<span class="gate-status-mark" aria-hidden="true"></span>
-							<span id="status-text">Ready</span>
-							<span id="gate-state-line" class="gate-visually-hidden">READY WHEN YOU ARE</span>
+						<div class="hero-side">
+							<div class="gate-status" id="status-pill" aria-live="polite">
+								<span class="gate-status-mark" aria-hidden="true"></span>
+								<span id="status-text">Prêt</span>
+								<span id="gate-state-line" class="visually-hidden">READY WHEN YOU ARE</span>
+							</div>
+							<div class="hero-stats">
+								<div class="hero-stat">
+									<strong id="stat-playtime">0h</strong>
+									<span>Temps de jeu</span>
+								</div>
+								<div class="hero-stat">
+									<strong id="stat-worlds">0</strong>
+									<span>Mondes</span>
+								</div>
+								<div class="hero-stat">
+									<strong id="stat-mods">0</strong>
+									<span>Mods</span>
+								</div>
+							</div>
 						</div>
 					</header>
 
-					<div class="voxel-hero-copy">
-						<span class="voxel-hero-kicker">AETHER / YOUR MINECRAFT SPACE</span>
-						<h1>YOUR NEXT WORLD<br><span>STARTS HERE.</span></h1>
-						<p>Choose your profile, make it yours, and jump straight into the game.</p>
-					</div>
-					<div class="gate-stage">
-						<div class="gate-art" aria-label="The Fold, Aether's identity mark">
-							<svg class="gate-emblem" viewBox="0 0 360 360" role="img" aria-labelledby="gate-emblem-title">
-								<title id="gate-emblem-title">Aether Fold</title>
-								<defs>
-									<linearGradient id="fold-left" x1="0" y1="0" x2="1" y2="1">
-										<stop offset="0" stop-color="#f2f4f6" />
-										<stop offset="1" stop-color="#858d95" />
-									</linearGradient>
-									<linearGradient id="fold-right" x1="0" y1="0" x2="1" y2="1">
-										<stop offset="0" stop-color="#bec5cb" />
-										<stop offset="1" stop-color="#555e67" />
-									</linearGradient>
-									<linearGradient id="fold-base" x1="0" y1="0" x2="1" y2="0">
-										<stop offset="0" stop-color="#737d86" />
-										<stop offset="1" stop-color="#d8dde1" />
-									</linearGradient>
-								</defs>
-								<path class="fold-plane fold-plane--left" d="M171 30 67 292h65l70-177z" fill="url(#fold-left)" />
-								<path class="fold-plane fold-plane--right" d="m181 30 112 262h-66l-69-164 22-55z" fill="url(#fold-right)" />
-								<path class="fold-plane fold-plane--base" d="m132 292 43-105h58l44 105z" fill="url(#fold-base)" />
-								<path class="fold-edge" d="m171 30 10 0M67 292h226M132 292l43-105h58l44 105" />
-								<path class="fold-cut" d="m173 128 31 73h-27l-19-45z" />
-							</svg>
-						</div>
-
-						<div class="gate-action-column">
-							<div class="gate-player">
-								<div class="dock-avatar gate-avatar" id="dock-avatar">?</div>
-								<div class="gate-player-copy">
-									<span>PLAYING AS</span>
-									<strong class="dock-name" id="dock-account-name">No account</strong>
-									<small id="session-badge">no account selected</small>
+					<div class="home-spotlight">
+						<article class="instance-hero card" id="instance-hero">
+							<div class="instance-hero-scene" aria-hidden="true">
+								<span class="pixel-sun"></span>
+								<span class="pixel-cloud pixel-cloud--one"></span>
+								<span class="pixel-cloud pixel-cloud--two"></span>
+								<span class="pixel-hill pixel-hill--far"></span>
+								<span class="pixel-hill pixel-hill--near"></span>
+								<span class="pixel-tree pixel-tree--one"></span>
+								<span class="pixel-tree pixel-tree--two"></span>
+								<span class="pixel-tree pixel-tree--three"></span>
+								<span class="pixel-house">
+									<i class="house-roof"></i>
+									<i class="house-wall"></i>
+									<i class="house-door"></i>
+									<i class="house-window"></i>
+								</span>
+							</div>
+							<div class="instance-hero-body">
+								<span class="card-eyebrow">TON ESPACE DE JEU</span>
+								<h2 id="home-profile-name">Prêt pour l'aventure ?</h2>
+								<p class="instance-hero-hint">Joue maintenant ou ouvre un monde pour tes amis.</p>
+								<div class="instance-chips">
+									<span class="chip"><small>VERSION</small><strong id="home-profile-version">—</strong></span>
+									<span class="chip"><small>LOADER</small><strong id="home-profile-loader">Fabric</strong></span>
+									<span class="chip"><small>MÉMOIRE</small><strong id="home-profile-memory">4 Go</strong></span>
 								</div>
-								<button type="button" class="gate-player-change nav-item" data-page="accounts" aria-label="Manage player accounts">
-									<span>CHANGE</span><b>↗</b>
+								<div class="instance-actions">
+									<button type="button" class="play-button" id="btn-launch" aria-label="Lancer Minecraft">
+										<span class="play-glyph" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m8 5 11 7-11 7z" /></svg></span>
+										<span class="play-copy">
+											<span class="play-label">JOUER</span>
+											<span class="play-account" id="play-account-label">AUCUN COMPTE SÉLECTIONNÉ</span>
+										</span>
+									</button>
+									<button type="button" class="btn btn--danger" id="btn-stop" hidden>ARRÊTER</button>
+									<button type="button" class="btn btn--ghost" id="btn-install">INSTALLER / RÉPARER</button>
+									<button type="button" class="btn btn--danger" id="btn-cancel-install" hidden>ANNULER L'INSTALLATION</button>
+								</div>
+								<div class="progress" id="install-progress" hidden>
+									<div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+									<span class="progress-label" id="progress-label">Préparation…</span>
+								</div>
+												<div class="instance-foot"><span class="muted" id="home-host-status">Ton jeu est prêt quand tu veux.</span><button type="button" class="link-button nav-item" data-page="worlds">MES MONDES <b>↗</b></button></div>
+							</div>
+						</article>
+
+						<div class="spotlight-stack">
+							<article class="spotlight-card card">
+								<span class="spotlight-tag spotlight-tag--snapshot">SNAPSHOT</span>
+								<div class="spotlight-icon spotlight-icon--snow" aria-hidden="true">
+									<svg viewBox="0 0 24 24"><path d="M12 2v20M3.5 7l17 10M20.5 7l-17 10M12 6l-3 3M12 6l3 3M12 18l-3-3M12 18l3-3" /></svg>
+								</div>
+								<h3>Biome des cimes</h3>
+								<p>Montagnes enneigées et mobs cachés à découvrir.</p>
+								<button type="button" class="link-button" data-news="snapshot">LIRE LA SUITE <b>↗</b></button>
+							</article>
+							<article class="spotlight-card card">
+								<span class="spotlight-tag spotlight-tag--update">UPDATE</span>
+								<div class="spotlight-icon spotlight-icon--redstone" aria-hidden="true">
+									<svg viewBox="0 0 24 24"><rect x="4" y="4" width="7" height="7" rx="1" /><rect x="13" y="13" width="7" height="7" rx="1" /><path d="M11 7.5h4a2 2 0 0 1 2 2v1M13 16.5H9a2 2 0 0 1-2-2v-1" /></svg>
+								</div>
+								<h3>Refonte de la redstone</h3>
+								<p>Nouveaux composants pour tes circuits les plus fous.</p>
+								<button type="button" class="link-button" data-news="update">LIRE LA SUITE <b>↗</b></button>
+							</article>
+							<article class="spotlight-card card">
+								<span class="spotlight-tag spotlight-tag--event">ÉVÉNEMENT</span>
+								<div class="spotlight-icon spotlight-icon--leaf" aria-hidden="true">
+									<svg viewBox="0 0 24 24"><path d="M5 19c0-8 5-13 14-14-1 9-6 14-14 14Z" /><path d="M5 19 14 10" /></svg>
+								</div>
+								<h3>Festival d'automne</h3>
+								<p>Récompenses exclusives jusqu'à la fin du mois.</p>
+								<button type="button" class="link-button" data-news="event">LIRE LA SUITE <b>↗</b></button>
+							</article>
+						</div>
+					</div>
+
+					<section class="home-section" aria-labelledby="library-title">
+						<header class="section-head">
+							<div>
+								<span class="section-kicker">POUR JOUER ENSEMBLE</span>
+								<h2 id="library-title">MES MONDES</h2>
+							</div>
+							<div class="section-actions">
+								<span class="badge" id="host-count-home">0 monde</span>
+								<button type="button" class="btn btn--primary nav-item" data-page="worlds">
+									<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+									CRÉER UN MONDE
 								</button>
 							</div>
+						</header>
+						<div id="home-host-list" class="home-worlds"></div>
+					</section>
 
-							<details class="gate-disclosure gate-account-disclosure">
-								<summary><span>SWITCH PLAYER</span><span class="gate-disclosure-value" id="gate-account-summary">No account selected</span></summary>
-								<div class="gate-disclosure-content">
-									<div id="play-accounts" class="account-list"></div>
-									<div class="gate-inline-actions">
-										<button class="btn btn--ghost btn--small" id="play-add-offline">Add offline account</button>
-										<button class="btn btn--ghost btn--small nav-item" data-page="accounts">Manage all accounts</button>
-									</div>
-								</div>
-							</details>
-
-							<div class="gate-action-bottom">
-								<div class="progress gate-progress" id="install-progress" hidden>
-									<div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
-									<span class="progress-label" id="progress-label">Preparing…</span>
-								</div>
-								<div class="gate-primary-actions">
-									<button type="button" class="gate-enter" id="btn-launch" aria-label="Launch Minecraft">
-										<span>ENTER</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h15M13 5l7 7-7 7" /></svg>
-									</button>
-									<button type="button" class="gate-stop btn btn--danger" id="btn-stop" hidden>STOP SESSION</button>
-									<button type="button" class="gate-stop btn btn--danger" id="btn-cancel-install" hidden>CANCEL INSTALL</button>
-								</div>
+					<section class="home-section" aria-labelledby="news-title">
+						<header class="section-head">
+							<div>
+								<span class="section-kicker">FIL D'ACTU</span>
+								<h2 id="news-title">ACTUALITÉS</h2>
 							</div>
+							<span class="section-note">SNAPSHOTS · MISES À JOUR · COMMUNAUTÉ</span>
+						</header>
+						<div class="news-grid">
+							<article class="news-card card" id="news-snapshot">
+								<span class="news-tag">SNAPSHOT</span>
+								<h3>Biome des cimes</h3>
+								<p>Montagnes enneigées et mobs cachés à découvrir.</p>
+								<span class="news-meta">IL Y A 2 JOURS</span>
+							</article>
+							<article class="news-card card" id="news-update">
+								<span class="news-tag">UPDATE</span>
+								<h3>Refonte de la redstone</h3>
+								<p>Nouveaux composants pour tes circuits les plus fous.</p>
+								<span class="news-meta">IL Y A 4 JOURS</span>
+							</article>
+							<article class="news-card card" id="news-event">
+								<span class="news-tag">ÉVÉNEMENT</span>
+								<h3>Festival d'automne</h3>
+								<p>Récompenses exclusives jusqu'à la fin du mois.</p>
+								<span class="news-meta">JUSQU'AU 30 NOVEMBRE</span>
+							</article>
+							<article class="news-card card">
+								<span class="news-tag news-tag--community">COMMUNAUTÉ</span>
+								<h3>Concours de constructions</h3>
+								<p>Montre ton château et gagne un skin unique.</p>
+								<span class="news-meta">IL Y A 1 SEMAINE</span>
+							</article>
+							<article class="news-card card">
+								<span class="news-tag news-tag--patch">MISE À JOUR</span>
+								<h3>Correctifs de performance</h3>
+								<p>Chargement des chunks plus rapide et moins de saccades.</p>
+								<span class="news-meta">IL Y A 2 SEMAINES</span>
+							</article>
 						</div>
-					</div>
+					</section>
 
-					<footer class="gate-footer">
-						<div><span class="gate-footer-mark"></span><span>AETHER / THE FOLD</span></div>
-						<span>BUILT AROUND YOUR WORLD</span>
-						<details class="gate-disclosure gate-settings-disclosure">
-							<summary><span>SETUP</span><span class="gate-disclosure-value">CONFIGURATION & REPAIR</span></summary>
-							<div class="gate-disclosure-content gate-config-grid">
-								<label class="field gate-field-wide">
-									<span class="field-label">Profile</span>
-									<div class="field-row">
-										<select id="select-profile" class="input"></select>
-										<button type="button" class="icon-btn" id="btn-profile-new" title="New profile" aria-label="New profile">
-											<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg>
-										</button>
-										<button type="button" class="icon-btn" id="btn-profile-delete" title="Delete this profile" aria-label="Delete this profile">
-											<svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13" /></svg>
-										</button>
-									</div>
-								</label>
-								<label class="field">
-									<span class="field-label">Minecraft version</span>
-									<select id="select-version" class="input"></select>
-								</label>
-								<label class="field">
-									<span class="field-label">Fabric loader</span>
-									<select id="select-loader" class="input"></select>
-								</label>
-								<label class="field">
-									<span class="field-label">Memory</span>
-									<div class="range-row">
-										<input type="range" id="range-memory" min="1024" max="16384" step="256" value="4096" aria-label="Maximum memory" />
-										<output id="output-memory">4096 MB</output>
-									</div>
-								</label>
-								<label class="field">
-									<span class="field-label">Window width</span>
-									<div class="range-row">
-										<input type="range" id="range-width" min="640" max="3840" step="8" value="854" aria-label="Window width" />
-										<output id="output-width">854</output>
-									</div>
-								</label>
-								<label class="field">
-									<span class="field-label">Window height</span>
-									<div class="range-row">
-										<input type="range" id="range-height" min="480" max="2160" step="8" value="480" aria-label="Window height" />
-										<output id="output-height">480</output>
-									</div>
-								</label>
-								<div class="gate-setup-footer gate-field-wide">
-									<span>INSTALLATION IS ONLY NEEDED WHEN THE CLIENT IS MISSING OR BROKEN.</span>
-									<button class="btn btn--ghost" id="btn-install">Install / repair client</button>
-								</div>
-								<div class="gate-runtime" aria-hidden="true">
-									<span id="dock-version">1.21.11</span>
-									<span id="dock-memory">4096 MB</span>
-									<pre class="console" id="console" aria-live="polite"></pre>
-								</div>
+					<section class="home-section" aria-labelledby="prefs-title">
+						<header class="section-head">
+							<div>
+								<span class="section-kicker">PRÉFÉRENCES</span>
+								<h2 id="prefs-title">RÉGLAGES</h2>
 							</div>
-						</details>
-						
+							<button type="button" class="link-button nav-item" data-page="settings">TOUS LES RÉGLAGES <b>↗</b></button>
+						</header>
+						<div class="prefs-grid">
+							<article class="pref-card card">
+								<div class="pref-head">
+									<span class="pref-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="4" y="7" width="16" height="10" rx="2" /><path d="M8 7v10M16 7v10M4 12h16" /></svg></span>
+									<div class="pref-copy">
+										<h3>Mémoire allouée</h3>
+										<p>Mémoire réservée au jeu</p>
+									</div>
+									<output id="output-memory" for="range-memory">4096 MB</output>
+								</div>
+								<input type="range" id="range-memory" min="1024" max="16384" step="512" value="4096" aria-label="Mémoire allouée" />
+							</article>
+
+							<article class="pref-card card">
+								<div class="pref-head">
+									<span class="pref-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" /><path d="M12 4a8 8 0 0 1 0 16Z" fill="currentColor" stroke="none" /></svg></span>
+									<div class="pref-copy">
+										<h3>Teinte de l'interface</h3>
+										<p>Change toute l'ambiance en un glissement</p>
+									</div>
+									<output id="output-hue" for="range-hue">96°</output>
+								</div>
+								<input type="range" id="range-hue" class="range-hue" min="0" max="360" step="1" value="96" aria-label="Teinte de l'interface" />
+							</article>
+
+							<article class="pref-card card">
+								<div class="pref-head">
+									<span class="pref-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 18h18M5 18V9l7-5 7 5v9" /><path d="M9 18v-5h6v5" /></svg></span>
+									<div class="pref-copy">
+										<h3>Fond animé</h3>
+										<p>Désactive le monde voxel pour économiser la batterie</p>
+									</div>
+									<button type="button" class="switch" id="toggle-animated-bg" role="switch" aria-checked="true" aria-label="Fond animé"><span></span></button>
+								</div>
+							</article>
+
+							<article class="pref-card card">
+								<div class="pref-head">
+									<span class="pref-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3v10M12 3 8 7M12 3l4 4" /><path d="M5 12v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6" /></svg></span>
+									<div class="pref-copy">
+										<h3>Mises à jour automatiques</h3>
+										<p>Télécharger les nouvelles versions en arrière-plan</p>
+									</div>
+									<button type="button" class="switch" id="toggle-auto-updates" role="switch" aria-checked="true" aria-label="Mises à jour automatiques"><span></span></button>
+								</div>
+							</article>
+						</div>
+					</section>
+
+					<details class="setup-panel card">
+						<summary>
+							<span class="setup-summary-copy"><strong>INSTALLATION &amp; RÉPARATION</strong><small>Version du jeu, mémoire et affichage</small></span>
+							<span class="setup-summary-state"><span id="home-game-state">Inactif</span><b>+</b></span>
+						</summary>
+						<div class="setup-grid">
+							<label class="field">
+								<span class="field-label">Version de Minecraft</span>
+								<select id="select-version" class="input"></select>
+							</label>
+							<label class="field">
+								<span class="field-label">Loader Fabric</span>
+								<select id="select-loader" class="input"></select>
+							</label>
+							<label class="field">
+								<span class="field-label">Largeur de fenêtre</span>
+								<div class="range-row">
+									<input type="range" id="range-width" min="640" max="3840" step="8" value="854" aria-label="Largeur de fenêtre" />
+									<output id="output-width">854</output>
+								</div>
+							</label>
+							<label class="field">
+								<span class="field-label">Hauteur de fenêtre</span>
+								<div class="range-row">
+									<input type="range" id="range-height" min="480" max="2160" step="8" value="480" aria-label="Hauteur de fenêtre" />
+									<output id="output-height">480</output>
+								</div>
+							</label>
+							<div class="setup-actions">
+								<span>Ces réglages s'appliquent à tes prochains lancements.</span>
+							</div>
+							<pre class="console console--static setup-console" id="console" aria-live="polite"></pre>
+						</div>
+					</details>
+
+					<footer class="home-foot">
+						<span>CUBE LAUNCHER · VOXEL EDITION</span>
+						<span>MINECRAFT N'EST PAS AFFILIÉ À MOJANG OU MICROSOFT</span>
 					</footer>
 				</div>
 			</section>
 
-			<!-- ========================== ACCOUNTS ========================== -->
+			<!-- ============================ INSTANCES =========================== -->
+			<section class="page" data-page="worlds">
+				<header class="page-header">
+					<div>
+						<p class="page-kicker">CUBE / TES AVENTURES</p>
+						<h1>Mes mondes</h1>
+						<p>Crée un serveur, lance-le et partage son adresse avec les joueurs sur ton réseau local.</p>
+					</div>
+					<div class="actions"><button class="btn btn--ghost" id="btn-refresh-versions">Actualiser les versions</button></div>
+				</header>
+				<div class="glass-block">
+					<div class="block-head"><h2 class="block-title">Créer un monde</h2><span class="block-subtitle">JAVA + FABRIC · SAUVEGARDE LOCALE</span></div>
+					<div class="block-body">
+						<div class="host-create-grid">
+							<label class="field"><span class="field-label">NOM DU MONDE</span><input type="text" id="host-name" class="input" maxlength="48" placeholder="Survie entre amis" /></label>
+							<label class="field"><span class="field-label">VERSION</span><select id="host-version" class="input"></select></label>
+							<label class="field"><span class="field-label">PORT</span><input type="number" id="host-port" class="input" value="25565" min="1024" max="65535" /></label>
+							<label class="field"><span class="field-label">JOUEURS MAX.</span><input type="number" id="host-players" class="input" value="8" min="1" max="100" /></label>
+						</div>
+						<div class="host-create-actions"><span class="muted">Le premier démarrage installe Fabric et prépare le monde.</span><button class="btn btn--primary" id="btn-host-create">Créer et démarrer</button></div>
+						<p class="host-network-note"><b>Inviter des amis</b> · L’adresse locale fonctionne sur le même réseau. Pour jouer via Internet, configure la redirection de port du routeur.</p>
+					</div>
+				</div>
+				<div class="glass-block">
+					<div class="block-head"><h2 class="block-title">Tes mondes</h2><div class="actions actions--tight"><span class="badge" id="host-count">0 monde</span></div></div>
+					<div id="host-list" class="home-worlds"></div>
+					<div class="block-foot">Les mondes sont sauvegardés sur cet ordinateur. L’arrêt sauvegarde avant de fermer le serveur.</div>
+				</div>
+			</section>
+
+			<!-- ============================ ACCOUNTS ============================ -->
 			<section class="page" data-page="accounts">
 				<header class="page-header">
 					<div>
-						<h1>Accounts</h1>
-						<p>Offline accounts only need a name; the identifier is generated exactly like Minecraft does it. Microsoft accounts use the device code sign in.</p>
+						<p class="page-kicker">CUBE / JOUEUR</p>
+						<h1>Comptes</h1>
+						<p>Un compte hors ligne n'a besoin que d'un pseudo. Les comptes Microsoft utilisent la connexion par code et leur session reste protégée sur cette machine.</p>
 					</div>
 					<div class="actions">
-						<button class="btn btn--ghost" id="btn-add-offline">Offline account</button>
-						<button class="btn btn--ghost" id="btn-add-microsoft">Microsoft account</button>
+						<button class="btn btn--ghost" id="btn-add-offline">Compte hors ligne</button>
+						<button class="btn btn--primary" id="btn-add-microsoft">Compte Microsoft</button>
 					</div>
 				</header>
-				<div class="block">
-					<div class="block-head"><h2 class="block-title">Accounts</h2></div>
+				<div class="glass-block">
+					<div class="block-head">
+						<h2 class="block-title">Tes joueurs</h2>
+						<span class="block-subtitle">Choisis l'identité utilisée au lancement</span>
+					</div>
 					<div id="account-table" class="account-table"></div>
 				</div>
 			</section>
 
-			<!-- ========================== VERSIONS ========================== -->
-			<section class="page" data-page="versions">
-				<header class="page-header">
-					<div>
-						<h1>Versions</h1>
-						<p>Every released Minecraft version supported by the Aether client.</p>
-					</div>
-					<button class="btn btn--ghost" id="btn-refresh-versions">Refresh</button>
-				</header>
-				<div class="block">
-					<div class="block-head">
-						<h2 class="block-title">Available versions</h2>
-						<span class="block-subtitle">Published by Mojang</span>
-					</div>
-					<div id="version-table" class="version-table"></div>
-				</div>
-			</section>
-
-			<!-- ============================ MODS ============================ -->
+			<!-- ============================== MODS ============================= -->
 			<section class="page" data-page="mods">
 				<header class="page-header">
 					<div>
+						<p class="page-kicker">CUBE / MODRINTH</p>
 						<h1>Mods</h1>
-						<p>A disabled mod stays on the disk and is renamed with a <code>.disabled</code> suffix, so nothing has to be downloaded again.</p>
+						<p>Explore des mods Fabric compatibles avec ta version. Chaque fichier téléchargé est vérifié avant d’être ajouté au jeu.</p>
 					</div>
 					<div class="actions">
-						<button class="btn btn--ghost" id="btn-mods-refresh">Refresh</button>
-						<button class="btn btn--ghost" id="btn-mods-folder">Open folder</button>
+						<button class="btn btn--ghost" id="btn-mods-refresh">Rafraîchir</button>
+						<button class="btn btn--ghost" id="btn-mods-folder">Ouvrir le dossier</button>
 					</div>
 				</header>
-				<div class="block">
+				<div class="glass-block mod-discovery">
+					<div class="block-head"><div><h2 class="block-title">Découvrir</h2><span class="block-subtitle" id="mods-search-version">Fabric · —</span></div></div>
+					<div class="block-body"><div class="mod-search-row"><input type="search" id="mods-search-query" class="input" placeholder="Rechercher un mod…" maxlength="80" /><button type="button" class="btn btn--primary" id="btn-mods-search">Rechercher</button></div><div class="mod-results-grid" id="mods-search-results"><div class="mod-search-empty">Cherche un mod par nom pour commencer.</div></div></div>
+				</div>
+				<div class="glass-block">
 					<div class="block-head">
-						<h2 class="block-title">Installed mods</h2>
-						<span class="badge" id="mods-count">0 mods</span>
+						<h2 class="block-title">Mods installés</h2>
+						<span class="badge" id="mods-count">0 mod</span>
 					</div>
 					<div id="mods-table" class="mod-table"></div>
 					<p class="log-path" id="mods-path"></p>
 				</div>
 			</section>
 
-			<!-- =========================== SERVERS ========================== -->
+			<!-- ============================ SERVERS =========================== -->
 			<section class="page" data-page="servers">
 				<header class="page-header">
 					<div>
-						<h1>Servers</h1>
-						<p>Ping any server, check whether it accepts an offline account, and host your own offline server in one click.</p>
+						<p class="page-kicker">CUBE / RÉSEAU</p>
+						<h1>Serveurs</h1>
+						<p>Enregistre une adresse, teste son ping réel et rejoins-la en un clic. L'hébergement local accepte les comptes hors ligne.</p>
 					</div>
 				</header>
 
 				<div class="grid grid--two">
-					<div class="block">
-						<div class="block-head"><h2 class="block-title">Add a server</h2></div>
+					<div class="glass-block">
+						<div class="block-head"><h2 class="block-title">Rejoindre un serveur</h2></div>
 						<div class="block-body">
 							<label class="field">
-								<span class="field-label">Name</span>
-								<input type="text" id="server-name" class="input" maxlength="48" placeholder="My server" />
+								<span class="field-label">Nom</span>
+								<input type="text" id="server-name" class="input" maxlength="48" placeholder="Mon serveur" />
 							</label>
 							<label class="field">
-								<span class="field-label">Address</span>
-								<input type="text" id="server-address" class="input" maxlength="128" placeholder="play.example.com:25565" />
+								<span class="field-label">Adresse</span>
+								<input type="text" id="server-address" class="input" maxlength="128" placeholder="play.exemple.com:25565" />
 							</label>
 							<div class="actions">
-								<button class="btn btn--primary" id="btn-server-add">Add server</button>
-								<button class="btn btn--ghost" id="btn-server-probe">Test address</button>
+								<button class="btn btn--primary" id="btn-server-add">Ajouter le serveur</button>
+								<button class="btn btn--ghost" id="btn-server-probe">Tester l'adresse</button>
 							</div>
 							<p class="muted" id="server-verdict" aria-live="polite"></p>
 						</div>
 					</div>
 
-					<div class="block">
-						<div class="block-head"><h2 class="block-title">Host an offline server</h2></div>
-						<div class="block-body">
-							<p class="muted">A local Fabric server with <code>online-mode=false</code>. Friends join with any name, without a Microsoft account.</p>
-							<label class="field">
-								<span class="field-label">World name</span>
-								<input type="text" id="host-name" class="input" maxlength="48" placeholder="Our world" />
-							</label>
-							<div class="grid grid--two">
-								<label class="field">
-									<span class="field-label">Port</span>
-									<input type="number" id="host-port" class="input" value="25565" min="1024" max="65535" />
-								</label>
-								<label class="field">
-									<span class="field-label">Players</span>
-									<input type="number" id="host-players" class="input" value="20" min="1" max="100" />
-								</label>
-							</div>
-							<button class="btn btn--ghost btn--block" id="btn-host-create">Create the server</button>
-						</div>
-					</div>
 				</div>
 
-				<div class="block">
-					<div class="block-head">
-						<h2 class="block-title">Your servers</h2>
-						<div class="actions actions--tight">
-							<span class="badge" id="server-count">0 servers</span>
-							<button class="btn btn--ghost btn--small" id="btn-servers-refresh">Refresh</button>
-						</div>
-					</div>
-					<div id="server-list" class="mod-table"></div>
-				</div>
-
-				<div class="block">
-					<div class="block-head">
-						<h2 class="block-title">Local servers</h2>
-						<span class="badge" id="host-count">0 servers</span>
-					</div>
-					<div id="host-list" class="mod-table"></div>
-					<div class="block-foot">The console of a server is written to <code>console.log</code> in its folder. Stop goes through RCON, so the world is saved before the process ends.</div>
+				<div class="glass-block">
+					<div class="block-head"><h2 class="block-title">Serveurs enregistrés</h2><div class="actions actions--tight"><span class="badge" id="server-count">0 serveur</span><span class="block-subtitle">Rejoins un serveur public ou privé</span></div></div>
+					<div id="server-list" class="server-list"></div>
 				</div>
 			</section>
 
-			<!-- ========================= PERFORMANCE ======================== -->
+			<!-- ========================== PERFORMANCE ========================= -->
 			<section class="page" data-page="performance">
 				<header class="page-header">
 					<div>
+						<p class="page-kicker">CUBE / SYSTÈME</p>
 						<h1>Performance</h1>
-						<p>The optimisation pack, the JVM flags and the rendering options. Every change is reversible; the original <code>options.txt</code> is kept.</p>
+						<p>Le pack d'optimisation, les options JVM et le rendu. Chaque changement est réversible : l'<code>options.txt</code> d'origine est conservé.</p>
 					</div>
 				</header>
 
 				<div class="grid grid--two">
-					<div class="block">
-						<div class="block-head"><h2 class="block-title">JVM preset</h2></div>
+					<div class="glass-block">
+						<div class="block-head"><h2 class="block-title">Preset JVM</h2></div>
 						<div class="block-body">
-							<p class="muted">The garbage collector flags of the next launch. Ultra uses Aikar's flags with string tuning.</p>
+							<p class="muted">Les options du ramasse-miettes du prochain lancement. Ultra utilise les flags d'Aikar avec l'optimisation des chaînes.</p>
 							<div class="preset-cards-grid" id="preset-cards-grid">
-								<button type="button" class="preset-card" data-preset="balanced" title="Low latency G1GC tuning for a stable 144+ FPS">
+								<button type="button" class="preset-card" data-preset="balanced" title="Réglage G1GC à faible latence pour une image stable">
 									<span class="preset-card-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" /><path d="M12 3v18M3 12h18" /></svg></span>
-									<span class="preset-card-info">
-										<span class="preset-card-title">Balanced</span>
-									</span>
+									<span class="preset-card-info"><span class="preset-card-title">Équilibré</span></span>
 								</button>
-								<button type="button" class="preset-card" data-preset="performance" title="Optimised allocation rates, minimal GC pauses">
+								<button type="button" class="preset-card" data-preset="performance" title="Taux d'allocation optimisés, pauses GC minimales">
 									<span class="preset-card-icon"><svg viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" /></svg></span>
-									<span class="preset-card-info">
-										<span class="preset-card-title">Performance</span>
-									</span>
+									<span class="preset-card-info"><span class="preset-card-title">Performance</span></span>
 								</button>
-								<button type="button" class="preset-card" data-preset="ultra" title="Aikar competitive flags with string deduplication">
+								<button type="button" class="preset-card" data-preset="ultra" title="Flags compétitifs d'Aikar avec déduplication des chaînes">
 									<span class="preset-card-icon"><svg viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" /></svg></span>
-									<span class="preset-card-info">
-										<span class="preset-card-title">Ultra</span>
-									</span>
+									<span class="preset-card-info"><span class="preset-card-title">Ultra</span></span>
 								</button>
 							</div>
 							<select id="select-jvm" class="input" hidden aria-hidden="true" tabindex="-1">
-								<option value="balanced">Balanced</option>
+								<option value="balanced">Équilibré</option>
 								<option value="performance">Performance</option>
 								<option value="ultra">Ultra</option>
-								<option value="custom">Plain arguments</option>
+								<option value="custom">Arguments bruts</option>
 							</select>
 							<div class="actions">
-								<button class="btn btn--primary" id="btn-jvm-apply">Apply the preset</button>
+								<button class="btn btn--primary" id="btn-jvm-apply">Appliquer le preset</button>
 							</div>
 							<p class="muted" id="jvm-current"></p>
 						</div>
 					</div>
 
-					<div class="block">
-						<div class="block-head"><h2 class="block-title">Game options</h2></div>
+					<div class="glass-block">
+						<div class="block-head"><h2 class="block-title">Options du jeu</h2></div>
 						<div class="block-body">
-							<p class="muted">Writes the rendering options. The original file is copied to <code>options.txt.aether-backup</code> on the first change.</p>
+							<p class="muted">Écrit les options de rendu. Le fichier d'origine est copié dans <code>options.txt.aether-backup</code> au premier changement.</p>
 							<div class="actions">
-								<button class="btn btn--ghost" id="btn-tune-max">Maximum FPS</button>
-								<button class="btn btn--ghost" id="btn-tune-balanced">Balanced</button>
-								<button class="btn btn--ghost" id="btn-tune-restore">Restore</button>
+								<button class="btn btn--ghost" id="btn-tune-max">FPS maximum</button>
+								<button class="btn btn--ghost" id="btn-tune-balanced">Équilibré</button>
+								<button class="btn btn--ghost" id="btn-tune-restore">Restaurer</button>
 							</div>
 							<p class="muted" id="options-current"></p>
 						</div>
 					</div>
 				</div>
 
-				<div class="block">
-					<div class="block-head">
-						<h2 class="block-title">Live FPS curve</h2>
-						<span class="badge" id="fps-spline-status">880+ FPS peak target</span>
+				<div class="grid grid--two">
+					<div class="glass-block">
+						<div class="block-head"><h2 class="block-title">Mémoire allouée</h2><span class="badge">Réglage direct</span></div>
+						<div class="block-body">
+							<p class="muted">Le tas maximum du prochain lancement. Le profil actif l'adopte immédiatement.</p>
+							<label class="field">
+								<span class="field-label">RAM allouée</span>
+								<div class="range-row">
+									<input type="range" id="range-perf-memory" min="1024" max="16384" step="512" value="4096" aria-label="Mémoire allouée" />
+									<output id="output-perf-memory">4096 MB</output>
+								</div>
+							</label>
+						</div>
 					</div>
-					<div class="block-body">
-						<canvas id="fps-spline-canvas" class="fps-spline-canvas" width="600" height="120"></canvas>
+
+					<div class="glass-block">
+						<div class="block-head"><h2 class="block-title">Système</h2><span class="block-subtitle">Rapport local</span></div>
+						<div class="block-body">
+							<pre class="system-info" id="system-info">Lecture de l'environnement…</pre>
+						</div>
 					</div>
 				</div>
 
-				<div class="block">
+				<div class="glass-block">
 					<div class="block-head">
-						<h2 class="block-title">Optimisation pack</h2>
+						<h2 class="block-title">Pack d'optimisation</h2>
 						<div class="actions actions--tight">
 							<span class="badge" id="perf-count">0/10</span>
-							<button class="btn btn--ghost btn--small" id="btn-perf-refresh">Refresh</button>
-							<button class="btn btn--ghost btn--small" id="btn-perf-install">Install missing</button>
+							<button class="btn btn--ghost btn--small" id="btn-perf-refresh">Rafraîchir</button>
+							<button class="btn btn--ghost btn--small" id="btn-perf-install">Installer les manquants</button>
 						</div>
 					</div>
 					<div id="perf-mods" class="mod-table"></div>
@@ -445,212 +618,220 @@
 				</div>
 			</section>
 
-			<!-- ============================ LOGS ============================ -->
+			<!-- ============================= LOGS ============================= -->
 			<section class="page" data-page="logs">
 				<header class="page-header">
 					<div>
-						<h1>Logs</h1>
-						<p>The output of the running session and the downloads of the last installation.</p>
+						<p class="page-kicker">CUBE / DIAGNOSTIC</p>
+						<h1>Journaux</h1>
+						<p>La sortie de la session en cours et les téléchargements de la dernière installation.</p>
 					</div>
 				</header>
 
-				<div class="block">
+				<div class="glass-block">
 					<div class="block-head">
-						<h2 class="block-title">Current session</h2>
-						<span class="badge" id="session-log-badge">empty</span>
+						<h2 class="block-title">Session en cours</h2>
+						<span class="badge" id="session-log-badge">vide</span>
 					</div>
-					<pre class="console console--tall" id="session-log" data-empty="No output yet. Launch the game and its lines appear here."></pre>
+					<pre class="console console--tall" id="session-log" data-empty="Aucune sortie pour le moment. Lance le jeu et ses lignes apparaîtront ici."></pre>
 				</div>
 
-				<div class="block">
+				<div class="glass-block">
 					<div class="block-head">
-						<h2 class="block-title">Past sessions</h2>
-						<span class="badge" id="sessions-count">no session</span>
+						<h2 class="block-title">Sessions passées</h2>
+						<span class="badge" id="sessions-count">aucune session</span>
 					</div>
 					<div id="sessions-table" class="session-table"></div>
 					<p class="log-path" id="sessions-note"></p>
 					<div id="session-view"></div>
 				</div>
 
-				<div class="block">
+				<div class="glass-block">
 					<div class="block-head">
-						<h2 class="block-title">Install log</h2>
-						<button class="btn btn--ghost btn--small" id="btn-logs-refresh">Refresh</button>
+						<h2 class="block-title">Journal d'installation</h2>
+						<button class="btn btn--ghost btn--small" id="btn-logs-refresh">Rafraîchir</button>
 					</div>
 					<div id="install-log-body"></div>
 					<p class="log-path" id="install-log-path"></p>
 				</div>
 			</section>
 
-			<!-- ========================== SETTINGS ========================== -->
-			<section class="page studio-page" data-page="settings">
-				<header class="page-header studio-header">
+			<!-- ============================ SETTINGS ========================== -->
+			<section class="page" data-page="settings">
+				<header class="page-header">
 					<div>
-						<p class="studio-kicker">AETHER / WORKSPACE DESIGN</p>
-						<h1>Identity Studio</h1>
-						<p>Shape the atmosphere, surface and rhythm of your launcher. Changes are previewed live and saved to this machine.</p>
+						<p class="page-kicker">CUBE / CONFIGURATION</p>
+						<h1>Réglages</h1>
+						<p>Java, mémoire, résolution et couleur de l'interface. Tout reste stocké sur cette machine.</p>
 					</div>
 					<div class="studio-edition">
 						<span class="studio-live-dot"></span>
-						<span>LIVE COMPOSITION</span>
+						<span id="studio-theme-name">GRAPHITE / CONTOUR</span>
 					</div>
 				</header>
 
-				<div class="studio-layout">
-					<section class="studio-preview-column" aria-label="Live appearance preview">
-						<div class="studio-preview-meta">
-							<span>01 — YOUR WORKSPACE</span>
-							<span id="studio-theme-name">GRAPHITE / CONTOUR</span>
-						</div>
-						<div class="studio-preview-frame" id="studio-preview">
-							<div class="studio-preview-rail">
-								<div class="studio-preview-mark"><span></span><span></span><span></span></div>
-								<div class="studio-preview-rail-rule"></div>
-								<div class="studio-preview-rail-item is-active"><i>01</i><span>PLAY</span></div>
-								<div class="studio-preview-rail-item"><i>02</i><span>VAULT</span></div>
-								<div class="studio-preview-rail-item"><i>03</i><span>MODS</span></div>
-								<div class="studio-preview-rail-item"><i>04</i><span>NETWORK</span></div>
-								<div class="studio-preview-rail-bottom"><span class="studio-preview-status"></span><span>LOCAL</span></div>
-							</div>
-							<div class="studio-preview-content">
-								<div class="studio-preview-top">
-									<span>AETHER <b>/</b> CLIENT</span>
-									<span>FIELD NOTE 001</span>
-								</div>
-								<div class="studio-preview-main">
-									<div class="studio-preview-overline"><span></span> SESSION READY <small>01.21.11</small></div>
-									<h2>Build your<br /><em>own</em> atmosphere.</h2>
-									<p>A personal space for the way you play. Precise, quiet and entirely yours.</p>
-									<div class="studio-preview-metrics">
-										<div><small>MEMORY</small><strong id="studio-preview-memory">4096 <i>MB</i></strong></div>
-										<div><small>PROFILE</small><strong>DEFAULT</strong></div>
-										<div><small>CHANNEL</small><strong>STABLE</strong></div>
-									</div>
-									<div class="studio-preview-action"><span>ENTER WORLD</span><b>↗</b></div>
-								</div>
-								<div class="studio-preview-footer">
-									<span>DESIGNED TO DISAPPEAR INTO YOUR FLOW</span>
-									<span id="studio-preview-accent">SIGNAL / 01</span>
-								</div>
-							</div>
-							<div class="studio-preview-orbit" aria-hidden="true"><span></span><span></span><span></span></div>
-						</div>
-						<div class="studio-preview-caption">
-							<span>THE PREVIEW USES YOUR CURRENT SETTINGS</span>
-							<span id="studio-preview-density">ROOMY · WIDE NAVIGATION</span>
-						</div>
-					</section>
-
-					<div class="studio-controls">
-						<section class="studio-control-section">
-							<div class="studio-section-head">
-								<div><span class="studio-index">A</span><h2>Colourway</h2></div>
-								<span>CHOOSE A MATERIAL</span>
-							</div>
-							<div class="studio-theme-choices" id="theme-choices">
-								<button type="button" class="studio-theme-choice is-active" data-theme="graphite" aria-pressed="true">
-									<span class="studio-theme-swatch swatch-graphite"><i></i><i></i><i></i></span>
-									<span><strong>Graphite</strong><small>Quiet / neutral</small></span><b>01</b>
-								</button>
-								<button type="button" class="studio-theme-choice" data-theme="oxide" aria-pressed="false">
-									<span class="studio-theme-swatch swatch-oxide"><i></i><i></i><i></i></span>
-									<span><strong>Oxide</strong><small>Warm / industrial</small></span><b>02</b>
-								</button>
-								<button type="button" class="studio-theme-choice" data-theme="field" aria-pressed="false">
-									<span class="studio-theme-swatch swatch-field"><i></i><i></i><i></i></span>
-									<span><strong>Field</strong><small>Organic / technical</small></span><b>03</b>
-								</button>
-								<button type="button" class="studio-theme-choice" data-theme="blueprint" aria-pressed="false">
-									<span class="studio-theme-swatch swatch-blueprint"><i></i><i></i><i></i></span>
-									<span><strong>Blueprint</strong><small>Cool / precise</small></span><b>04</b>
-								</button>
-							</div>
-							<label class="studio-accent-field">
-								<span><strong>Personal signal</strong><small>Override the signature accent</small></span>
-								<span class="studio-accent-input"><input type="color" id="input-accent" value="#e7e9ec" aria-label="Custom accent colour" /><output id="output-accent">#E7E9EC</output></span>
-							</label>
-						</section>
-
-						<section class="studio-control-section">
-							<div class="studio-section-head">
-								<div><span class="studio-index">B</span><h2>Surface</h2></div>
-								<span>BACKGROUND LINEWORK</span>
-							</div>
-							<div class="studio-segmented" id="surface-choices">
-								<button type="button" data-surface="contour" class="is-active" aria-pressed="true"><span class="surface-glyph surface-contour"></span><strong>Contour</strong><small>Topographic</small></button>
-								<button type="button" data-surface="draft" aria-pressed="false"><span class="surface-glyph surface-draft"></span><strong>Draft</strong><small>Grid / technical</small></button>
-								<button type="button" data-surface="plain" aria-pressed="false"><span class="surface-glyph surface-plain"></span><strong>Quiet</strong><small>No linework</small></button>
-							</div>
-						</section>
-
-						<section class="studio-control-section">
-							<div class="studio-section-head">
-								<div><span class="studio-index">C</span><h2>Workspace rhythm</h2></div>
-								<span>LAYOUT / DENSITY</span>
-							</div>
-							<div class="studio-choice-row">
-								<div class="studio-choice-block"><span class="studio-choice-label">SPACING</span><div class="studio-pill-choices" id="density-choices">
-									<button type="button" data-density="roomy" class="is-active" aria-pressed="true">Roomy</button>
-									<button type="button" data-density="compact" aria-pressed="false">Compact</button>
-								</div></div>
-								<div class="studio-choice-block"><span class="studio-choice-label">NAVIGATION</span><div class="studio-pill-choices" id="navigation-choices">
-									<button type="button" data-navigation="wide" class="is-active" aria-pressed="true">Expanded</button>
-									<button type="button" data-navigation="rail" aria-pressed="false">Icon rail</button>
-								</div></div>
-							</div>
-						</section>
-
-						<div class="studio-reset-row">
-							<span>Every choice is stored locally. No account or cloud sync.</span>
-							<button type="button" class="btn btn--ghost btn--small" id="appearance-reset">Reset studio</button>
-						</div>
-					</div>
-				</div>
-
-				<div class="studio-secondary-grid">
-					<div class="block">
-						<div class="block-head"><h2 class="block-title">Runtime</h2><span class="block-subtitle">JAVA / MEMORY</span></div>
+				<div class="grid grid--two">
+					<div class="glass-block">
+						<div class="block-head"><h2 class="block-title">Runtime</h2><span class="block-subtitle">JAVA / MÉMOIRE</span></div>
 						<div class="block-body">
 							<label class="field">
-								<span class="field-label">Java path</span>
-								<input type="text" id="input-java" class="input" placeholder="Auto detected" />
+								<span class="field-label">Chemin de Java</span>
+								<input type="text" id="input-java" class="input" placeholder="Détecté automatiquement" />
 							</label>
+							<label class="field">
+								<span class="field-label">Mémoire maximale</span>
+								<div class="range-row">
+									<input type="range" id="range-max-memory" min="1024" max="16384" step="512" value="4096" aria-label="Mémoire maximale" />
+									<output id="output-max-memory">4096 MB</output>
+								</div>
+							</label>
+							<label class="field">
+								<span class="field-label">Mémoire initiale</span>
+								<div class="range-row">
+									<input type="range" id="range-min-memory" min="256" max="8192" step="256" value="1024" aria-label="Mémoire initiale" />
+									<output id="output-min-memory">1024 MB</output>
+								</div>
+							</label>
+							<label class="field--inline"><input type="checkbox" id="check-g1" checked /><span>Utiliser le ramasse-miettes G1</span></label>
+						</div>
+					</div>
+
+					<div class="glass-block">
+						<div class="block-head"><h2 class="block-title">Affichage &amp; Fabric</h2><span class="block-subtitle">FENÊTRE / DÉPENDANCE</span></div>
+						<div class="block-body">
 							<div class="grid grid--two">
-								<label class="field"><span class="field-label">Maximum memory</span><div class="range-row"><input type="range" id="range-max-memory" min="1024" max="16384" step="256" value="4096" aria-label="Maximum memory" /><output id="output-max-memory">4096 MB</output></div></label>
-								<label class="field"><span class="field-label">Initial memory</span><div class="range-row"><input type="range" id="range-min-memory" min="256" max="8192" step="256" value="1024" aria-label="Initial memory" /><output id="output-min-memory">1024 MB</output></div></label>
+								<label class="field">
+									<span class="field-label">Largeur de fenêtre</span>
+									<div class="range-row">
+										<input type="range" id="range-width-settings" min="640" max="3840" step="8" value="854" aria-label="Largeur de fenêtre" />
+										<output id="output-width-settings">854</output>
+									</div>
+								</label>
+								<label class="field">
+									<span class="field-label">Hauteur de fenêtre</span>
+									<div class="range-row">
+										<input type="range" id="range-height-settings" min="480" max="2160" step="8" value="480" aria-label="Hauteur de fenêtre" />
+										<output id="output-height-settings">480</output>
+									</div>
+								</label>
 							</div>
-							<label class="field--inline"><input type="checkbox" id="check-g1" checked /><span>Use the G1 garbage collector</span></label>
-						</div>
-					</div>
-					<div class="block">
-						<div class="block-head"><h2 class="block-title">Fabric</h2><span class="block-subtitle">CLIENT DEPENDENCY</span></div>
-						<div class="block-body">
 							<label class="field">
-								<span class="field-label">Fabric API version</span>
+								<span class="field-label">Version de Fabric API</span>
 								<input type="text" id="input-fabric-api" class="input" />
 							</label>
-							<p class="muted">The version used for the next repair or installation. Existing profiles keep their selected Minecraft and Fabric loader versions.</p>
+							<p class="muted">Cette version s’applique à tous tes comptes et aux prochaines installations.</p>
 						</div>
 					</div>
 				</div>
 
-				<div class="block">
-					<div class="block-head"><h2 class="block-title">Installation paths</h2><span class="block-subtitle">LOCAL STORAGE</span></div>
+				<div class="glass-block">
+					<div class="block-head"><h2 class="block-title">Colorway</h2><span class="block-subtitle">CHOISIS UNE MATIÈRE</span></div>
+					<div class="block-body">
+						<div class="theme-choices" id="theme-choices">
+							<button type="button" class="theme-choice is-active" data-theme="graphite" aria-pressed="true">
+								<span class="theme-swatch swatch-graphite"><i></i><i></i><i></i></span>
+								<span class="theme-choice-copy"><strong>Graphite</strong><small>Sobre / neutre</small></span>
+								<b>01</b>
+							</button>
+							<button type="button" class="theme-choice" data-theme="oxide" aria-pressed="false">
+								<span class="theme-swatch swatch-oxide"><i></i><i></i><i></i></span>
+								<span class="theme-choice-copy"><strong>Oxyde</strong><small>Chaud / industriel</small></span>
+								<b>02</b>
+							</button>
+							<button type="button" class="theme-choice" data-theme="field" aria-pressed="false">
+								<span class="theme-swatch swatch-field"><i></i><i></i><i></i></span>
+								<span class="theme-choice-copy"><strong>Prairie</strong><small>Organique / technique</small></span>
+								<b>03</b>
+							</button>
+							<button type="button" class="theme-choice" data-theme="blueprint" aria-pressed="false">
+								<span class="theme-swatch swatch-blueprint"><i></i><i></i><i></i></span>
+								<span class="theme-choice-copy"><strong>Blueprint</strong><small>Froid / précis</small></span>
+								<b>04</b>
+							</button>
+						</div>
+						<label class="accent-field">
+							<span><strong>Signal personnel</strong><small>Remplace l'accent de la matière</small></span>
+							<span class="accent-input"><input type="color" id="input-accent" value="#e7e9ec" aria-label="Couleur d'accent personnalisée" /><output id="output-accent">#E7E9EC</output></span>
+						</label>
+					</div>
+				</div>
+
+				<div class="glass-block">
+					<div class="block-head"><h2 class="block-title">Espace de travail</h2><span class="block-subtitle">LIGNES / RYTHME / NAVIGATION</span></div>
+					<div class="block-body workspace-controls">
+						<div class="workspace-group">
+							<span class="workspace-label">SURFACE</span>
+							<div class="segmented" id="surface-choices">
+								<button type="button" data-surface="contour" class="is-active" aria-pressed="true"><span class="surface-glyph surface-contour"></span><strong>Contour</strong><small>Topographique</small></button>
+								<button type="button" data-surface="draft" aria-pressed="false"><span class="surface-glyph surface-draft"></span><strong>Croquis</strong><small>Grille</small></button>
+								<button type="button" data-surface="plain" aria-pressed="false"><span class="surface-glyph surface-plain"></span><strong>Calme</strong><small>Sans ligne</small></button>
+							</div>
+						</div>
+						<div class="workspace-row">
+							<div class="workspace-group">
+								<span class="workspace-label">ESPACEMENT</span>
+								<div class="pill-choices" id="density-choices">
+									<button type="button" data-density="roomy" class="is-active" aria-pressed="true">Ample</button>
+									<button type="button" data-density="compact" aria-pressed="false">Compact</button>
+								</div>
+							</div>
+							<div class="workspace-group">
+								<span class="workspace-label">NAVIGATION</span>
+								<div class="pill-choices" id="navigation-choices">
+									<button type="button" data-navigation="wide" class="is-active" aria-pressed="true">Étendue</button>
+									<button type="button" data-navigation="rail" aria-pressed="false">Icônes seules</button>
+								</div>
+							</div>
+						</div>
+						<div class="reset-row">
+							<span>Chaque choix est stocké localement. Aucun compte, aucune synchronisation.</span>
+							<button type="button" class="btn btn--ghost btn--small" id="appearance-reset">Réinitialiser</button>
+						</div>
+					</div>
+				</div>
+
+				<div class="glass-block">
+					<div class="block-head"><h2 class="block-title">Chemins d'installation</h2><span class="block-subtitle">STOCKAGE LOCAL</span></div>
 					<pre class="console console--static" id="paths-output"></pre>
 				</div>
 			</section>
 		</main>
 	</div>
 
-	<!-- ============================ MODAL ============================ -->
+	<!-- ============================== MODAL ============================== -->
 	<div class="modal-backdrop" id="modal" hidden>
 		<div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title" tabindex="-1">
-			<h2 id="modal-title">Add account</h2>
+			<h2 id="modal-title">Ajouter un compte</h2>
 			<div id="modal-body"></div>
 			<div class="modal-actions">
-				<button class="btn btn--ghost" id="modal-cancel">Cancel</button>
-				<button class="btn btn--primary" id="modal-confirm">Confirm</button>
+				<button class="btn btn--ghost" id="modal-cancel">Annuler</button>
+				<button class="btn btn--primary" id="modal-confirm">Confirmer</button>
 			</div>
+		</div>
+	</div>
+
+	<div class="install-wizard" id="install-wizard" hidden>
+		<div class="install-wizard__glow"></div>
+		<div class="install-wizard__panel" role="dialog" aria-modal="true" aria-labelledby="install-wizard-title">
+			<header class="install-wizard__header">
+				<div><span class="card-eyebrow">CUBE / SETUP STUDIO</span><h2 id="install-wizard-title">Préparer ton monde</h2><p>Une installation propre, pensée pour ton aventure.</p></div>
+				<button class="icon-button" id="install-wizard-close" aria-label="Fermer">×</button>
+			</header>
+			<nav class="install-steps" aria-label="Étapes d'installation">
+				<span class="install-step is-active" data-step="1"><b>01</b><span>Configuration</span></span>
+				<i></i><span class="install-step" data-step="2"><b>02</b><span>Vérification</span></span>
+				<i></i><span class="install-step" data-step="3"><b>03</b><span>Installation</span></span>
+			</nav>
+			<section class="install-wizard__body" id="install-wizard-body">
+				<div class="wizard-page" data-wizard-page="1">
+					<div class="wizard-intro"><span class="wizard-orb">✦</span><div><h3>Construisons ton setup</h3><p>Choisis les composants. Le launcher s'occupe du reste.</p></div></div>
+					<div class="wizard-fields"><label class="field"><span class="field-label">VERSION DE MINECRAFT</span><select id="wizard-version" class="input"></select></label><label class="field"><span class="field-label">LOADER</span><select id="wizard-loader" class="input"></select></label></div>
+					<div class="wizard-note"><span>⌁</span><div><strong>Installation intelligente</strong><small>Les fichiers déjà présents seront vérifiés et réutilisés pour gagner du temps.</small></div></div>
+				</div>
+				<div class="wizard-page" data-wizard-page="2" hidden><div class="wizard-review"><span class="review-icon">✓</span><h3>Tout est prêt</h3><p>Voici les composants qui seront installés.</p><div class="review-grid"><div><small>VERSION</small><strong id="wizard-review-version">—</strong></div><div><small>LOADER</small><strong id="wizard-review-loader">—</strong></div><div><small>COMPOSANTS</small><strong>Fabric API + Aether</strong></div></div></div></div>
+				<div class="wizard-page" data-wizard-page="3" hidden><div class="wizard-progress"><div class="wizard-progress-top"><div><span class="card-eyebrow">DÉPLOIEMENT EN COURS</span><h3 id="wizard-task">Initialisation…</h3></div><strong id="wizard-percent">0%</strong></div><div class="wizard-progress-bar"><span id="wizard-progress-fill"></span></div><div class="wizard-progress-meta"><span id="wizard-progress-detail">Préparation des ressources</span><span>NE FERME PAS LE LAUNCHER</span></div><div class="wizard-rings"><i></i><i></i><i></i></div></div></div>
+			</section>
+			<footer class="install-wizard__footer"><span id="wizard-status">ÉTAPE 01 / 02</span><div><button class="btn btn--ghost" id="install-wizard-back">Retour</button><button class="btn btn--primary" id="install-wizard-next">Continuer <b>→</b></button><button class="btn btn--danger" id="install-wizard-cancel" hidden>Annuler</button></div></footer>
 		</div>
 	</div>
 

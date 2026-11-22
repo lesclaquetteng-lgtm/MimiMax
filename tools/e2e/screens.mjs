@@ -100,6 +100,7 @@ const PROBE = `(() => {
 		.filter((node) => node.scrollWidth - node.clientWidth > 1)
 		.map((node) => node.className);
 	const tiny = [...page.querySelectorAll('h1, h2, p, span, output, button, code')]
+		.filter((node) => !node.closest('.visually-hidden'))
 		.filter((node) => node.clientWidth > 0 && node.scrollWidth - node.clientWidth > 2)
 		.map((node) => (node.className || node.tagName) + ':' + node.scrollWidth + '>' + node.clientWidth);
 	return {
@@ -205,7 +206,7 @@ await shot('08-logs-session');
 
 await evaluate('window.aether.stop(), true');
 await waitFor(
-	`document.querySelector('#status-text').textContent === 'Ready' && document.querySelector('#btn-stop').hidden === true`,
+	`document.querySelector('#status-text').textContent === 'Prêt' && document.querySelector('#btn-stop').hidden === true`,
 	'the interface to come back to the ready state',
 	20000
 );
@@ -218,11 +219,22 @@ await sleep(350);
 await probe('accounts-empty');
 await shot('09-accounts-empty', true);
 
-// Without any account the launch is refused, which is the error toast.
+// Without any account the launch action is refused before it is even clickable.
 await openPage('play');
 await waitFor(`document.querySelectorAll('#play-accounts .account-row').length === 0`, 'the empty play list');
-await evaluate(`document.querySelector('#btn-launch').click(), true`);
-await waitForText('Add an account first.');
+await waitFor(
+	`document.querySelector('#btn-launch').disabled === true`,
+	'the launch action to be disabled without an account'
+);
+const launchWithoutAccount = await evaluate(`(() => ({
+	disabled: document.querySelector('#btn-launch').disabled,
+	ariaDisabled: document.querySelector('#btn-launch').getAttribute('aria-disabled'),
+	label: document.querySelector('#play-account-label').textContent.trim()
+}))()`);
+if (launchWithoutAccount.disabled !== true || launchWithoutAccount.ariaDisabled !== 'true'
+	|| !launchWithoutAccount.label.includes('AUCUN COMPTE')) {
+	throw new Error(`the launch action still looks available: ${JSON.stringify(launchWithoutAccount)}`);
+}
 await sleep(300);
 await probe('play-empty');
 await shot('10-play-empty', true);

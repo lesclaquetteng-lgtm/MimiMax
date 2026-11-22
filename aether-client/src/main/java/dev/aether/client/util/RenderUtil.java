@@ -246,8 +246,221 @@ public final class RenderUtil {
 		float maxOffset = contentHeight - height;
 		int position = maxOffset <= 0 ? 0 : Math.round(travel * (offset / maxOffset));
 
-		roundedRect(graphics,x,y,3,height,1,ColorUtil.withAlpha(theme().borderStrong(),0.55f));
-		roundedRect(graphics,x,y+position,3,thumb,1,ColorUtil.withAlpha(accent,0.9f));
+		roundedRect(graphics, x, y, 3, height, 1, AetherDesignSystem.scrollTrack(theme()));
+		roundedRect(graphics, x, y + position, 3, thumb, 1, AetherDesignSystem.scrollThumb(accent));
+	}
+
+	/**
+	 * The vertical distance an overlay still has to travel when it opens. The decoration uses it
+	 * for a fade-and-lift entrance; interactive hitboxes stay where the layout put them.
+	 */
+	public static int enterLift(long openedAt) {
+		float progress = Math.min(1.0f,
+				Math.max(0.0f, (System.nanoTime() - openedAt) / (float) AetherDesignSystem.Metrics.ENTER_NANOS));
+		float remaining = 1.0f - progress;
+		return Math.round(remaining * remaining * remaining * AetherDesignSystem.Metrics.ENTER_LIFT);
+	}
+
+	/**
+	 * Paints the Aurora Nightfall backdrop: a night gradient, two drifting aurora curtains, a
+	 * scatter of stars, a pixel moon and a voxel horizon. It is deliberately cheap: the curtains
+	 * are short runs of rectangles, not a texture or a shader.
+	 */
+	public static void auroraBackdrop(GuiGraphics graphics, int width, int height, long now,
+			float opacity) {
+		if (width <= 0 || height <= 0 || opacity <= 0.004f) {
+			return;
+		}
+		AetherDesignSystem.Palette palette = theme();
+		int night = ColorUtil.lerp(palette.background(), AetherDesignSystem.Scene.MOUNTAIN, 0.42f);
+		graphics.fill(0, 0, width, height, ColorUtil.fade(night, opacity));
+
+		int drift = (int) ((now / 1_000_000L) % 20_000L);
+		auroraCurtain(graphics, width, Math.round(height * 0.17f), Math.max(8, height / 28),
+				26, AetherDesignSystem.Scene.AURORA_GREEN, 0.12f, drift, opacity);
+		auroraCurtain(graphics, width, Math.round(height * 0.29f), Math.max(10, height / 22),
+				18, AetherDesignSystem.Scene.AURORA_TEAL, 0.09f, drift + 1_300, opacity);
+		auroraCurtain(graphics, width, Math.round(height * 0.40f), Math.max(6, height / 34),
+				10, AetherDesignSystem.Scene.AURORA_VIOLET, 0.05f, drift + 2_700, opacity);
+
+		for (int index = 0; index < 44; index++) {
+			int x = Math.floorMod(noise(index * 37 + 11), Math.max(1, width));
+			int y = Math.floorMod(noise(index * 91 + 7), Math.max(1, (int) (height * 0.68f)));
+			int size = (noise(index * 17 + 3) & 3) == 0 ? 2 : 1;
+			float twinkle = 0.30f + 0.55f
+					* (0.5f + 0.5f * (float) Math.sin(now / 780_000_000.0 + index * 0.71));
+			graphics.fill(x, y, x + size, y + size,
+					ColorUtil.fade(ColorUtil.withAlpha(AetherDesignSystem.Scene.STAR, twinkle), opacity));
+		}
+
+		pixelMoon(graphics, width - 66, 28, now, opacity);
+		voxelHorizon(graphics, width, height, opacity);
+	}
+
+	private static void auroraCurtain(GuiGraphics graphics, int width, int centerY, int amplitude,
+			int thickness, int colour, float alpha, int drift, float opacity) {
+		int paint = ColorUtil.fade(ColorUtil.withAlpha(colour, alpha), opacity);
+		int tail = ColorUtil.fade(ColorUtil.withAlpha(colour, alpha * 0.35f), opacity);
+		for (int x = 0; x < width; x += 24) {
+			double wave = Math.sin((x + drift * 0.14) * 0.018)
+					+ 0.45 * Math.sin((x - drift * 0.09) * 0.041);
+			int y = centerY + Math.round((float) wave * amplitude);
+			graphics.fill(x, y, x + 26, y + thickness, paint);
+			graphics.fill(x, y + thickness, x + 26, y + thickness + 8, tail);
+		}
+	}
+
+	private static void pixelMoon(GuiGraphics graphics, int x, int y, long now, float opacity) {
+		int glow = ColorUtil.fade(ColorUtil.withAlpha(AetherDesignSystem.Scene.MOON, 0.06f), opacity);
+		roundedRect(graphics, x - 12, y - 12, 42, 42, 21, glow);
+		roundedRect(graphics, x - 5, y - 5, 28, 28, 14,
+				ColorUtil.fade(ColorUtil.withAlpha(AetherDesignSystem.Scene.MOON, 0.09f), opacity));
+
+		int moon = ColorUtil.fade(ColorUtil.withAlpha(AetherDesignSystem.Scene.MOON, 0.82f), opacity);
+		int crater = ColorUtil.fade(ColorUtil.withAlpha(AetherDesignSystem.Scene.MOON, 0.36f), opacity);
+		graphics.fill(x, y + 4, x + 18, y + 14, moon);
+		graphics.fill(x + 4, y, x + 14, y + 18, moon);
+		graphics.fill(x + 3, y + 3, x + 6, y + 6, crater);
+		graphics.fill(x + 11, y + 8, x + 14, y + 11, crater);
+		graphics.fill(x + 6, y + 12, x + 8, y + 14, crater);
+
+		int pulse = 1 + Math.round((0.5f + 0.5f * (float) Math.sin(now / 1_400_000_000.0)) * 3.0f);
+		outline(graphics, x - pulse, y - pulse, 18 + pulse * 2, 18 + pulse * 2,
+				ColorUtil.fade(ColorUtil.withAlpha(AetherDesignSystem.Scene.STAR, 0.06f), opacity));
+	}
+
+	private static void voxelHorizon(GuiGraphics graphics, int width, int height, float opacity) {
+		AetherDesignSystem.Palette palette = theme();
+		for (int layer = 0; layer < 2; layer++) {
+			int baseline = height - 10 + layer * 7;
+			int colour = ColorUtil.fade(ColorUtil.lerp(AetherDesignSystem.Scene.MOUNTAIN,
+					palette.background(), 0.08f + layer * 0.12f), opacity);
+			int step = 28 + layer * 8;
+			for (int x = -step; x < width + step; x += step) {
+				int peak = 9 + Math.floorMod(noise(x + layer * 71), 25);
+				graphics.fill(x, baseline - peak, x + step, height, colour);
+				if ((noise(x + 19) & 3) == 0) {
+					graphics.fill(x + 6, baseline - peak - 6, x + 14, baseline - peak, colour);
+				}
+			}
+		}
+	}
+
+	private static int noise(int seed) {
+		int value = seed * 0x1F123BB5;
+		value ^= value >>> 15;
+		value *= 0x2C1B3C6D;
+		return value ^ (value >>> 12);
+	}
+
+	/**
+	 * A frosted panel: a shadow, an accent halo, the glass surface, a luminous border and a
+	 * specular line along the top edge.
+	 */
+	public static void glassPanel(GuiGraphics graphics, int x, int y, int width, int height,
+			int radius, int accent, float opacity) {
+		if (width <= 0 || height <= 0 || opacity <= 0.004f) {
+			return;
+		}
+		AetherDesignSystem.Palette palette = theme();
+		int spread = 4;
+		roundedRect(graphics, x - spread, y - spread + 2, width + spread * 2, height + spread * 2,
+				radius + spread, ColorUtil.fade(SHADOW, opacity));
+		roundedRect(graphics, x - 5, y - 5, width + 10, height + 10, radius + 5,
+				ColorUtil.fade(AetherDesignSystem.glow(accent, 0.08f), opacity));
+		roundedRect(graphics, x - 2, y - 2, width + 4, height + 4, radius + 2,
+				ColorUtil.fade(AetherDesignSystem.glow(accent, 0.13f), opacity));
+		bordered(graphics, x, y, width, height, radius,
+				ColorUtil.fade(AetherDesignSystem.glass(palette), opacity),
+				ColorUtil.fade(AetherDesignSystem.glassBorder(palette, accent), opacity));
+		if (width > radius * 2) {
+			graphics.fill(x + radius, y + 1, x + width - radius, y + 2,
+					ColorUtil.fade(AetherDesignSystem.glassHighlight(palette), opacity));
+			graphics.fill(x + radius, y + 2, x + width - radius, y + 3,
+					ColorUtil.fade(ColorUtil.withAlpha(palette.textPrimary(), 0.035f), opacity));
+		}
+	}
+
+	/** A quieter glass surface for rails and columns inside a panel. */
+	public static void glassInset(GuiGraphics graphics, int x, int y, int width, int height,
+			int radius, int accent, float opacity) {
+		if (width <= 0 || height <= 0 || opacity <= 0.004f) {
+			return;
+		}
+		AetherDesignSystem.Palette palette = theme();
+		bordered(graphics, x, y, width, height, radius,
+				ColorUtil.fade(AetherDesignSystem.glassDeep(palette), opacity),
+				ColorUtil.fade(AetherDesignSystem.glassBorder(palette), opacity));
+		if (width > radius * 2) {
+			graphics.fill(x + radius, y + 1, x + width - radius, y + 2,
+					ColorUtil.fade(AetherDesignSystem.glassHighlight(palette), opacity * 0.55f));
+		}
+	}
+
+	/** A module row, with the accent halo reserved for the enabled state. */
+	public static void rowCard(GuiGraphics graphics, int x, int y, int width, int height, int radius,
+			int accent, boolean active, boolean hovered, float opacity) {
+		AetherDesignSystem.Palette palette = theme();
+		if (active) {
+			roundedRect(graphics, x - 2, y - 2, width + 4, height + 4, radius + 2,
+					ColorUtil.fade(AetherDesignSystem.glow(accent, 0.09f), opacity));
+		}
+		bordered(graphics, x, y, width, height, radius,
+				ColorUtil.fade(AetherDesignSystem.row(palette, accent, active, hovered), opacity),
+				ColorUtil.fade(AetherDesignSystem.rowBorder(palette, accent, active, hovered), opacity));
+		if (active) {
+			roundedRect(graphics, x + 1, y + Math.max(4, height / 2 - (height - 24) / 2), 2,
+					Math.min(height - 8, 24), 1, ColorUtil.fade(accent, opacity));
+		}
+		if (width > radius * 2) {
+			graphics.fill(x + radius, y + 1, x + width - radius, y + 2,
+					ColorUtil.fade(AetherDesignSystem.glassHighlight(palette), opacity * 0.45f));
+		}
+	}
+
+	/** A slider track, its filled part and a small handle the click geometry also follows. */
+	public static void slider(GuiGraphics graphics, int x, int y, int width, float progress,
+			int track, int fill, int knob) {
+		if (width <= 0) {
+			return;
+		}
+		float ratio = Math.max(0.0f, Math.min(1.0f, progress));
+		roundedRect(graphics, x, y, width, 3, 1, track);
+		int filled = Math.round(width * ratio);
+		if (filled > 1) {
+			roundedRect(graphics, x, y, filled, 3, 1, fill);
+		}
+		int size = 5;
+		int knobX = x + Math.round((width - size) * ratio);
+		roundedRect(graphics, knobX - 1, y - 2, size + 2, size + 2, (size + 2) / 2,
+				ColorUtil.withAlpha(knob, 0.20f));
+		roundedRect(graphics, knobX, y - 1, size, size, size / 2, knob);
+	}
+
+	/** A compact state chip, used for counts and keybinds. */
+	public static void chip(GuiGraphics graphics, int x, int y, int width, int height, int radius,
+			int fill, int border) {
+		bordered(graphics, x, y, width, height, radius, fill, border);
+	}
+
+	/**
+	 * A category or count badge. The width is returned, so the caller can align the next element
+	 * without measuring the label a second time.
+	 */
+	public static int badge(GuiGraphics graphics, Font font, String label, int x, int y, int minWidth,
+			int accent, boolean active, boolean hovered, float opacity) {
+		AetherDesignSystem.Palette palette = theme();
+		int width = Math.max(minWidth, font.width(label) + 10);
+		int height = 14;
+		roundedRect(graphics, x, y, width, height, height / 2,
+				ColorUtil.fade(AetherDesignSystem.badge(palette, accent, active, hovered), opacity));
+		if (active) {
+			roundedRect(graphics, x + 5, y + height - 1, width - 10, 1, 0,
+					ColorUtil.fade(accent, opacity));
+		}
+		centeredText(graphics, font, label, x + width / 2, y + 3,
+				ColorUtil.fade(AetherDesignSystem.badgeText(palette, accent, active, hovered), opacity));
+		return width;
 	}
 
 	/**

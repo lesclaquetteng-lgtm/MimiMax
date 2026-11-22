@@ -298,6 +298,16 @@ pub async fn mods_open_folder(app: AppHandle) -> Value {
 	}
 }
 
+#[tauri::command(rename_all = "snake_case")]
+pub async fn mods_search(app: AppHandle, query: String, game_version: String) -> Value {
+	core::run_core(app, vec!["mods".to_string(), "search".to_string(), query, "--version".to_string(), game_version]).await
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn mods_install(app: AppHandle, slug: String, game_version: String) -> Value {
+	core::run_core(app, vec!["mods".to_string(), "install".to_string(), slug, "--version".to_string(), game_version]).await
+}
+
 /// Opens a directory in the file explorer, without a console window.
 fn open_folder(path: &Path) -> Result<(), String> {
 	#[cfg(windows)]
@@ -385,24 +395,15 @@ pub async fn hosts_list(app: AppHandle) -> Value {
 pub async fn hosts_create(app: AppHandle, options: Option<Value>) -> Value {
 	let options = options.unwrap_or_else(|| json!({}));
 	let mut args = vec!["hosts".to_string(), "create".to_string()];
-
 	args.push(text(options.get("name")).unwrap_or_default());
-	args.push("--port".to_string());
-	args.push(
-		options
-			.get("port")
-			.and_then(Value::as_u64)
-			.unwrap_or(25565)
-			.to_string(),
-	);
-	args.push("--max-players".to_string());
-	args.push(
-		options
-			.get("maxPlayers")
-			.and_then(Value::as_u64)
-			.unwrap_or(20)
-			.to_string(),
-	);
+	for (key, flag, default) in [("port", "--port", "25565"), ("maxPlayers", "--max-players", "8")] {
+		args.push(flag.to_string());
+		args.push(options.get(key).and_then(Value::as_u64).map(|value| value.to_string()).unwrap_or_else(|| default.to_string()));
+	}
+	if let Some(version) = text(options.get("gameVersion")) {
+		args.push("--version".to_string());
+		args.push(version);
+	}
 
 	if let Some(motd) = text(options.get("motd")) {
 		if !motd.is_empty() {
@@ -518,7 +519,7 @@ pub async fn logs_read(app: AppHandle, name: String, lines: Option<u32>) -> Valu
 async fn blocking_stream(app: AppHandle, args: Vec<String>, kind: StreamKind) -> Value {
 	core::blocking(move || core::run_core_streaming(&app, &args, kind, |_, _| {}))
 		.await
-		.unwrap_or_else(|| failure("The launcher core stopped unexpectedly."))
+		.unwrap_or_else(|| failure("Le cœur du launcher s'est arrêté de façon inattendue."))
 }
 
 #[tauri::command(rename_all = "snake_case")]
@@ -568,7 +569,7 @@ pub async fn install_start(app: AppHandle, profile: Option<Value>) -> Value {
 		})
 	})
 	.await
-	.unwrap_or_else(|| failure("The launcher core stopped unexpectedly."));
+	.unwrap_or_else(|| failure("Le cœur du launcher s'est arrêté de façon inattendue."));
 
 	if let Ok(mut guard) = slot.lock() {
 		*guard = None;
@@ -681,7 +682,7 @@ pub async fn game_launch(app: AppHandle, options: Option<Value>) -> Value {
 		})
 	})
 	.await
-	.unwrap_or_else(|| failure("The launcher core stopped unexpectedly."));
+	.unwrap_or_else(|| failure("Le cœur du launcher s'est arrêté de façon inattendue."));
 
 	if let Ok(mut guard) = slot.lock() {
 		*guard = None;

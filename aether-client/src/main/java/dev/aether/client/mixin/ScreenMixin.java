@@ -1,6 +1,6 @@
 package dev.aether.client.mixin;
 
-import com.mojang.blaze3d.platform.InputConstants;
+import dev.aether.client.AetherClient;
 import dev.aether.client.gui.ClickGuiScreen;
 import dev.aether.client.module.ModuleCategory;
 import net.minecraft.client.Minecraft;
@@ -22,14 +22,15 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 public abstract class ScreenMixin {
 
 	/**
-	 * Opens the click GUI when the right shift key is pressed on the main menu.
+	 * Opens the click GUI when its current binding is pressed on the main menu.
 	 */
 	@Inject(method = "keyPressed", at = @At("HEAD"), cancellable = true)
 	private void aether$keyPressed(KeyEvent event, CallbackInfoReturnable<Boolean> callback) {
-		if (event.key() != InputConstants.KEY_RSHIFT) {
+		if (!((Object) this instanceof TitleScreen)) {
 			return;
 		}
-		if (!((Object) this instanceof TitleScreen)) {
+		AetherClient client = AetherClient.getInstance();
+		if (client == null || !client.isClickGuiKey(event)) {
 			return;
 		}
 

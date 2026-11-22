@@ -167,7 +167,7 @@ const again = await aim('#btn-install');
 record('the button is reachable again once the obstacle is gone', again.reachable === true, `hit=${again.hit}`);
 
 // --- a hit on a child of the target counts as the target -------------------------------------
-await probe('<button id="probe-parent" style="position:fixed;left:12px;top:80px;width:220px;height:40px"><span id="probe-child" style="display:block;width:100%;height:100%">inside</span></button>');
+await probe('<button id="probe-parent" style="position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:2147483647;width:220px;height:40px"><span id="probe-child" style="display:block;width:100%;height:100%">inside</span></button>');
 const child = await aim('#probe-parent');
 record('a hit on a child of the target counts as the target', child.hit === '#probe-child', `hit=${child.hit}`);
 await clear();

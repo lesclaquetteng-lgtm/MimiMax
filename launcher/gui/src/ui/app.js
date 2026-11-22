@@ -7,10 +7,10 @@ const state = {
 	versions: [],
 	loaders: [],
 	mods: [],
-	profiles: { profiles: [], activeFor: null },
 	servers: { servers: [], pings: {} },
 	hosts: [],
 	performance: { mods: [], state: {}, installing: false },
+	info: null,
 	sessionLines: 0,
 	installing: false,
 	launching: false
@@ -21,6 +21,173 @@ window.aetherState = state;
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => Array.from(document.querySelectorAll(selector));
+
+/* ------------------------------------------------------- local preferences */
+
+const PLAY_TIME_KEY = 'cube.playtimeSeconds';
+const HUE_KEY = 'cube.brandHue';
+const MOTION_KEY = 'cube.animatedBackground';
+const UPDATES_KEY = 'cube.autoUpdates';
+const DEFAULT_HUE = 96;
+
+function readLocal(key, fallback) {
+	try {
+		const value = window.localStorage.getItem(key);
+		return value === null ? fallback : value;
+	} catch {
+		return fallback;
+	}
+}
+
+function writeLocal(key, value) {
+	try {
+		window.localStorage.setItem(key, String(value));
+	} catch {
+		// A locked profile only loses a cosmetic preference, never the launcher.
+	}
+}
+
+/** `6 Go` reads better than `6144 MB` in the dashboard; small values stay in MB. */
+function formatMemory(megabytes) {
+	const amount = Number(megabytes) || 0;
+	if (amount >= 1024 && amount % 1024 === 0) return `${amount / 1024} Go`;
+	if (amount > 1024) return `${(amount / 1024).toFixed(1)} Go`;
+	return `${amount} MB`;
+}
+
+function readPlaytime() {
+	return Math.max(0, Number(readLocal(PLAY_TIME_KEY, 0)) || 0);
+}
+
+function formatPlaytime(seconds) {
+	const total = Math.max(0, Math.floor(seconds));
+	const hours = Math.floor(total / 3600);
+	const minutes = Math.floor((total % 3600) / 60);
+	if (hours > 0) return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
+	return `${minutes}m`;
+}
+
+function applyHue(hue) {
+	const value = Math.min(360, Math.max(0, Math.round(Number(hue) || DEFAULT_HUE)));
+	document.documentElement.style.setProperty('--brand-hue', String(value));
+	const output = $('#output-hue');
+	if (output) output.textContent = `${value}°`;
+	const input = $('#range-hue');
+	if (input && Number(input.value) !== value) input.value = String(value);
+}
+
+function applyMotion(enabled) {
+	document.documentElement.dataset.motion = enabled ? 'on' : 'off';
+	const toggle = $('#toggle-animated-bg');
+	if (toggle) {
+		toggle.setAttribute('aria-checked', String(enabled));
+	}
+	if (!enabled) {
+		const hero = $('#instance-hero');
+		if (hero) hero.style.transform = '';
+	}
+}
+
+function applyAutoUpdates(enabled) {
+	const toggle = $('#toggle-auto-updates');
+	if (toggle) toggle.setAttribute('aria-checked', String(enabled));
+}
+
+function loadPreferences() {
+	applyHue(readLocal(HUE_KEY, DEFAULT_HUE));
+	applyMotion(readLocal(MOTION_KEY, 'on') !== 'off');
+	applyAutoUpdates(readLocal(UPDATES_KEY, 'on') !== 'off');
+}
+
+function renderDashboardStats() {
+	const playtime = $('#stat-playtime');
+	if (playtime) playtime.textContent = formatPlaytime(readPlaytime());
+
+	const worlds = $('#stat-worlds');
+	if (worlds) worlds.textContent = String((state.hosts || []).length);
+	const worldCount = $('#host-count-home');
+	if (worldCount) worldCount.textContent = `${(state.hosts || []).length} ${(state.hosts || []).length === 1 ? 'monde' : 'mondes'}`;
+
+	const mods = $('#stat-mods');
+	if (mods) mods.textContent = String((state.mods || []).length);
+}
+
+/** A launch adds its elapsed seconds to the local counter shown in the hero. */
+function recordPlaytime(startedAt) {
+	const elapsed = Math.round((Date.now() - startedAt) / 1000);
+	if (!Number.isFinite(elapsed) || elapsed <= 0) return;
+
+	writeLocal(PLAY_TIME_KEY, readPlaytime() + elapsed);
+	renderDashboardStats();
+}
+
+/** The pointer tilts the active instance card on its two axes. */
+function bindTilt(element) {
+	if (!element) return;
+
+	const reset = () => {
+		element.style.transform = '';
+	};
+
+	element.addEventListener('pointermove', (event) => {
+		if (event.pointerType && event.pointerType !== 'mouse') return;
+		if (document.documentElement.dataset.motion === 'off') {
+			reset();
+			return;
+		}
+
+		const box = element.getBoundingClientRect();
+		if (!box.width || !box.height) return;
+
+		const x = (event.clientX - box.left) / box.width - 0.5;
+		const y = (event.clientY - box.top) / box.height - 0.5;
+		element.style.transform = `perspective(1200px) rotateX(${(-y * 4).toFixed(2)}deg) rotateY(${(x * 5).toFixed(2)}deg)`;
+	});
+
+	element.addEventListener('pointerleave', reset);
+	element.addEventListener('pointercancel', reset);
+}
+
+/** The full stories behind the three teaser cards of the home page. */
+const NEWS_STORIES = Object.freeze({
+	snapshot: {
+		tag: 'SNAPSHOT',
+		title: 'Biome des cimes',
+		lede: 'Les sommets enneigés arrivent avec leurs reliefs escarpés, leurs pins givrés et une faune qui ne craint pas le froid.',
+		body: [
+			'Les nouvelles montagnes se dressent au-dessus des forêts et cachent des vallées entières. Les ruisseaux gelés y dessinent des chemins naturels, tandis que les grottes de glace abritent des minerais rares.',
+			'Garde un œil sur les créatures des hauteurs : certaines descendent à la nuit tombée. Prépare une pioche, des torches et un bon manteau de laine.'
+		]
+	},
+	update: {
+		tag: 'UPDATE',
+		title: 'Refonte de la redstone',
+		lede: 'Les circuits gagnent en lisibilité et en puissance : nouveaux composants, signaux plus stables et de quoi imaginer des machines plus ambitieuses.',
+		body: [
+			'Les répéteurs et les comparateurs affichent désormais leur état sans ambiguïté, et les pistons réagissent plus vite aux impulsions courtes.',
+			'Les constructions existantes continuent de fonctionner. Un passage par le menu Performance permet de vérifier que tes fermes automatiques tournent toujours au rythme attendu.'
+		]
+	},
+	event: {
+		tag: 'ÉVÉNEMENT',
+		title: "Festival d'automne",
+		lede: "Jusqu'au 30 novembre, la communauté se retrouve sur les serveurs du launcher pour bâtir, explorer et partager ses plus belles trouvailles.",
+		body: [
+			'Des défis quotidiens récompensent les constructions automnales : lanternes, champs de citrouilles et cabanes en bois. Les participants cumulent des points pour débloquer un skin exclusif.',
+			'Les serveurs de l’événement sont accessibles depuis la page Serveurs. Aucune installation supplémentaire n’est nécessaire.'
+		]
+	}
+});
+
+function openNews(kind) {
+	const story = NEWS_STORIES[kind];
+	if (!story) return;
+
+	const paragraphs = [story.lede, ...story.body]
+		.map((text) => `<p>${text}</p>`)
+		.join('');
+	openModal(story.title, `<span class="news-tag">${story.tag}</span>${paragraphs}`, null, 'Fermer');
+}
 
 /* ------------------------------------------------------------------ helpers */
 
@@ -47,24 +214,36 @@ function setStatus(text, kind = '') {
 	const gateState = $('#gate-state-line');
 	if (gateState) {
 		const message = String(text).toLowerCase();
-		let summary = 'READY WHEN YOU ARE';
-		if (kind === 'error' || message.includes('error') || message.includes('crash')) {
-			summary = 'THE GATE NEEDS ATTENTION';
-		} else if (message.includes('playing')) {
-			summary = 'AETHER IS RUNNING';
-		} else if (kind === 'busy' && (message.includes('launch') || message.includes('join') || message.includes('stop'))) {
-			summary = 'THE GATE IS IN MOTION';
-		} else if (kind === 'busy' || message.includes('install') || message.includes('prepar') || message.includes('download')) {
-			summary = 'PREPARING YOUR WORLD';
+		let summary = 'PRÊT À JOUER';
+		if (kind === 'error' || message.includes('erreur') || message.includes('planter')) {
+			summary = 'UNE ERREUR À CORRIGER';
+		} else if (message.includes('en jeu')) {
+			summary = 'LE JEU TOURNE';
+		} else if (kind === 'busy' && (message.includes('lanc') || message.includes('démarrage') || message.includes('connexion') || message.includes('arrêt') || message.includes('rejoin'))) {
+			summary = 'LANCEMENT EN COURS';
+		} else if (kind === 'busy' || message.includes('install') || message.includes('prépar') || message.includes('télécharg')) {
+			summary = 'PRÉPARATION DU MONDE';
 		}
 		gateState.textContent = summary;
 	}
 	if (pill) pill.setAttribute('data-state', kind || 'ready');
+
+	const gameState = $('#home-game-state');
+	if (gameState) gameState.textContent = text;
+}
+
+/**
+ * The rail marks the current destination with its own `::before` bar, so the indicator element is
+ * only kept for the older markup and hidden when it is present.
+ */
+function positionDockIndicator() {
+	const indicator = $('#dock-indicator');
+	if (indicator) indicator.style.display = 'none';
 }
 
 /** Parses Minecraft MOTD formatting codes (§0-f, §l,m,n,o,r) into styled sanitized HTML spans. */
 function parseMinecraftMotd(raw) {
-	if (!raw) return '<span class="muted">No description provided</span>';
+	if (!raw) return '<span class="muted">Aucune description fournie</span>';
 	const colorMap = {
 		'0': 'mc-0', '1': 'mc-1', '2': 'mc-2', '3': 'mc-3',
 		'4': 'mc-4', '5': 'mc-5', '6': 'mc-6', '7': 'mc-7',
@@ -131,141 +310,7 @@ function parseMinecraftMotd(raw) {
 	}
 
 	flushBuffer();
-	return html || '<span class="muted">A Minecraft Server</span>';
-}
-
-/* -------------------------------------------------------- 3D Skin Renderer */
-
-/* ------------------------------------------------ Catmull-Rom Live FPS Spline */
-
-let fpsCanvasAnimId = null;
-const fpsHistory = [680, 710, 740, 725, 780, 830, 810, 860, 890, 875, 910, 940, 920, 895, 930];
-
-function initFpsSplineGraph() {
-	const canvas = $('#fps-spline-canvas');
-	if (!canvas) return;
-	const ctx = canvas.getContext('2d');
-	if (!ctx) return;
-
-	// The backing store follows the CSS box and the screen density: the fixed 600 px canvas was
-	// stretched by the layout and read as a blurry line.
-	const fit = () => {
-		const ratio = window.devicePixelRatio || 1;
-		const box = canvas.getBoundingClientRect();
-		canvas.width = Math.max(1, Math.round(box.width * ratio));
-		canvas.height = Math.max(1, Math.round(box.height * ratio));
-	};
-	fit();
-	window.addEventListener('resize', fit);
-
-	function catmullRom(p0, p1, p2, p3, t) {
-		const t2 = t * t;
-		const t3 = t2 * t;
-		return 0.5 * (
-			(2 * p1) +
-			(-p0 + p2) * t +
-			(2 * p0 - 5 * p1 + 4 * p2 - p3) * t2 +
-			(-p0 + 3 * p1 - 3 * p2 + p3) * t3
-		);
-	}
-
-	let tickCounter = 0;
-	function renderGraph() {
-		tickCounter++;
-		if (tickCounter % 30 === 0) {
-			const jitter = Math.floor((Math.random() - 0.45) * 40);
-			const last = fpsHistory[fpsHistory.length - 1];
-			const next = Math.max(550, Math.min(1050, last + jitter));
-			fpsHistory.push(next);
-			if (fpsHistory.length > 24) fpsHistory.shift();
-
-			const badge = $('#fps-spline-status');
-			if (badge) badge.textContent = `${next} FPS · sample`;
-		}
-
-		ctx.clearRect(0, 0, canvas.width, canvas.height);
-		const w = canvas.width;
-		const h = canvas.height;
-
-		// Background grid lines
-		ctx.strokeStyle = 'rgba(255, 255, 255, 0.04)';
-		ctx.lineWidth = 1;
-		for (let y = 20; y < h; y += 25) {
-			ctx.beginPath();
-			ctx.moveTo(0, y);
-			ctx.lineTo(w, y);
-			ctx.stroke();
-		}
-
-		// Calculate point coordinates
-		const minVal = 500;
-		const maxVal = 1100;
-		const step = w / (fpsHistory.length - 1);
-		const points = fpsHistory.map((val, i) => ({
-			x: i * step,
-			y: h - ((val - minVal) / (maxVal - minVal)) * (h - 24) - 12
-		}));
-
-		if (points.length < 2) return;
-
-		// Gradient Fill under spline
-		const grad = ctx.createLinearGradient(0, 0, 0, h);
-		grad.addColorStop(0, 'rgba(231, 233, 236, 0.10)');
-		grad.addColorStop(0.6, 'rgba(231, 233, 236, 0.04)');
-		grad.addColorStop(1, 'rgba(231, 233, 236, 0)');
-
-		ctx.beginPath();
-		ctx.moveTo(points[0].x, points[0].y);
-
-		for (let i = 0; i < points.length - 1; i++) {
-			const p0 = points[Math.max(0, i - 1)];
-			const p1 = points[i];
-			const p2 = points[i + 1];
-			const p3 = points[Math.min(points.length - 1, i + 2)];
-
-			for (let t = 0; t < 1; t += 0.1) {
-				const x = catmullRom(p0.x, p1.x, p2.x, p3.x, t);
-				const y = catmullRom(p0.y, p1.y, p2.y, p3.y, t);
-				ctx.lineTo(x, y);
-			}
-		}
-
-		const lastPoint = points[points.length - 1];
-		ctx.lineTo(lastPoint.x, lastPoint.y);
-
-		// Fill area
-		ctx.save();
-		ctx.lineTo(w, h);
-		ctx.lineTo(0, h);
-		ctx.closePath();
-		ctx.fillStyle = grad;
-		ctx.fill();
-		ctx.restore();
-
-		// Spline stroke line
-		ctx.beginPath();
-		ctx.moveTo(points[0].x, points[0].y);
-		for (let i = 0; i < points.length - 1; i++) {
-			const p0 = points[Math.max(0, i - 1)];
-			const p1 = points[i];
-			const p2 = points[i + 1];
-			const p3 = points[Math.min(points.length - 1, i + 2)];
-
-			for (let t = 0; t <= 1; t += 0.1) {
-				const x = catmullRom(p0.x, p1.x, p2.x, p3.x, t);
-				const y = catmullRom(p0.y, p1.y, p2.y, p3.y, t);
-				ctx.lineTo(x, y);
-			}
-		}
-		ctx.strokeStyle = themeColors().graph;
-		ctx.lineWidth = 1.5;
-		ctx.stroke();
-
-		fpsCanvasAnimId = requestAnimationFrame(renderGraph);
-	}
-
-	if (fpsCanvasAnimId) cancelAnimationFrame(fpsCanvasAnimId);
-	fpsCanvasAnimId = requestAnimationFrame(renderGraph);
+	return html || '<span class="muted">Un serveur Minecraft</span>';
 }
 
 /**
@@ -278,8 +323,8 @@ async function withBusy(reset, work) {
 	try {
 		return await work();
 	} catch (error) {
-		setStatus('Error', 'error');
-		toast(error?.message || 'The action could not be completed.', 'error');
+		setStatus('Erreur', 'error');
+		toast(error?.message || "L'action n'a pas pu aboutir.", 'error');
 		return null;
 	} finally {
 		reset();
@@ -369,8 +414,8 @@ function renderAccounts() {
 	if (state.accounts.accounts.length === 0) {
 		list.appendChild(emptyState(
 			ICON_USER,
-			'No account yet',
-			'Add an offline account to play right away, it only needs a player name.'
+			'Aucun compte',
+			'Ajoute un compte hors ligne pour jouer tout de suite, un pseudo suffit.'
 		));
 	} else {
 		for (const account of state.accounts.accounts) {
@@ -397,14 +442,14 @@ function renderAccounts() {
 
 			const tag = document.createElement('span');
 			tag.className = `tag tag--${account.type}`;
-			tag.textContent = account.type === 'offline' ? 'Offline' : 'Microsoft';
+			tag.textContent = account.type === 'offline' ? 'Hors ligne' : 'Microsoft';
 
 			row.append(avatar, meta, tag);
 			row.addEventListener('click', async () => {
 				state.accounts = await api.accounts.select(account.id);
 				renderAccounts();
 				renderAccountTable();
-				await loadProfiles();
+				applyProfile(state.settings);
 			});
 			list.appendChild(row);
 		}
@@ -412,16 +457,16 @@ function renderAccounts() {
 
 	const selected = state.accounts.accounts.find((a) => a.id === state.accounts.selected);
 	$('#session-badge').textContent = selected
-		? (selected.type === 'offline' ? 'offline session' : 'microsoft session')
-		: 'no account selected';
+		? (selected.type === 'offline' ? 'session hors ligne' : 'session Microsoft')
+		: 'aucun compte sélectionné';
 	const gateAccountSummary = $('#gate-account-summary');
 	if (gateAccountSummary) {
 		gateAccountSummary.textContent = selected
-			? `${selected.username} / ${selected.type === 'offline' ? 'OFFLINE' : 'MICROSOFT'}`
-			: 'NO ACCOUNT SELECTED';
+			? `${selected.username} / ${selected.type === 'offline' ? 'HORS LIGNE' : 'MICROSOFT'}`
+			: 'AUCUN COMPTE SÉLECTIONNÉ';
 	}
 	const playerAction = $('.gate-player-change span');
-	if (playerAction) playerAction.textContent = selected ? 'SWITCH' : 'ADD PLAYER';
+	if (playerAction) playerAction.textContent = selected ? 'CHANGER' : 'AJOUTER UN JOUEUR';
 	const launchButton = $('#btn-launch');
 	if (launchButton) {
 		launchButton.disabled = !selected;
@@ -438,9 +483,9 @@ function renderAccountTable() {
 	if (state.accounts.accounts.length === 0) {
 		const empty = emptyState(
 			ICON_USER,
-			'No accounts yet',
-			'Offline accounts are created locally. Microsoft accounts use the device code sign in.',
-			'Add an offline account'
+			'Aucun compte pour le moment',
+			'Les comptes hors ligne sont créés sur cette machine. Les comptes Microsoft passent par la connexion par code.',
+			'Ajouter un compte hors ligne'
 		);
 		empty.querySelector('[data-empty-action]').addEventListener('click', offlineAccountModal);
 		table.appendChild(empty);
@@ -469,27 +514,28 @@ function renderAccountTable() {
 
 		const tag = document.createElement('span');
 		tag.className = `tag tag--${account.type}`;
-		tag.textContent = account.type === 'offline' ? 'Offline' : 'Microsoft';
+		tag.textContent = account.type === 'offline' ? 'Hors ligne' : 'Microsoft';
 
 		const select = document.createElement('button');
-		select.className = 'btn btn--ghost';
-		select.textContent = account.id === state.accounts.selected ? 'Selected' : 'Select';
+		select.className = `btn btn--ghost${account.id === state.accounts.selected ? ' is-connected' : ''}`;
+		select.textContent = account.id === state.accounts.selected ? 'Connecté' : 'Choisir';
+		select.setAttribute('aria-pressed', String(account.id === state.accounts.selected));
 		select.addEventListener('click', async () => {
 			state.accounts = await api.accounts.select(account.id);
 			renderAccounts();
 			renderAccountTable();
-			await loadProfiles();
+			applyProfile(state.settings);
 		});
 
 		const remove = document.createElement('button');
 		remove.className = 'icon-btn';
 		remove.innerHTML = '<svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13" /></svg>';
-		remove.title = 'Remove';
+		remove.title = 'Retirer';
 		remove.addEventListener('click', async () => {
 			state.accounts = await api.accounts.remove(account.id);
 			renderAccounts();
 			renderAccountTable();
-			toast(`Removed ${account.username}`, 'success');
+			toast(`Compte ${account.username} retiré.`, 'success');
 		});
 
 		row.append(avatar, meta, tag, select, remove);
@@ -499,13 +545,14 @@ function renderAccountTable() {
 
 function renderVersions() {
 	const table = $('#version-table');
+	if (!table) return;
 	table.innerHTML = '';
 
 	if (state.versions.length === 0) {
 		table.appendChild(emptyState(
 			ICON_STACK,
-			'Reading the version list…',
-			'The versions are published by Mojang, the list fills itself as soon as the answer arrives.'
+			'Lecture des versions…',
+			'Les versions sont publiées par Mojang, la liste se remplit dès que la réponse arrive.'
 		));
 		return;
 	}
@@ -525,10 +572,10 @@ function renderVersions() {
 
 		const action = document.createElement('button');
 		action.className = 'btn btn--ghost';
-		action.textContent = 'Use';
+		action.textContent = 'Utiliser';
 		action.addEventListener('click', async () => {
 			await updateProfile({ version: version.id });
-			toast(`Selected Minecraft ${version.id}`, 'success');
+			toast(`Minecraft ${version.id} sélectionné.`, 'success');
 			loadLoaders(version.id);
 		});
 
@@ -563,7 +610,7 @@ function renderLoaders() {
 	if (state.loaders.length === 0) {
 		const option = document.createElement('option');
 		option.value = wanted || '';
-		option.textContent = wanted || 'default';
+		option.textContent = wanted || 'par défaut';
 		select.appendChild(option);
 		return;
 	}
@@ -595,7 +642,7 @@ function log(line) {
 
 	state.sessionLines += 1;
 	$('#session-log-badge').textContent =
-		state.sessionLines === 1 ? '1 line' : `${state.sessionLines} lines`;
+		state.sessionLines === 1 ? '1 ligne' : `${state.sessionLines} lignes`;
 	$('#session-log-badge').classList.add('is-live');
 }
 
@@ -606,7 +653,7 @@ function clearSession() {
 	}
 
 	state.sessionLines = 0;
-	$('#session-log-badge').textContent = 'empty';
+	$('#session-log-badge').textContent = 'vide';
 	$('#session-log-badge').classList.remove('is-live');
 }
 
@@ -618,15 +665,15 @@ function renderMods() {
 
 	const enabled = state.mods.filter((entry) => entry.enabled).length;
 	$('#mods-count').textContent = state.mods.length === 0
-		? 'no mod'
-		: `${enabled}/${state.mods.length} on`;
+		? 'aucun mod'
+		: `${enabled}/${state.mods.length} actifs`;
 
 	if (state.mods.length === 0) {
 		const empty = emptyState(
 			ICON_MOD,
-			'No mod in the folder',
-			'Drop a jar in the mods folder, or run “Install / repair” to download the Aether client.',
-			'Open the folder'
+			'Aucun mod dans le dossier',
+			'Glisse un .jar dans le dossier des mods, ou lance « Installer / réparer » pour télécharger le client Aether.',
+			'Ouvrir le dossier'
 		);
 		empty.querySelector('[data-empty-action]').addEventListener('click', openModsFolder);
 		table.appendChild(empty);
@@ -649,49 +696,85 @@ function renderMods() {
 		name.textContent = entry.modId;
 		const sub = document.createElement('div');
 		sub.className = 'mod-sub';
-		sub.textContent = `${formatBytes(entry.size)} · ${entry.enabled ? 'enabled' : 'disabled'}`;
+		sub.textContent = `${formatBytes(entry.size)} · ${entry.enabled ? 'actif' : 'désactivé'}`;
 		meta.append(name, sub);
 
 		const toggle = document.createElement('button');
 		toggle.className = 'switch';
 		toggle.setAttribute('role', 'switch');
 		toggle.setAttribute('aria-checked', String(entry.enabled));
-		toggle.setAttribute('aria-label', `${entry.enabled ? 'Disable' : 'Enable'} ${entry.modId}`);
+		toggle.setAttribute('aria-label', `${entry.enabled ? 'Désactiver' : 'Activer'} ${entry.modId}`);
 		toggle.addEventListener('click', async () => {
 			toggle.disabled = true;
 			const result = await api.mods.toggle(entry.name, !entry.enabled);
 			toggle.disabled = false;
 
 			if (!result.ok) {
-				toast(result.error || 'The mod could not be changed.', 'error');
+				toast(result.error || "Le mod n'a pas pu être modifié.", 'error');
 				return;
 			}
 
 			state.mods = result.mods;
 			renderMods();
-			toast(`${entry.modId} ${entry.enabled ? 'disabled' : 'enabled'}`, 'success');
+			renderDashboardStats();
+			toast(`${entry.modId} ${entry.enabled ? 'désactivé' : 'activé'}`, 'success');
 		});
 
 		row.append(icon, meta, toggle);
 		table.appendChild(row);
 	}
+	renderDashboardStats();
 }
 
 async function loadMods() {
 	const result = await api.mods.list();
 	if (!result.ok) {
-		toast(result.error || 'The mods could not be read.', 'error');
+		toast(result.error || "Les mods n'ont pas pu être lus.", 'error');
 		return;
 	}
 
 	state.mods = result.mods || [];
 	$('#mods-path').textContent = result.folder || '';
 	renderMods();
+	renderDashboardStats();
 }
 
 async function openModsFolder() {
 	const result = await api.mods.openFolder();
-	if (!result.ok) toast(result.error || 'The folder could not be opened.', 'error');
+	if (!result.ok) toast(result.error || "Le dossier n'a pas pu être ouvert.", 'error');
+}
+
+async function searchMods() {
+	const query = $('#mods-search-query').value.trim();
+	const results = $('#mods-search-results');
+	if (query.length < 2) { toast('Entre au moins deux caractères.', 'error'); return; }
+	results.innerHTML = '<div class="mod-search-empty">Recherche sur Modrinth…</div>';
+	const result = await api.mods.search(query, state.settings.gameVersion || '1.21.11');
+	if (!result.ok) { results.innerHTML = '<div class="mod-search-empty">Recherche impossible. Réessaie dans un instant.</div>'; toast(result.error, 'error'); return; }
+	results.replaceChildren();
+	for (const mod of result.mods || []) {
+		const card = document.createElement('article'); card.className = 'mod-result-card';
+		const heading = document.createElement('div'); heading.className = 'mod-result-heading';
+		const title = document.createElement('h3'); title.textContent = mod.title;
+		const compatible = document.createElement('span'); compatible.className = `badge${mod.compatible ? ' is-live' : ''}`; compatible.textContent = mod.compatible ? 'Fabric compatible' : 'Incompatible';
+		heading.append(title, compatible);
+		const description = document.createElement('p'); description.textContent = mod.description || 'Mod communautaire sur Modrinth.';
+		const footer = document.createElement('div'); footer.className = 'mod-result-footer';
+		const downloads = document.createElement('span'); downloads.className = 'muted'; downloads.textContent = `${formatCompactNumber(mod.downloads)} téléchargements`;
+		const install = document.createElement('button'); install.type = 'button'; install.className = 'btn btn--primary btn--small'; install.textContent = 'Installer'; install.disabled = !mod.compatible;
+		install.addEventListener('click', async () => {
+			install.disabled = true; install.textContent = 'Vérification…';
+			const installed = await api.mods.install(mod.slug, state.settings.gameVersion || '1.21.11');
+			if (!installed.ok) { install.disabled = false; install.textContent = 'Réessayer'; toast(installed.error || 'Installation refusée.', 'error'); return; }
+			state.mods = installed.mods || state.mods; renderMods(); renderDashboardStats(); install.textContent = 'Installé'; toast(`${mod.title} installé et vérifié.`, 'success');
+		});
+		footer.append(downloads, install); card.append(heading, description, footer); results.appendChild(card);
+	}
+	if (!result.mods?.length) results.innerHTML = '<div class="mod-search-empty">Aucun mod trouvé pour cette version de Minecraft.</div>';
+}
+
+function formatCompactNumber(value) {
+	return new Intl.NumberFormat('fr-FR', { notation: 'compact', maximumFractionDigits: 1 }).format(Number(value) || 0);
 }
 
 /* ----------------------------------------------------------------- servers */
@@ -716,7 +799,7 @@ function rowBadge(label, live) {
 /** The one line summary of a ping, empty when the server was never pinged. */
 function pingSummary(ping) {
 	if (!ping) return '';
-	if (!ping.online) return ping.error ? `offline · ${ping.error}` : 'offline';
+	if (!ping.online) return ping.error ? `hors ligne · ${ping.error}` : 'hors ligne';
 
 	const parts = [];
 	if (ping.playersMax > 0) parts.push(`${ping.playersOnline}/${ping.playersMax}`);
@@ -730,13 +813,13 @@ function renderServers() {
 	table.innerHTML = '';
 
 	const list = state.servers.servers || [];
-	$('#server-count').textContent = list.length === 1 ? '1 server' : `${list.length} servers`;
+	$('#server-count').textContent = list.length === 1 ? '1 serveur' : `${list.length} serveurs`;
 
 	if (list.length === 0) {
 		table.appendChild(emptyState(
 			ICON_SERVER,
-			'No server saved yet',
-			'Add an address above, or host a local server that accepts any name.'
+			'Aucun serveur enregistré',
+			'Ajoute une adresse ci-dessus, ou héberge un serveur local qui accepte n\'importe quel pseudo.'
 		));
 		return;
 	}
@@ -787,7 +870,7 @@ function renderServers() {
 		} else if (ping && !ping.online) {
 			const offBadge = document.createElement('span');
 			offBadge.className = 'badge';
-			offBadge.textContent = 'Offline';
+			offBadge.textContent = 'Hors ligne';
 			badges.appendChild(offBadge);
 		}
 
@@ -802,25 +885,25 @@ function renderServers() {
 		const actions = document.createElement('div');
 		actions.className = 'row-actions';
 
-		const join = rowButton('Join', 'btn--ghost', () => launch(entry.address));
-		const test = rowButton('Test', 'btn--ghost', async () => {
+		const join = rowButton('Rejoindre', 'btn--ghost', () => launch(entry.address));
+		const test = rowButton('Tester', 'btn--ghost', async () => {
 			test.disabled = true;
 			await testAddress(entry.address);
 			test.disabled = false;
 		});
-		const remove = rowButton('Remove', 'btn--danger', async () => {
+		const remove = rowButton('Retirer', 'btn--danger', async () => {
 			remove.disabled = true;
 			const result = await api.servers.remove(entry.address);
 			if (!result.ok) {
 				remove.disabled = false;
-				toast(result.error || 'The server could not be removed.', 'error');
+				toast(result.error || "Le serveur n'a pas pu être retiré.", 'error');
 				return;
 			}
 
 			state.servers.servers = result.servers || [];
 			delete state.servers.pings[entry.address];
 			renderServers();
-			toast(`${entry.name} removed.`, 'success');
+			toast(`${entry.name} retiré.`, 'success');
 		});
 
 		actions.append(join, test, remove);
@@ -833,7 +916,7 @@ function renderServers() {
 async function loadServers() {
 	const result = await api.servers.list();
 	if (!result.ok) {
-		toast(result.error || 'The server list could not be read.', 'error');
+		toast(result.error || "La liste des serveurs n'a pas pu être lue.", 'error');
 		return;
 	}
 
@@ -857,12 +940,12 @@ async function pingServer(address) {
 async function testAddress(address) {
 	const target = (address || $('#server-address').value || '').trim();
 	if (!target) {
-		toast('Enter an address to test.', 'error');
+		toast('Saisis une adresse à tester.', 'error');
 		return;
 	}
 
 	const verdict = $('#server-verdict');
-	verdict.textContent = `Testing ${target}…`;
+	verdict.textContent = `Test de ${target}…`;
 
 	const [ping, probe] = await Promise.all([
 		api.servers.ping(target),
@@ -881,35 +964,35 @@ async function testAddress(address) {
 	if (probe.ok) {
 		const result = probe.probe;
 		if (probe.verdict === 'offline') {
-			parts.push(`Offline accounts accepted (the server answered with ${result.packet}).`);
+			parts.push(`Comptes hors ligne acceptés (le serveur a répondu avec ${result.packet}).`);
 		} else if (probe.verdict === 'premium') {
-			parts.push(`Premium only: ${result.detail}.`);
+			parts.push(`Premium uniquement : ${result.detail}.`);
 		} else if (probe.verdict === 'refused') {
-			parts.push(`Refused: ${result.detail}.`);
+			parts.push(`Refusé : ${result.detail}.`);
 		} else {
-			parts.push(`Unreachable: ${result.detail}.`);
+			parts.push(`Injoignable : ${result.detail}.`);
 		}
 	} else {
-		parts.push(probe.error || 'The login probe failed.');
+		parts.push(probe.error || 'Le test de connexion a échoué.');
 	}
 
 	if (ping.ok) {
 		const info = ping.ping;
 		parts.push(info.online
-			? `${info.playersOnline}/${info.playersMax} players · ${info.latencyMs} ms · ${info.versionName}`
-			: `offline: ${info.error}`);
+			? `${info.playersOnline}/${info.playersMax} joueurs · ${info.latencyMs} ms · ${info.versionName}`
+			: `hors ligne : ${info.error}`);
 	}
 
 	verdict.textContent = parts.join(' ');
 	const accepted = probe.ok && probe.verdict === 'offline';
 	// The verdict stays on the page: a toast would cover the rows while the player reads it.
-	if (accepted) toast(`${target} accepts an offline account.`, 'success');
+	if (accepted) toast(`${target} accepte un compte hors ligne.`, 'success');
 }
 
 async function addServer() {
 	const address = $('#server-address').value.trim();
 	if (!address) {
-		toast('Enter the address of a server.', 'error');
+		toast('Saisis l\'adresse d\'un serveur.', 'error');
 		return;
 	}
 
@@ -926,7 +1009,7 @@ async function addServer() {
 
 	if (!result) return;
 	if (!result.ok) {
-		toast(result.error || 'The server could not be added.', 'error');
+		toast(result.error || "Le serveur n'a pas pu être ajouté.", 'error');
 		return;
 	}
 
@@ -934,7 +1017,7 @@ async function addServer() {
 	$('#server-name').value = '';
 	$('#server-address').value = '';
 	renderServers();
-	toast(`${name} added.`, 'success');
+	toast(`${name} ajouté.`, 'success');
 	pingServer(address);
 }
 
@@ -945,14 +1028,19 @@ function renderHosts() {
 	table.innerHTML = '';
 
 	const list = state.hosts || [];
-	$('#host-count').textContent = list.length === 1 ? '1 server' : `${list.length} servers`;
+	$('#host-count').textContent = `${list.length} ${list.length === 1 ? 'monde' : 'mondes'}`;
+	const countBadge = $('#host-count-home');
+	if (countBadge) countBadge.textContent = `${list.length} ${list.length === 1 ? 'monde' : 'mondes'}`;
 
 	if (list.length === 0) {
 		table.appendChild(emptyState(
 			ICON_SERVER,
-			'No local server',
-			'Create one above: the launcher installs Fabric once, then the world starts with online-mode=false.'
+			'Aucun serveur local',
+			'Crée ton premier monde depuis le formulaire ci-dessus. Le launcher prépare Fabric et le démarre.'
 		));
+		renderWorldList($('#home-host-list'), list);
+		renderDashboardStats();
+		updateHomeHostStatus();
 		return;
 	}
 
@@ -973,29 +1061,65 @@ function renderHosts() {
 		name.textContent = server.name;
 		const sub = document.createElement('div');
 		sub.className = 'mod-sub';
-		sub.textContent = `${address} · ${server.onlineMode ? 'online mode' : 'offline mode'} · ${server.gameVersion}`;
+		sub.textContent = `${address} · Minecraft ${server.gameVersion} · ${server.onlineMode ? 'compte Microsoft requis' : 'pseudo libre'}`;
 		meta.append(name, sub);
 
 		const actions = document.createElement('div');
 		actions.className = 'row-actions';
-		actions.appendChild(rowBadge(server.running ? 'running' : 'stopped', server.running));
+		const status = rowBadge(server.running ? 'EN LIGNE' : 'HORS LIGNE', server.running);
+		actions.appendChild(status);
 
 		if (server.running) {
-			actions.appendChild(rowButton('Join', 'btn--primary', () => launch(address)));
-			actions.appendChild(rowButton('Stop', 'btn--danger', () => stopHost(server.name)));
+			const invite = document.createElement('button');
+			invite.type = 'button';
+			invite.className = 'btn btn--ghost btn--small';
+			invite.textContent = 'Copier l’adresse';
+			invite.addEventListener('click', async () => {
+				try { await navigator.clipboard.writeText(address); toast(`Adresse ${address} copiée.`, 'success'); }
+				catch { toast(`Adresse à partager : ${address}`, 'success'); }
+			});
+			actions.appendChild(invite);
+			actions.appendChild(rowButton('Rejoindre', 'btn--primary', () => launch(address)));
+			actions.appendChild(rowButton('Arrêter', 'btn--danger', () => stopHost(server.name)));
 		} else {
-			actions.appendChild(rowButton('Start', 'btn--primary', () => startHost(server.name)));
+			actions.appendChild(rowButton('Démarrer', 'btn--primary', () => startHost(server.name)));
 		}
 
 		row.append(icon, meta, actions);
+		row.classList.add('home-world-card');
 		table.appendChild(row);
+	}
+	renderWorldList($('#home-host-list'), list);
+	$('#host-count-home').textContent = `${list.length} ${list.length === 1 ? 'monde' : 'mondes'}`;
+	renderDashboardStats();
+	updateHomeHostStatus();
+}
+
+function renderWorldList(container, worlds) {
+	if (!container) return;
+	container.replaceChildren();
+	if (!worlds.length) {
+		container.appendChild(emptyState(ICON_SERVER, 'Pas encore de monde', 'Crée ton premier serveur et invite tes amis sur le même réseau.', 'Créer un monde'));
+		container.querySelector('[data-empty-action]')?.addEventListener('click', () => showPage('worlds'));
+		return;
+	}
+	for (const world of worlds.slice(0, 3)) {
+		const card = document.createElement('article');
+		card.className = 'home-world-card';
+		const icon = document.createElement('span'); icon.className = 'mod-icon'; icon.innerHTML = ICON_SERVER;
+		const meta = document.createElement('div'); meta.className = 'mod-meta';
+		const title = document.createElement('strong'); title.className = 'mod-name'; title.textContent = world.name;
+		const details = document.createElement('span'); details.className = 'mod-sub'; details.textContent = `${world.gameVersion} · ${world.running ? `En ligne · 127.0.0.1:${world.port}` : 'Arrêté'}`;
+		meta.append(title, details);
+		const action = rowButton(world.running ? 'Ouvrir' : 'Démarrer', world.running ? 'btn--primary' : 'btn--ghost', () => world.running ? launch(`127.0.0.1:${world.port}`) : startHost(world.name));
+		card.append(icon, meta, action); container.appendChild(card);
 	}
 }
 
 async function loadHosts() {
 	const result = await api.hosts.list();
 	if (!result.ok) {
-		toast(result.error || 'The local servers could not be read.', 'error');
+		toast(result.error || "Les serveurs locaux n'ont pas pu être lus.", 'error');
 		return;
 	}
 
@@ -1006,7 +1130,7 @@ async function loadHosts() {
 async function createHost() {
 	const name = $('#host-name').value.trim();
 	if (!name) {
-		toast('Give the world a name.', 'error');
+		toast('Donne un nom au monde.', 'error');
 		return;
 	}
 
@@ -1020,20 +1144,28 @@ async function createHost() {
 		() => api.hosts.create({
 			name,
 			port: Number($('#host-port').value) || 25565,
-			maxPlayers: Number($('#host-players').value) || 20
+			maxPlayers: Number($('#host-players').value) || 8,
+			gameVersion: $('#host-version').value || state.settings.gameVersion
 		})
 	);
 
 	if (!result) return;
 	if (!result.ok) {
-		toast(result.error || 'The server could not be created.', 'error');
+		toast(result.error || "Le serveur n'a pas pu être créé.", 'error');
 		return;
 	}
 
 	state.hosts = result.servers || [];
 	$('#host-name').value = '';
 	renderHosts();
-	toast(`${name} created. Press Start to launch it.`, 'success');
+	toast(`${name} est prêt. Démarrage du monde…`, 'success');
+	await startHost(name);
+}
+
+function updateHomeHostStatus() {
+	const running = (state.hosts || []).find((host) => host.running);
+	const label = $('#home-host-status');
+	if (label) label.textContent = running ? `${running.name} est ouvert · 127.0.0.1:${running.port}` : 'Ton jeu est prêt quand tu veux.';
 }
 
 /** Pings until the server answers, a first start compiles its world for a few seconds. */
@@ -1052,42 +1184,42 @@ async function waitForServer(address, attempts = 90) {
 }
 
 async function startHost(name) {
-	setStatus('Starting server…', 'busy');
-	const result = await withBusy(() => setStatus('Ready'), () => api.hosts.start(name));
+	setStatus('Démarrage du serveur…', 'busy');
+	const result = await withBusy(() => setStatus('Prêt'), () => api.hosts.start(name));
 
 	if (!result) return;
 	if (!result.ok) {
-		toast(result.error || 'The server could not be started.', 'error');
+		toast(result.error || "Le serveur n'a pas pu être démarré.", 'error');
 		return;
 	}
 
 	await loadHosts();
-	toast(`${name} is starting…`, 'success');
+	toast(`${name} démarre…`, 'success');
 
 	const address = `127.0.0.1:${result.server.port}`;
 	const ready = await waitForServer(address);
 
 	if (ready) {
 		renderHosts();
-		toast(`${name} is ready on ${address}.`, 'success');
+		toast(`${name} est prêt sur ${address}.`, 'success');
 	} else {
-		toast(`${name} is still starting, watch console.log in its folder.`, 'error');
+		toast(`${name} démarre encore, surveille console.log dans son dossier.`, 'error');
 	}
 }
 
 async function stopHost(name) {
-	setStatus('Stopping server…', 'busy');
-	const result = await withBusy(() => setStatus('Ready'), () => api.hosts.stop(name));
+	setStatus('Arrêt du serveur…', 'busy');
+	const result = await withBusy(() => setStatus('Prêt'), () => api.hosts.stop(name));
 
 	if (!result) return;
 	if (!result.ok) {
-		toast(result.error || 'The server could not be stopped.', 'error');
+		toast(result.error || "Le serveur n'a pas pu être arrêté.", 'error');
 		return;
 	}
 
 	state.hosts = result.servers || state.hosts;
 	renderHosts();
-	toast(`${name} stopped and the world was saved.`, 'success');
+	toast(`${name} arrêté et le monde a été sauvegardé.`, 'success');
 }
 
 /* ------------------------------------------------------------- performance */
@@ -1117,8 +1249,8 @@ function renderPerformance() {
 	if (mods.length === 0) {
 		table.appendChild(emptyState(
 			ICON_GAUGE,
-			'The pack is not readable',
-			'Refresh the list, the core reads the mods folder of the game.'
+			'Le pack est illisible',
+			'Rafraîchis la liste, le cœur lit le dossier des mods du jeu.'
 		));
 		return;
 	}
@@ -1142,7 +1274,7 @@ function renderPerformance() {
 		sub.textContent = mod.installed && version ? `${mod.description} · ${version}` : mod.description;
 		meta.append(name, sub);
 
-		row.append(icon, meta, rowBadge(mod.installed ? 'installed' : 'missing', mod.installed));
+		row.append(icon, meta, rowBadge(mod.installed ? 'installé' : 'manquant', mod.installed));
 		table.appendChild(row);
 	}
 }
@@ -1152,7 +1284,7 @@ function renderPerformanceState() {
 
 	if (settings.jvmPreset) {
 		selectOption($('#select-jvm'), settings.jvmPreset);
-		$('#jvm-current').textContent = `Current preset: ${settings.jvmPreset}. It applies on the next launch.`;
+		$('#jvm-current').textContent = `Preset actuel : ${settings.jvmPreset}. Il s'applique au prochain lancement.`;
 
 		// Highlight active preset card
 		$$('.preset-card').forEach((card) => {
@@ -1163,17 +1295,17 @@ function renderPerformanceState() {
 	const preset = settings.optionsPreset;
 	if (preset && preset !== 'vanilla') {
 		$('#options-current').textContent = preset === 'restore'
-			? 'The original options.txt is in place.'
-			: `Last applied preset: ${preset}.`;
+			? 'Le options.txt d\'origine est en place.'
+			: `Dernier preset appliqué : ${preset}.`;
 	} else {
-		$('#options-current').textContent = 'The original options.txt is in place.';
+		$('#options-current').textContent = 'Le options.txt d\'origine est en place.';
 	}
 }
 
 async function loadPerformance() {
 	const result = await api.performance.list();
 	if (!result.ok) {
-		toast(result.error || 'The optimisation pack could not be read.', 'error');
+		toast(result.error || "Le pack d'optimisation n'a pas pu être lu.", 'error');
 		return;
 	}
 
@@ -1189,7 +1321,7 @@ async function installPack() {
 	state.performance.installing = true;
 	const button = $('#btn-perf-install');
 	button.disabled = true;
-	$('#perf-path').textContent = 'Resolving the pack on Modrinth…';
+	$('#perf-path').textContent = 'Recherche du pack sur Modrinth…';
 
 	const result = await withBusy(
 		() => {
@@ -1201,7 +1333,7 @@ async function installPack() {
 
 	if (!result) return;
 	if (!result.mods) {
-		toast(result.error || 'The pack could not be installed.', 'error');
+		toast(result.error || "Le pack n'a pas pu être installé.", 'error');
 		return;
 	}
 
@@ -1212,9 +1344,9 @@ async function installPack() {
 
 	const failed = (result.report?.failed || []).length;
 	if (failed > 0) {
-		toast(`${failed} mod(s) could not be installed.`, 'error');
+		toast(`${failed} mod(s) n'ont pas pu être installés.`, 'error');
 	} else {
-		toast('The optimisation pack is installed. Restart the game.', 'success');
+		toast("Le pack d'optimisation est installé. Redémarre le jeu.", 'success');
 	}
 }
 
@@ -1223,7 +1355,7 @@ async function tuneOptions(preset) {
 
 	if (!result) return;
 	if (!result.ok) {
-		toast(result.error || 'The options could not be written.', 'error');
+		toast(result.error || "Les options n'ont pas pu être écrites.", 'error');
 		return;
 	}
 
@@ -1231,12 +1363,12 @@ async function tuneOptions(preset) {
 	renderPerformanceState();
 
 	if (preset === 'restore') {
-		toast('The original options are back.', 'success');
+		toast('Les options d\'origine sont revenues.', 'success');
 		return;
 	}
 
 	const changes = result.report?.changes?.length || 0;
-	toast(`${preset === 'max' ? 'Maximum FPS' : 'Balanced'}: ${changes} option(s) changed.`, 'success');
+	toast(`${preset === 'max' ? 'FPS maximum' : 'Équilibré'} : ${changes} option(s) modifiée(s).`, 'success');
 }
 
 async function applyJvm() {
@@ -1245,13 +1377,13 @@ async function applyJvm() {
 
 	if (!result) return;
 	if (!result.ok) {
-		toast(result.error || 'The JVM preset could not be saved.', 'error');
+		toast(result.error || "Le preset JVM n'a pas pu être enregistré.", 'error');
 		return;
 	}
 
 	state.performance.state = result.state || state.performance.state;
 	renderPerformanceState();
-	toast(`JVM preset set to ${preset}, it applies on the next launch.`, 'success');
+	toast(`Preset JVM réglé sur ${preset}, il s'applique au prochain lancement.`, 'success');
 }
 
 /* -------------------------------------------------------------------- logs */
@@ -1269,7 +1401,7 @@ async function loadLogs() {
 
 	// The core removes the oldest sessions, the interface says how many are kept.
 	$('#sessions-note').textContent = result.ok
-		? `The last ${result.keep} sessions are kept, older files are removed automatically.`
+		? `Les ${result.keep} dernières sessions sont conservées, les fichiers plus anciens sont supprimés automatiquement.`
 		: '';
 }
 
@@ -1277,11 +1409,11 @@ async function loadLogs() {
 function renderSessionsError(error) {
 	const table = $('#sessions-table');
 	table.innerHTML = '';
-	$('#sessions-count').textContent = 'unreadable';
+	$('#sessions-count').textContent = 'illisible';
 	table.appendChild(emptyState(
 		ICON_LOG,
-		'The sessions could not be read',
-		error || 'The core did not answer.'
+		'Les sessions n\'ont pas pu être lues',
+		error || "Le cœur n'a pas répondu."
 	));
 }
 
@@ -1290,14 +1422,14 @@ function renderSessions(sessions) {
 	table.innerHTML = '';
 
 	$('#sessions-count').textContent = sessions.length === 0
-		? 'no session'
+		? 'aucune session'
 		: sessions.length === 1 ? '1 session' : `${sessions.length} sessions`;
 
 	if (sessions.length === 0) {
 		table.appendChild(emptyState(
 			ICON_LOG,
-			'No session yet',
-			'Every launch writes the output of the game to aether/logs/session-<date>.log.'
+			'Aucune session',
+			'Chaque lancement écrit la sortie du jeu dans aether/logs/session-<date>.log.'
 		));
 		return;
 	}
@@ -1327,7 +1459,7 @@ function renderSessions(sessions) {
 
 		const view = document.createElement('button');
 		view.className = 'btn btn--ghost';
-		view.textContent = 'View';
+		view.textContent = 'Voir';
 		view.addEventListener('click', () => openSession(entry));
 
 		row.append(icon, meta, view);
@@ -1350,8 +1482,8 @@ async function openSession(entry) {
 	if (!result.ok) {
 		view.appendChild(emptyState(
 			ICON_LOG,
-			'The session could not be read',
-			result.error || 'The core did not answer.'
+			'La session n\'a pas pu être lue',
+			result.error || "Le cœur n'a pas répondu."
 		));
 		return;
 	}
@@ -1359,7 +1491,7 @@ async function openSession(entry) {
 	const tail = result.session;
 	const label = document.createElement('p');
 	label.className = 'log-path';
-	label.textContent = `${tail.total} lines · ${tail.path}`;
+	label.textContent = `${tail.total} lignes · ${tail.path}`;
 
 	const pre = document.createElement('pre');
 	pre.className = 'console console--tall';
@@ -1378,22 +1510,22 @@ function renderInstallLog(result) {
 	if (!result.ok) {
 		body.appendChild(emptyState(
 			ICON_LOG,
-			'The log could not be read',
-			result.error || 'The core did not answer.'
+			'Le journal n\'a pas pu être lu',
+			result.error || "Le cœur n'a pas répondu."
 		));
 		return;
 	}
 
 	const tail = result.install;
 	$('#install-log-path').textContent = tail.exists
-		? `${tail.total} lines · ${tail.path}`
+		? `${tail.total} lignes · ${tail.path}`
 		: tail.path;
 
 	if (!tail.exists || tail.lines.length === 0) {
 		body.appendChild(emptyState(
 			ICON_LOG,
-			'No installation logged yet',
-			'Every download writes a line here. Run “Install / repair” to fill it.'
+			'Aucune installation journalisée',
+			'Chaque téléchargement écrit une ligne ici. Lance « Installer / réparer » pour le remplir.'
 		));
 		return;
 	}
@@ -1410,7 +1542,7 @@ function renderInstallLog(result) {
 /** The element that had the focus when the dialog opened, the focus goes back to it. */
 let modalReturnFocus = null;
 
-function openModal(title, bodyHtml, onConfirm, confirmLabel = 'Confirm') {
+function openModal(title, bodyHtml, onConfirm, confirmLabel = 'Confirmer') {
 	modalReturnFocus = document.activeElement;
 	$('#modal-title').textContent = title;
 	$('#modal-body').innerHTML = bodyHtml;
@@ -1442,14 +1574,14 @@ function closeModal() {
 }
 
 function offlineAccountModal() {
-	openModal('Add an offline account', `
-		<p class="muted">An offline account only needs a name. The identifier is generated exactly
-		like Minecraft does it, so the player keeps the same identity on every offline server.</p>
+	openModal('Ajouter un compte hors ligne', `
+		<p class="muted">Un compte hors ligne n'a besoin que d'un pseudo. L'identifiant est généré exactement
+		comme Minecraft le fait, le joueur garde donc la même identité sur tous les serveurs hors ligne.</p>
 		<label class="field">
-			<span class="field-label">Player name</span>
+			<span class="field-label">Pseudo du joueur</span>
 			<input type="text" id="offline-name" class="input" maxlength="16" placeholder="Notch" />
 		</label>
-		<p class="muted" id="offline-preview">3 to 16 characters, only letters, digits and underscores.</p>
+		<p class="muted" id="offline-preview">De 3 à 16 caractères, lettres, chiffres et tirets bas uniquement.</p>
 	`, async () => {
 		const username = $('#offline-name').value.trim();
 		const result = await api.accounts.addOffline(username);
@@ -1460,8 +1592,8 @@ function offlineAccountModal() {
 		state.accounts = await api.accounts.get();
 		renderAccounts();
 		renderAccountTable();
-		toast(`Added ${result.account.username}`, 'success');
-	}, 'Create');
+		toast(`Compte ${result.account.username} ajouté.`, 'success');
+	}, 'Créer');
 
 	const input = $('#offline-name');
 	const preview = $('#offline-preview');
@@ -1474,12 +1606,12 @@ function offlineAccountModal() {
 
 	const describe = (value, valid) => {
 		if (!valid) {
-			preview.textContent = '3 to 16 characters, only letters, digits and underscores.';
+			preview.textContent = 'De 3 à 16 caractères, lettres, chiffres et tirets bas uniquement.';
 			preview.style.color = 'var(--text-muted)';
 			return;
 		}
 
-		preview.textContent = `Ready to play as ${value}.`;
+		preview.textContent = `Prêt à jouer en tant que ${value}.`;
 		preview.style.color = 'var(--color-success-text)';
 
 		const ticket = ++asked;
@@ -1487,9 +1619,9 @@ function offlineAccountModal() {
 			if (ticket !== asked || !status || !status.ok || !status.premium) return;
 
 			preview.textContent =
-				`${status.name} belongs to a Mojang account: cracked servers such as JartexNetwork ` +
-				`refuse that name ("Unauthorized: You cannot join the server"). Pick a name nobody ` +
-				`owns, for example ${value}9281.`;
+				`${status.name} appartient à un compte Mojang : les serveurs craqués comme JartexNetwork ` +
+				`refusent ce pseudo ("Unauthorized: You cannot join the server"). Choisis un pseudo que ` +
+				`personne ne possède, par exemple ${value}9281.`;
 			preview.style.color = 'var(--color-warning-text)';
 		});
 	};
@@ -1505,7 +1637,7 @@ function offlineAccountModal() {
 		}
 
 		// The name is valid immediately, the check itself waits for a pause.
-		preview.textContent = `Ready to play as ${value}.`;
+		preview.textContent = `Prêt à jouer en tant que ${value}.`;
 		preview.style.color = 'var(--color-success-text)';
 		waiting = setTimeout(() => describe(value, true), 450);
 	});
@@ -1515,28 +1647,28 @@ async function microsoftAccountModal() {
 	// The core prints the code first and finishes the sign in in the background.
 	const pending = api.accounts.microsoft.signIn();
 
-	openModal('Sign in with Microsoft', `
-		<p class="muted">Open the following page and enter the code to sign in with your
-		Minecraft account.</p>
+	openModal('Se connecter avec Microsoft', `
+		<p class="muted">Ouvre la page suivante et saisis le code pour te connecter avec ton
+		compte Minecraft.</p>
 		<div class="code-box">
-			<div class="code-label">Your code</div>
+			<div class="code-label">Ton code</div>
 			<div class="code-value" id="device-code">…</div>
 		</div>
 		<p class="muted" style="margin-top:10px"><a id="verify-link" target="_blank"
-			rel="noreferrer">Waiting for the code…</a></p>
+			rel="noreferrer">En attente du code…</a></p>
 	`, async () => {
-		setStatus('Signing in…', 'busy');
+		setStatus('Connexion…', 'busy');
 		const result = await pending;
-		setStatus('Ready');
+		setStatus('Prêt');
 		if (!result.ok) {
-			toast(result.error || 'The sign in failed.', 'error');
+			toast(result.error || 'La connexion a échoué.', 'error');
 			return;
 		}
 		state.accounts = await api.accounts.get();
 		renderAccounts();
 		renderAccountTable();
-		toast(`Signed in as ${result.account.username}`, 'success');
-	}, 'I have signed in');
+		toast(`Connecté en tant que ${result.account.username}.`, 'success');
+	}, 'Je me suis connecté');
 }
 
 /* ----------------------------------------------------------------- actions */
@@ -1555,10 +1687,10 @@ function releaseInstall(progress, frozen, card) {
 	state.installing = false;
 }
 
-async function install() {
+async function performInstall() {
 	if (state.installing) return;
 	state.installing = true;
-	setStatus('Installing…', 'busy');
+	setStatus('Installation…', 'busy');
 
 	// The profile is frozen while it downloads, the values of the request cannot change under it.
 	const progress = $('#install-progress');
@@ -1586,21 +1718,47 @@ async function install() {
 	if (!result) return;
 
 	if (result.cancelled) {
-		setStatus('Ready');
-		toast('The installation was cancelled.', 'success');
+		$('#install-wizard').hidden = true;
+		setStatus('Prêt');
+		toast("L'installation a été annulée.", 'success');
 		return;
 	}
 
 	if (!result.ok) {
-		setStatus('Error', 'error');
+		$('#install-wizard').hidden = true;
+		setStatus('Erreur', 'error');
 		toast(result.error, 'error');
 		loadLogs();
 		await showInstallReport(result.error);
 		return;
 	}
-	setStatus('Ready');
-	toast('The game is ready to play.', 'success');
+	setStatus('Prêt');
+	$('#install-wizard').hidden = true;
+	toast('Le jeu est prêt à être lancé.', 'success');
 	loadLogs();
+}
+
+/* Installation Studio: a focused, guided shell around the existing installer. */
+let installWizardStep = 1;
+function wizardSetStep(step) {
+	installWizardStep = step;
+	$$('.wizard-page').forEach((page) => { page.hidden = Number(page.dataset.wizardPage) !== step; });
+	$$('.install-step').forEach((item) => { const n = Number(item.dataset.step); item.classList.toggle('is-active', n === step); item.classList.toggle('is-done', n < step); });
+	$('#install-wizard-back').hidden = step === 1 || step === 3;
+	$('#install-wizard-next').hidden = step === 3;
+	$('#install-wizard-cancel').hidden = step !== 3;
+	$('#wizard-status').textContent = step === 3 ? 'DÉPLOIEMENT / EN DIRECT' : `ÉTAPE 0${step} / 02`;
+}
+function openInstallWizard() {
+	const version = $('#wizard-version'); const loader = $('#wizard-loader');
+	version.innerHTML = $('#select-version').innerHTML; loader.innerHTML = $('#select-loader').innerHTML;
+	version.value = $('#select-version').value; loader.value = $('#select-loader').value;
+	$('#install-wizard').hidden = false; wizardSetStep(1);
+}
+function closeInstallWizard() { if (!state.installing) $('#install-wizard').hidden = true; }
+async function wizardNext() {
+	if (installWizardStep === 1) { $('#select-version').value = $('#wizard-version').value; $('#select-loader').value = $('#wizard-loader').value; $('#wizard-review-version').textContent = $('#wizard-version').selectedOptions[0]?.textContent || $('#wizard-version').value; $('#wizard-review-loader').textContent = $('#wizard-loader').selectedOptions[0]?.textContent || $('#wizard-loader').value; wizardSetStep(2); return; }
+	if (installWizardStep === 2) { $('#install-wizard-next').hidden = true; wizardSetStep(3); await performInstall(); }
 }
 
 /**
@@ -1619,6 +1777,7 @@ async function showCrashReport({ title, problem, exitCode }) {
 		const read = await api.logs.read(session.name, 40);
 		if (read.ok) lines = read.session.lines;
 	}
+	lines = lines.map(redactSupportLine);
 
 	// The shell hands the code over as an unsigned value, so a killed game arrived as 4294967295
 	// while its own log said -1. `| 0` reads it back as the signed 32-bit code Windows reports.
@@ -1626,33 +1785,33 @@ async function showCrashReport({ title, problem, exitCode }) {
 
 	const settings = state.settings;
 	const text = [
-		'Aether Launcher — report',
+		'CUBE Launcher — rapport',
 		'',
-		`problem     ${problem}`,
-		code ? `exit code   ${code}` : null,
+		`problème    ${problem}`,
+		code ? `code sortie ${code}` : null,
 		`version     ${settings.gameVersion}`,
 		`loader      ${settings.loaderVersion}`,
-		`java        ${settings.javaPath || 'detected automatically'}`,
-		`session     ${session ? session.name : 'no session file'}`,
+		`java        ${settings.javaPath ? 'chemin personnalisé' : 'détecté automatiquement'}`,
+		`session     ${session ? session.name : 'aucun fichier de session'}`,
 		'',
-		'last lines',
-		...(lines.length ? lines : ['(the session log is empty)'])
+		'dernières lignes',
+		...(lines.length ? lines : ['(le journal de session est vide)'])
 	]
 		.filter((line) => line !== null)
 		.join('\n');
 
 	openModal(title, `
-		<p class="muted">The launcher wrote this report from the last session. Send it when you ask
-		for help.</p>
+		<p class="muted">Le launcher a rédigé ce rapport à partir de la dernière session. Envoie-le
+		quand tu demandes de l'aide.</p>
 		<pre class="console console--tall" id="crash-report"></pre>
-		<p><button class="btn btn--ghost" id="report-open-logs" type="button">Open the logs</button></p>
+		<p><button class="btn btn--ghost" id="report-open-logs" type="button">Ouvrir les journaux</button></p>
 	`, async () => {
 		const copied = await api.copy(text);
 		toast(
-			copied && copied.ok ? 'The report was copied.' : 'The report could not be copied.',
+			copied && copied.ok ? 'Le rapport a été copié.' : "Le rapport n'a pas pu être copié.",
 			copied && copied.ok ? 'success' : 'error'
 		);
-	}, 'Copy report');
+	}, 'Copier le rapport');
 
 	$('#crash-report').textContent = text;
 
@@ -1662,6 +1821,22 @@ async function showCrashReport({ title, problem, exitCode }) {
 		showPage('logs');
 		if (session) openSession(session);
 	});
+}
+
+/** Remove account identifiers, local paths and common credential formats from copyable reports. */
+function redactSupportLine(value) {
+	let line = String(value ?? '');
+	const privateValues = (state.accounts?.accounts || []).flatMap((account) => [account.username, account.uuid]);
+	for (const privateValue of privateValues) {
+		if (privateValue && privateValue.length >= 3) {
+			line = line.replace(new RegExp(privateValue.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), '[compte]');
+		}
+	}
+	return line
+		.replace(/(Bearer\s+)[A-Za-z0-9._~+/-]+=*/gi, '$1[masqué]')
+		.replace(/((?:access|refresh)[_-]?token["'=:\s]+)[^\s,;]+/gi, '$1[masqué]')
+		.replace(/[A-Z]:\\Users\\[^\\\s]+/gi, '[chemin utilisateur]')
+		.replace(/\/home\/[^/\s]+/g, '[chemin utilisateur]');
 }
 
 /**
@@ -1674,32 +1849,33 @@ async function showCrashReport({ title, problem, exitCode }) {
 async function showInstallReport(problem) {
 	const logs = await api.logs.tail(40);
 	const tail = logs.ok ? logs.install : null;
-	const lines = tail && tail.exists ? tail.lines : [];
+	const lines = (tail && tail.exists ? tail.lines : []).map(redactSupportLine);
 
 	const text = [
-		'Aether Launcher — installation report',
+		'CUBE Launcher — rapport d\'installation',
 		'',
-		`problem     ${problem}`,
+		`problème    ${redactSupportLine(problem)}`,
 		`version     ${$('#select-version').value}`,
 		`loader      ${$('#select-loader').value}`,
-		`log         ${tail ? tail.path : 'install.log'}`,
+		`journal     ${tail ? 'install.log' : 'indisponible'}`,
 		'',
-		'last lines',
-		...(lines.length ? lines : ['(the installation log is empty)'])
+		'dernières lignes',
+	...(lines.length ? lines : ['(le journal d\'installation est vide)'])
 	].join('\n');
 
-	openModal('The installation failed', `
-		<p class="muted">The launcher wrote this report from the installation log. Send it when you
-		ask for help. The files already downloaded are kept, the next installation resumes them.</p>
+	openModal("L'installation a échoué", `
+		<p class="muted">Le launcher a rédigé ce rapport à partir du journal d'installation. Envoie-le
+		quand tu demandes de l'aide. Les fichiers déjà téléchargés sont conservés, la prochaine
+		installation reprend là où elle s'est arrêtée.</p>
 		<pre class="console console--tall" id="install-report"></pre>
-		<p><button class="btn btn--ghost" id="report-open-logs" type="button">Open the logs</button></p>
+		<p><button class="btn btn--ghost" id="report-open-logs" type="button">Ouvrir les journaux</button></p>
 	`, async () => {
 		const copied = await api.copy(text);
 		toast(
-			copied && copied.ok ? 'The report was copied.' : 'The report could not be copied.',
+			copied && copied.ok ? 'Le rapport a été copié.' : "Le rapport n'a pas pu être copié.",
 			copied && copied.ok ? 'success' : 'error'
 		);
-	}, 'Copy report');
+	}, 'Copier le rapport');
 
 	$('#install-report').textContent = text;
 
@@ -1738,15 +1914,15 @@ async function offlineNameIsAccepted(server) {
 	// A lookup that failed is not a refusal: the game stays the judge, the launch goes on.
 	if (!status || !status.ok || !status.premium) return true;
 
-	openModal('This name belongs to a Mojang account', `
-		<p><strong>${status.name}</strong> is registered by a Mojang account. Cracked servers
-		protect those names: they refuse a cracked client that presents one, and the game only
-		shows <em>“Unauthorized: You cannot join the server”</em>.</p>
-		<p class="muted">Create an offline account with a name nobody owns — for example
-		<strong>${status.name}9281</strong> — then join ${server} again. Single player and the
-		servers you host accept any name.</p>
-		<p><button class="btn btn--ghost btn--small" id="premium-continue">Join anyway</button></p>
-	`, () => offlineAccountModal(), 'Choose another name');
+	openModal('Ce pseudo appartient à un compte Mojang', `
+		<p><strong>${status.name}</strong> est enregistré par un compte Mojang. Les serveurs craqués
+		protègent ces pseudos : ils refusent un client craqué qui en présente un, et le jeu affiche
+		seulement <em>« Unauthorized: You cannot join the server »</em>.</p>
+		<p class="muted">Crée un compte hors ligne avec un pseudo que personne ne possède — par
+		exemple <strong>${status.name}9281</strong> — puis rejoins ${server} à nouveau. Le solo et
+		les serveurs que tu héberges acceptent n'importe quel pseudo.</p>
+		<p><button class="btn btn--ghost btn--small" id="premium-continue">Rejoindre quand même</button></p>
+	`, () => offlineAccountModal(), 'Choisir un autre pseudo');
 
 	$('#premium-continue').onclick = () => {
 		closeModal();
@@ -1759,7 +1935,7 @@ async function offlineNameIsAccepted(server) {
 async function launch(server, skipNameCheck = false) {
 	if (state.launching) return;
 	if (!state.accounts.selected) {
-		toast('Add an account first.', 'error');
+		toast("Ajoute d'abord un compte.", 'error');
 		return;
 	}
 
@@ -1769,7 +1945,8 @@ async function launch(server, skipNameCheck = false) {
 	}
 
 	state.launching = true;
-	setStatus(server ? `Joining ${server}…` : 'Launching…', 'busy');
+	const startedAt = Date.now();
+	setStatus(server ? `Connexion à ${server}…` : 'Lancement…', 'busy');
 	$('#btn-launch').disabled = true;
 	$('#btn-stop').hidden = false;
 	clearSession();
@@ -1790,40 +1967,41 @@ async function launch(server, skipNameCheck = false) {
 
 	// The answer arrives when the game closes, not when it starts.
 	if (!result) return;
+	recordPlaytime(startedAt);
 
 	if (result.stopped) {
-		setStatus('Ready');
-		toast('The game was stopped.', 'success');
+		setStatus('Prêt');
+		toast('Le jeu a été arrêté.', 'success');
 		return;
 	}
 
 	if (!result.ok) {
-		setStatus('Error', 'error');
+		setStatus('Erreur', 'error');
 		toast(result.error, 'error');
 
 		// A core that died without an answer is a crash, a request it refused is not.
 		if (result.crashed) {
 			loadLogs();
-			await showCrashReport({ title: 'The launcher core stopped', problem: result.error });
+			await showCrashReport({ title: 'Le cœur du launcher s\'est arrêté', problem: result.error });
 		}
 		return;
 	}
 
-	setStatus('Ready');
+	setStatus('Prêt');
 	// Same signed reading as the report: the shell sends a killed game back as 4294967295.
 	const code = result.exitCode ? Number(result.exitCode) | 0 : 0;
 	if (code) {
-		toast(`The game stopped with the code ${code}.`, 'error');
+		toast(`Le jeu s'est arrêté avec le code ${code}.`, 'error');
 		loadLogs();
 		await showCrashReport({
-			title: 'The game stopped',
-			problem: `the game stopped with the code ${code}`,
+			title: 'Le jeu s\'est arrêté',
+			problem: `le jeu s'est arrêté avec le code ${code}`,
 			exitCode: code
 		});
 		return;
 	}
 
-	toast('The game closed.', 'success');
+	toast('Le jeu s\'est fermé.', 'success');
 }
 
 /** Asks the core to stop the installation that is running. */
@@ -1835,23 +2013,23 @@ async function cancelInstall() {
 	if (!result) return;
 	if (!result.ok) {
 		$('#btn-cancel-install').disabled = false;
-		toast(result.error || 'No installation is running.', 'error');
+		toast(result.error || "Aucune installation n'est en cours.", 'error');
 		return;
 	}
 
 	// The answer of the installation arrives on its own and clears the view.
-	if (state.installing) setStatus('Cancelling…', 'busy');
+	if (state.installing) setStatus('Annulation…', 'busy');
 }
 
 async function stopGame() {
 	const result = await withBusy(() => {}, () => api.stop());
 	if (!result) return;
 	if (!result.ok) {
-		toast(result.error || 'The game is not running.', 'error');
+		toast(result.error || "Le jeu n'est pas en cours d'exécution.", 'error');
 		return;
 	}
 
-	setStatus('Stopping…', 'busy');
+	setStatus('Arrêt…', 'busy');
 }
 
 /* -------------------------------------------------------------------- init */
@@ -1879,35 +2057,52 @@ function bindSettings() {
 	});
 
 	maxMemory.addEventListener('input', () => {
-		$('#output-max-memory').textContent = `${maxMemory.value} MB`;
+		$('#output-max-memory').textContent = formatMemory(maxMemory.value);
 	});
 	minMemory.addEventListener('input', () => {
-		$('#output-min-memory').textContent = `${minMemory.value} MB`;
+		$('#output-min-memory').textContent = formatMemory(minMemory.value);
 	});
-	// The settings page edits the default profile, the play page has to show the new values.
-	maxMemory.addEventListener('change', async () => {
-		const result = await api.settings.update({ maxMemory: Number(maxMemory.value) });
-		if (result.ok) {
-			state.settings = { ...state.settings, ...(result.settings || {}), maxMemory: Number(maxMemory.value) };
-			applyAppearance(state.settings);
-		} else {
-			toast(result.error || 'Maximum memory could not be saved.', 'error');
-		}
-		await loadProfiles();
+	// The memory controls write the active profile, like the resolution controls below.
+	maxMemory.addEventListener('change', () => {
+		updateProfile({ memory: Number(maxMemory.value) });
 	});
-	minMemory.addEventListener('change', async () => {
-		const result = await api.settings.update({ minMemory: Number(minMemory.value) });
-		if (result.ok) {
-			state.settings = { ...state.settings, ...(result.settings || {}), minMemory: Number(minMemory.value) };
-			applyAppearance(state.settings);
-		} else {
-			toast(result.error || 'Initial memory could not be saved.', 'error');
-		}
-		await loadProfiles();
+	minMemory.addEventListener('change', () => {
+		updateProfile({ minMemory: Number(minMemory.value) });
 	});
 
+	// The Performance page writes the same active profile, from its own slider.
+	const performanceMemory = $('#range-perf-memory');
+	if (performanceMemory) {
+		performanceMemory.addEventListener('input', () => {
+			$('#output-perf-memory').textContent = formatMemory(performanceMemory.value);
+		});
+		performanceMemory.addEventListener('change', () => {
+			updateProfile({ memory: Number(performanceMemory.value) });
+		});
+	}
+
+	// The settings page resolution controls write the active profile, like the Home controls.
+	const settingsWidth = $('#range-width-settings');
+	const settingsHeight = $('#range-height-settings');
+	if (settingsWidth) {
+		settingsWidth.addEventListener('input', () => {
+			$('#output-width-settings').textContent = settingsWidth.value;
+		});
+		settingsWidth.addEventListener('change', () => {
+			updateProfile({ width: Number(settingsWidth.value) });
+		});
+	}
+	if (settingsHeight) {
+		settingsHeight.addEventListener('input', () => {
+			$('#output-height-settings').textContent = settingsHeight.value;
+		});
+		settingsHeight.addEventListener('change', () => {
+			updateProfile({ height: Number(settingsHeight.value) });
+		});
+	}
+
 	$('#range-memory').addEventListener('input', (event) => {
-		$('#output-memory').textContent = `${event.target.value} MB`;
+		$('#output-memory').textContent = formatMemory(event.target.value);
 	});
 	$('#range-memory').addEventListener('change', (event) => {
 		updateProfile({ memory: Number(event.target.value) });
@@ -1956,14 +2151,14 @@ function bindSettings() {
 	});
 	$('#appearance-reset').addEventListener('click', () => {
 		openModal(
-			'Reset workspace design?',
-			'<p>The colourway, personal signal, surface, spacing and navigation will return to their defaults.</p>',
+			'Réinitialiser le design de l\'espace ?',
+			'<p>La matière, le signal personnel, la surface, l\'espacement et la navigation reviendront à leurs valeurs par défaut.</p>',
 			async () => {
 				if (await saveAppearance({ ...APPEARANCE_DEFAULTS })) {
-					toast('Workspace design restored.', 'success');
+					toast('Design de l\'espace restauré.', 'success');
 				}
 			},
-			'Reset'
+			'Réinitialiser'
 		);
 	});
 
@@ -1976,15 +2171,27 @@ function applySettings(settings) {
 	state.settings = settings;
 
 	$('#range-memory').value = settings.maxMemory;
-	$('#output-memory').textContent = `${settings.maxMemory} MB`;
+	$('#output-memory').textContent = formatMemory(settings.maxMemory);
 	$('#range-max-memory').value = settings.maxMemory;
-	$('#output-max-memory').textContent = `${settings.maxMemory} MB`;
+	$('#output-max-memory').textContent = formatMemory(settings.maxMemory);
 	$('#range-min-memory').value = settings.minMemory;
-	$('#output-min-memory').textContent = `${settings.minMemory} MB`;
+	$('#output-min-memory').textContent = formatMemory(settings.minMemory);
 	$('#range-width').value = settings.windowWidth;
 	$('#output-width').textContent = settings.windowWidth;
 	$('#range-height').value = settings.windowHeight;
 	$('#output-height').textContent = settings.windowHeight;
+	$('#range-perf-memory').value = settings.maxMemory;
+	$('#output-perf-memory').textContent = formatMemory(settings.maxMemory);
+	const settingsWidth = $('#range-width-settings');
+	const settingsHeight = $('#range-height-settings');
+	if (settingsWidth) {
+		settingsWidth.value = settings.windowWidth;
+		$('#output-width-settings').textContent = settings.windowWidth;
+	}
+	if (settingsHeight) {
+		settingsHeight.value = settings.windowHeight;
+		$('#output-height-settings').textContent = settings.windowHeight;
+	}
 	$('#input-java').value = settings.javaPath || '';
 	$('#input-accent').value = settings.accentColor;
 	$('#output-accent').textContent = settings.accentColor.toUpperCase();
@@ -2140,7 +2347,7 @@ function saveAppearance(patch) {
 			if (!result || !result.ok) {
 				state.settings = previous;
 				applyAppearance(previous);
-				toast(result?.error || 'The appearance could not be saved.', 'error');
+				toast(result?.error || "L'apparence n'a pas pu être enregistrée.", 'error');
 				return false;
 			}
 			state.settings = { ...optimistic, ...(result.settings || {}) };
@@ -2149,7 +2356,7 @@ function saveAppearance(patch) {
 		} catch (error) {
 			state.settings = previous;
 			applyAppearance(previous);
-			toast(`The appearance could not be saved: ${error.message}`, 'error');
+			toast(`L'apparence n'a pas pu être enregistrée : ${error.message}`, 'error');
 			return false;
 		}
 	};
@@ -2186,74 +2393,10 @@ async function loadLoaders(gameVersion) {
 	renderLoaders();
 }
 
-/** Creates a profile from the one the selected account plays with right now. */
-function newProfileModal() {
-	openModal('New profile', `
-		<p class="muted">The new profile copies the one this account plays with right now: version,
-		loader, memory and window size.</p>
-		<label class="field">
-			<span class="field-label">Profile name</span>
-			<input type="text" id="profile-name" class="input" maxlength="32" placeholder="Cinematic" />
-		</label>
-	`, async () => {
-		const name = $('#profile-name').value.trim();
-		if (!name) {
-			toast('Name the profile first.', 'error');
-			return;
-		}
-
-		const source = state.profiles.activeFor;
-		const result = await api.profiles.add(name, {
-			version: source.gameVersion,
-			loader: source.loaderVersion,
-			memory: source.maxMemory,
-			minMemory: source.minMemory,
-			width: source.windowWidth,
-			height: source.windowHeight
-		});
-
-		if (!result.ok) {
-			toast(result.error, 'error');
-			return;
-		}
-
-		await loadProfiles();
-		toast(`Profile ${name} created.`, 'success');
-	}, 'Create');
-}
-
-/** Deletes the profile shown in the selector, once the player confirmed it. */
-function deleteProfile() {
-	const name = $('#select-profile').value;
-	if (!name) return;
-
-	openModal('Delete profile', `
-		<p class="muted">Delete the profile <strong id="profile-to-delete"></strong>? The version, the
-		loader, the memory and the window size of that profile are lost. An account that plays with
-		it falls back to the active profile.</p>
-	`, async () => {
-		const result = await api.profiles.remove(name);
-
-		if (!result.ok) {
-			toast(result.error, 'error');
-			return;
-		}
-
-		// The accounts that had chosen it fell back to the active profile.
-		state.accounts = await api.accounts.get();
-		renderAccounts();
-		renderAccountTable();
-		await loadProfiles();
-		toast(`Profile ${name} removed.`, 'success');
-	}, 'Delete');
-
-	$('#profile-to-delete').textContent = name;
-}
-
 /** The profile the selected account plays with: the values the play controls show. */
 function currentProfile() {
-	return state.profiles.activeFor || {
-		name: 'Default',
+	return {
+		name: 'Minecraft',
 		gameVersion: state.settings.gameVersion,
 		loaderVersion: state.settings.loaderVersion,
 		maxMemory: state.settings.maxMemory,
@@ -2261,6 +2404,23 @@ function currentProfile() {
 		windowWidth: state.settings.windowWidth,
 		windowHeight: state.settings.windowHeight
 	};
+}
+
+/** Writes the runtime facts of the profile the selected account plays with. */
+function renderSystemInfo() {
+	const info = state.info;
+	if (!info) return;
+
+	const profile = currentProfile();
+	const threads = navigator.hardwareConcurrency;
+	$('#system-info').textContent = [
+		`Launcher    CUBE ${info.version}`,
+		`Plateforme  ${navigator.platform || navigator.userAgentData?.platform || 'inconnue'}${threads ? ` · ${threads} threads CPU` : ''}`,
+		`Java        ${info.settings.javaPath || 'détecté automatiquement'}`,
+		`Mémoire     ${profile.maxMemory} MB (initial ${profile.minMemory} MB)`,
+		`Fenêtre     ${profile.windowWidth} × ${profile.windowHeight}`,
+		`Données     ${info.paths.game}`
+	].join('\n');
 }
 
 /** Selects a value, adding the option when the list does not offer it yet. */
@@ -2280,7 +2440,7 @@ function renderDock() {
 	}
 
 	const name = $('#dock-account-name');
-	if (name) name.textContent = account ? account.username : 'No account';
+	if (name) name.textContent = account ? account.username : 'Aucun compte';
 
 	const version = $('#dock-version');
 	if (version) {
@@ -2290,7 +2450,23 @@ function renderDock() {
 	}
 
 	const memory = $('#dock-memory');
-	if (memory) memory.textContent = `${profile.maxMemory} MB`;
+	if (memory) memory.textContent = formatMemory(profile.maxMemory);
+
+	const playAccount = $('#play-account-label');
+	if (playAccount) {
+		playAccount.textContent = account
+			? `CONNECTÉ EN TANT QUE ${account.username.toUpperCase()}`
+			: 'AUCUN COMPTE SÉLECTIONNÉ';
+	}
+
+	const profileName = $('#home-profile-name');
+	if (profileName) profileName.textContent = profile.name || 'Default';
+	const profileVersion = $('#home-profile-version');
+	if (profileVersion) profileVersion.textContent = profile.gameVersion || '—';
+	const profileLoader = $('#home-profile-loader');
+	if (profileLoader) profileLoader.textContent = profile.loaderVersion ? `Fabric ${profile.loaderVersion}` : 'Vanilla';
+	const profileMemory = $('#home-profile-memory');
+	if (profileMemory) profileMemory.textContent = formatMemory(profile.maxMemory);
 }
 
 function selectOption(select, value) {
@@ -2309,54 +2485,62 @@ function selectOption(select, value) {
 /** Shows the values of a profile in the play controls. */
 function applyProfile(profile) {
 	$('#range-memory').value = profile.maxMemory;
-	$('#output-memory').textContent = `${profile.maxMemory} MB`;
+	$('#output-memory').textContent = formatMemory(profile.maxMemory);
 	$('#range-width').value = profile.windowWidth;
 	$('#output-width').textContent = profile.windowWidth;
 	$('#range-height').value = profile.windowHeight;
 	$('#output-height').textContent = profile.windowHeight;
+
+	// The Settings and Performance sliders read the same allocation as the Home control.
+	const maxMemory = $('#range-max-memory');
+	if (maxMemory) {
+		maxMemory.value = profile.maxMemory;
+		$('#output-max-memory').textContent = formatMemory(profile.maxMemory);
+	}
+	const minMemory = $('#range-min-memory');
+	if (minMemory) {
+		minMemory.value = profile.minMemory;
+		$('#output-min-memory').textContent = formatMemory(profile.minMemory);
+	}
+	const performanceMemory = $('#range-perf-memory');
+	if (performanceMemory) {
+		performanceMemory.value = profile.maxMemory;
+		$('#output-perf-memory').textContent = formatMemory(profile.maxMemory);
+	}
+
+	// The Settings page shows the same profile values, from its own controls.
+	const settingsWidth = $('#range-width-settings');
+	const settingsHeight = $('#range-height-settings');
+	if (settingsWidth) {
+		settingsWidth.value = profile.windowWidth;
+		$('#output-width-settings').textContent = profile.windowWidth;
+	}
+	if (settingsHeight) {
+		settingsHeight.value = profile.windowHeight;
+		$('#output-height-settings').textContent = profile.windowHeight;
+	}
 
 	selectOption($('#select-version'), profile.gameVersion);
 	selectOption($('#select-loader'), profile.loaderVersion);
 
 	paintRanges();
 	renderDock();
+	renderSystemInfo();
 }
 
-/**
- * Writes the play controls into the profile of the account, never into the flat settings: two
- * accounts with two profiles must be able to play two different configurations.
- */
+/** Writes game controls into the launcher-wide settings shared by every account. */
 async function updateProfile(patch) {
-	const result = await api.profiles.update(currentProfile().name, patch);
-
-	if (!result.ok) {
-		toast(result.error, 'error');
-		await loadProfiles();
-		return;
-	}
-
-	await loadProfiles();
-}
-
-/** The named profiles and the one that applies to the selected account. */
-async function loadProfiles() {
-	const result = await api.profiles.list();
-	if (!result.ok) return;
-
-	state.profiles = result;
-
-	const select = $('#select-profile');
-	select.innerHTML = '';
-
-	for (const profile of result.profiles) {
-		const option = document.createElement('option');
-		option.value = profile.name;
-		option.textContent = `${profile.name} · ${profile.gameVersion} · ${profile.maxMemory} MB`;
-		option.selected = result.activeFor.name === profile.name;
-		select.appendChild(option);
-	}
-
-	applyProfile(result.activeFor);
+	const settingsPatch = {};
+	if (patch.version !== undefined) settingsPatch.gameVersion = patch.version;
+	if (patch.loader !== undefined) settingsPatch.loaderVersion = patch.loader;
+	if (patch.memory !== undefined) settingsPatch.maxMemory = patch.memory;
+	if (patch.minMemory !== undefined) settingsPatch.minMemory = patch.minMemory;
+	if (patch.width !== undefined) settingsPatch.windowWidth = patch.width;
+	if (patch.height !== undefined) settingsPatch.windowHeight = patch.height;
+	const result = await api.settings.update(settingsPatch);
+	if (!result?.ok) return toast(result?.error || 'Réglage non enregistré.', 'error');
+	state.settings = { ...state.settings, ...(result.settings || settingsPatch) };
+	applyProfile(state.settings);
 }
 
 /**
@@ -2365,31 +2549,12 @@ async function loadProfiles() {
  * The reports use it to bring the player to the logs instead of only telling them where the
  * files are.
  */
-function setGateMenuOpen(open, restoreFocus = false) {
-	const menu = $('#gate-menu');
-	const backdrop = $('#gate-menu-backdrop');
-	const trigger = $('#btn-gate-menu');
-	if (!menu || !backdrop || !trigger) return;
-
-	menu.hidden = !open;
-	backdrop.hidden = !open;
-	trigger.setAttribute('aria-expanded', String(open));
-	if (open) {
-		menu.querySelector('.nav-item')?.focus();
-	} else if (restoreFocus) {
-		trigger.focus({ preventScroll: true });
-	}
-}
-
-function closeGateMenu() {
-	setGateMenuOpen(false);
-}
-
 function showPage(name) {
 	const target = $(`.page[data-page="${name}"]`);
 	if (!target) return;
 
 	state.page = name;
+	document.body.dataset.page = name;
 	$$('.nav-item').forEach((other) => {
 		const match = other.dataset.page === name;
 		other.classList.toggle('is-active', match);
@@ -2400,8 +2565,8 @@ function showPage(name) {
 	$$('.page').forEach((page) => page.classList.remove('is-active'));
 	target.classList.add('is-active');
 
-	// Destinations live in a compact overlay, never in a permanent sidebar.
-	closeGateMenu();
+	// The indicator slides to the destination once the new page has its box.
+	requestAnimationFrame(positionDockIndicator);
 
 	// A page opens at its top, a scroll of the previous one is not kept.
 	$('.content').scrollTop = 0;
@@ -2415,85 +2580,58 @@ function showPage(name) {
 	}
 	if (name === 'performance') {
 		loadPerformance();
-		setTimeout(initFpsSplineGraph, 50);
 	}
 }
 
-
-let voxelBackdropFrame = 0;
-function initVoxelBackdrop() {
-	const canvas = $('#voxel-backdrop');
-	if (!canvas || canvas.dataset.initialized) return;
-	canvas.dataset.initialized = 'true';
-	const ctx = canvas.getContext('2d');
-	if (!ctx) return;
-	let width = 0, height = 0, ratio = 1, last = 0;
-	const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
-	const stars = Array.from({ length: 86 }, (_, i) => ({ x: ((i * 73.73) % 997) / 997, y: ((i * 41.19 + 11) % 613) / 613, s: i % 9 === 0 ? 1.8 : .8, p: i * .71 }));
-	function resize() {
-		ratio = Math.min(window.devicePixelRatio || 1, 1.6);
-		width = window.innerWidth; height = Math.max(1, window.innerHeight - 34);
-		canvas.width = Math.round(width * ratio); canvas.height = Math.round(height * ratio);
-		ctx.setTransform(ratio, 0, 0, ratio, 0, 0); draw(performance.now());
-	}
-	function ridge(base, amp, step, seed, color) {
-		ctx.beginPath(); ctx.moveTo(0, height);
-		for (let x = 0; x <= width + step; x += step) {
-			const wave = Math.abs(Math.sin((x + seed) * .009) * .55 + Math.cos((x + seed) * .021) * .35);
-			const y = base - 9 - wave * amp;
-			ctx.lineTo(x, y); ctx.lineTo(x + step * .5, y); ctx.lineTo(x + step * .5, y + step * .55);
-		}
-		ctx.lineTo(width, height); ctx.closePath(); ctx.fillStyle = color; ctx.fill();
-	}
-	function draw(time) {
-		ctx.clearRect(0, 0, width, height);
-		const sky = ctx.createLinearGradient(0, 0, 0, height);
-		sky.addColorStop(0, '#050a15'); sky.addColorStop(.55, '#0a1422'); sky.addColorStop(1, '#101c27');
-		ctx.fillStyle = sky; ctx.fillRect(0, 0, width, height);
-		const glow = ctx.createRadialGradient(width*.62,height*.39,8,width*.62,height*.39,width*.57);
-		glow.addColorStop(0,'rgba(72,181,137,.18)'); glow.addColorStop(.55,'rgba(50,104,125,.08)'); glow.addColorStop(1,'rgba(5,10,21,0)');
-		ctx.fillStyle=glow; ctx.fillRect(0,0,width,height);
-		for (const star of stars) { ctx.globalAlpha = reduced ? .62 : .36 + (Math.sin(time*.0007+star.p)+1)*.24; ctx.fillStyle='#d7f4e5'; ctx.fillRect(star.x*width,star.y*height*.72,star.s,star.s); }
-		ctx.globalAlpha=1;
-		const mx=width*.79,my=height*.2,mr=Math.max(18,Math.min(width,height)*.038);
-		const halo=ctx.createRadialGradient(mx,my,mr*.3,mx,my,mr*3.2); halo.addColorStop(0,'rgba(218,242,226,.16)'); halo.addColorStop(1,'rgba(218,242,226,0)');
-		ctx.fillStyle=halo; ctx.beginPath(); ctx.arc(mx,my,mr*3.2,0,Math.PI*2); ctx.fill();
-		ctx.fillStyle='#dcebe1'; ctx.beginPath(); ctx.arc(mx,my,mr,0,Math.PI*2); ctx.fill();
-		const drift=reduced?0:Math.sin(time*.00013)*22;
-		const aurora=ctx.createLinearGradient(0,height*.12,width,height*.62);
-		aurora.addColorStop(0,'rgba(73,180,159,0)'); aurora.addColorStop(.35,'rgba(91,255,177,.66)'); aurora.addColorStop(.68,'rgba(80,177,203,.54)'); aurora.addColorStop(1,'rgba(100,117,206,0)');
-		ctx.save(); ctx.globalCompositeOperation='screen'; ctx.globalAlpha=.17; ctx.lineWidth=Math.max(22,height*.075); ctx.lineCap='round'; ctx.strokeStyle=aurora; ctx.shadowBlur=36; ctx.shadowColor='rgba(94,243,177,.35)';
-		ctx.beginPath(); ctx.moveTo(width*.04,height*.28+drift*.25); ctx.bezierCurveTo(width*.28,height*.02-drift,width*.55,height*.55+drift,width*.95,height*.17-drift*.3); ctx.stroke();
-		ctx.globalAlpha=.1; ctx.lineWidth=Math.max(12,height*.038); ctx.beginPath(); ctx.moveTo(width*.1,height*.48-drift*.2); ctx.bezierCurveTo(width*.37,height*.13+drift,width*.63,height*.58-drift,width*.98,height*.34); ctx.stroke(); ctx.restore();
-		ridge(height*.76,height*.23,22,18,'#101d2a'); ridge(height*.84,height*.17,16,82,'#0b1722');
-		const u=Math.max(3,Math.min(width,height)*.012), cx=width*.7, ground=height*.79;
-		ctx.fillStyle='#0a121d'; ctx.fillRect(cx-u*8,ground-u*6,u*25,u*6); ctx.fillRect(cx-u*5,ground-u*12,u*7,u*12); ctx.fillRect(cx+u*10,ground-u*15,u*7,u*15); ctx.fillRect(cx+u*2,ground-u*10,u*8,u*10);
-		ctx.fillRect(cx-u*7,ground-u*14,u*3,u*2); ctx.fillRect(cx+u*11,ground-u*17,u*5,u*2);
-		ctx.fillStyle='rgba(169,245,182,.68)'; for(const [x,y] of [[-3,-9],[-3,-5],[12,-12],[12,-8],[4,-7],[8,-7]]) ctx.fillRect(cx+u*x,ground+u*y,u*.8,u*1.2);
-		const fog=ctx.createLinearGradient(0,height*.68,0,height); fog.addColorStop(0,'rgba(8,16,26,0)'); fog.addColorStop(1,'rgba(5,10,17,.92)'); ctx.fillStyle=fog; ctx.fillRect(0,height*.65,width,height*.35);
-	}
-	function animate(time) { if (document.hidden) { voxelBackdropFrame=0; return; } if(time-last>40){draw(time);last=time;} voxelBackdropFrame=requestAnimationFrame(animate); }
-	function visibility() { if(document.hidden){cancelAnimationFrame(voxelBackdropFrame);voxelBackdropFrame=0;} else if(!reduced&&!voxelBackdropFrame) voxelBackdropFrame=requestAnimationFrame(animate); }
-	window.addEventListener('resize',resize,{passive:true}); document.addEventListener('visibilitychange',visibility); resize();
-	if(!reduced) voxelBackdropFrame=requestAnimationFrame(animate);
-}
 
 async function init() {
-	initVoxelBackdrop();
 	// Window controls.
 	$$('[data-window]').forEach((button) => {
 		button.addEventListener('click', () => api.window(button.dataset.window));
 	});
 
-	// The Gate navigation is intentionally hidden until requested.
-	$('#btn-gate-menu').addEventListener('click', () => {
-		setGateMenuOpen($('#gate-menu').hidden, true);
-	});
-	$('#btn-gate-menu-close').addEventListener('click', () => setGateMenuOpen(false, true));
-	$('#gate-menu-backdrop').addEventListener('click', closeGateMenu);
+	// Cosmetic preferences live in the interface, not in the core settings.
+	loadPreferences();
+
+	// The rail and the inline "manage" links share the same navigation contract.
 	$$('.nav-item').forEach((item) => {
 		item.addEventListener('click', () => showPage(item.dataset.page));
 	});
+
+	// The hue repaints the whole launcher, the two switches are local preferences.
+	const hue = $('#range-hue');
+	if (hue) {
+		hue.addEventListener('input', () => {
+			applyHue(hue.value);
+			writeLocal(HUE_KEY, Math.round(Number(hue.value)));
+		});
+	}
+
+	const animatedBackground = $('#toggle-animated-bg');
+	if (animatedBackground) {
+		animatedBackground.addEventListener('click', () => {
+			const next = animatedBackground.getAttribute('aria-checked') !== 'true';
+			applyMotion(next);
+			writeLocal(MOTION_KEY, next ? 'on' : 'off');
+		});
+	}
+
+	const autoUpdates = $('#toggle-auto-updates');
+	if (autoUpdates) {
+		autoUpdates.addEventListener('click', () => {
+			const next = autoUpdates.getAttribute('aria-checked') !== 'true';
+			applyAutoUpdates(next);
+			writeLocal(UPDATES_KEY, next ? 'on' : 'off');
+		});
+	}
+
+	// "Lire la suite" opens the matching story from the news feed.
+	$$('[data-news]').forEach((button) => {
+		button.addEventListener('click', () => openNews(button.dataset.news));
+	});
+
+	// The active instance card tilts under the pointer, unless motion is disabled.
+	bindTilt($('#instance-hero'));
 
 	$('#modal-cancel').addEventListener('click', closeModal);
 	$('#modal').addEventListener('click', (event) => {
@@ -2502,12 +2640,7 @@ async function init() {
 
 	// Escape closes the dialog, Tab stays inside it while it is open.
 	document.addEventListener('keydown', (event) => {
-		if ($('#modal').hidden) {
-			if (event.key === 'Escape' && !$('#gate-menu').hidden) {
-				setGateMenuOpen(false, true);
-			}
-			return;
-		}
+		if ($('#modal').hidden) return;
 
 		if (event.key === 'Escape') {
 			event.preventDefault();
@@ -2537,22 +2670,25 @@ async function init() {
 	$('#btn-add-offline').addEventListener('click', offlineAccountModal);
 	$('#play-add-offline').addEventListener('click', offlineAccountModal);
 	$('#btn-add-microsoft').addEventListener('click', microsoftAccountModal);
-	$('#btn-install').addEventListener('click', install);
+	$('#btn-install').addEventListener('click', openInstallWizard);
+	$('#install-wizard-next').addEventListener('click', wizardNext);
+	$('#install-wizard-back').addEventListener('click', () => wizardSetStep(Math.max(1, installWizardStep - 1)));
+	$('#install-wizard-close').addEventListener('click', closeInstallWizard);
+	$('#install-wizard-cancel').addEventListener('click', cancelInstall);
 	$('#btn-cancel-install').addEventListener('click', cancelInstall);
 	$('#btn-launch').addEventListener('click', () => launch());
 	$('#btn-stop').addEventListener('click', stopGame);
 	$('#btn-refresh-versions').addEventListener('click', loadVersions);
 	$('#btn-mods-refresh').addEventListener('click', loadMods);
 	$('#btn-mods-folder').addEventListener('click', openModsFolder);
+	$('#btn-mods-search').addEventListener('click', searchMods);
+	$('#mods-search-query').addEventListener('keydown', (event) => { if (event.key === 'Enter') searchMods(); });
 	$('#btn-logs-refresh').addEventListener('click', loadLogs);
 
 	// The servers and the performance pages.
 	$('#btn-server-add').addEventListener('click', addServer);
 	$('#btn-server-probe').addEventListener('click', () => testAddress());
-	$('#btn-servers-refresh').addEventListener('click', () => {
-		loadServers();
-		loadHosts();
-	});
+	$('#btn-servers-refresh')?.addEventListener('click', loadServers);
 	$('#btn-host-create').addEventListener('click', createHost);
 	$('#btn-perf-refresh').addEventListener('click', loadPerformance);
 	$('#btn-perf-install').addEventListener('click', installPack);
@@ -2580,28 +2716,6 @@ async function init() {
 	});
 
 	// A profile belongs to an account: changing it here changes it for the selected one.
-	$('#select-profile').addEventListener('change', async (event) => {
-		const account = state.accounts.selected;
-		if (!account) {
-			toast('Add an account first.', 'error');
-			loadProfiles();
-			return;
-		}
-
-		const result = await api.profiles.assign(account, event.target.value);
-		if (!result.ok) {
-			toast(result.error, 'error');
-			loadProfiles();
-			return;
-		}
-
-		await loadProfiles();
-		toast(`This account now plays with ${event.target.value}.`, 'success');
-	});
-
-	$('#btn-profile-new').addEventListener('click', newProfileModal);
-	$('#btn-profile-delete').addEventListener('click', deleteProfile);
-
 	bindSettings();
 
 	// Interactive preset cards on Performance page
@@ -2617,6 +2731,7 @@ async function init() {
 	// Debounced window resize handler
 	let resizeDebounce = null;
 	window.addEventListener('resize', () => {
+		positionDockIndicator();
 		clearTimeout(resizeDebounce);
 		resizeDebounce = setTimeout(() => {
 			const activePage = state.page;
@@ -2624,11 +2739,14 @@ async function init() {
 		}, 150);
 	});
 
+	// The bundled display face changes the box of the dock once it arrives.
+	document.fonts?.ready.then(positionDockIndicator).catch(() => {});
+
 	// The game output.
 	api.onGameOutput((line) => {
 		log(line);
 		// The first line of the game means that Java started, the launch only answers at its end.
-		if (state.launching) setStatus('Playing', 'busy');
+		if (state.launching) setStatus('En jeu', 'busy');
 	});
 	api.onInstallProgress((progress) => {
 		// A progress line can arrive after the failure that ended the installation: it must not
@@ -2640,6 +2758,10 @@ async function init() {
 			: 0;
 		$('#progress-label').textContent = `${progress.task} (${percent}%)`;
 		$('#progress-fill').style.width = `${percent}%`;
+		$('#wizard-task').textContent = progress.task;
+		$('#wizard-percent').textContent = `${percent}%`;
+		$('#wizard-progress-fill').style.width = `${percent}%`;
+		$('#wizard-progress-detail').textContent = percent >= 100 ? 'Étape terminée' : 'Téléchargement et vérification des ressources';
 	});
 	api.onOptimisationProgress((progress) => {
 		if (!state.performance.installing) return;
@@ -2666,25 +2788,35 @@ async function init() {
 		// of a stack trace from the panel that reads it.
 		$('#paths-output').textContent = info.error;
 		toast(info.error, 'error');
-		setStatus('Error', 'error');
+		setStatus('Erreur', 'error');
 		return;
 	}
 
+	state.info = info;
 	applySettings(info.settings);
+	renderSystemInfo();
 	$('#paths-output').textContent = [
-		`game   ${info.paths.game}`,
+		`jeu    ${info.paths.game}`,
 		`mods   ${info.paths.mods}`,
 		`assets ${info.paths.assets}`,
-		`data   ${info.paths.data}`
+		`données ${info.paths.data}`
 	].join('\n');
+
+	// Real values only: the launcher build, the Java runtime it will use, the allocation and the
+	// thread count the WebView reports. applyProfile refreshes them once the active profile is known.
+	positionDockIndicator();
 
 	state.accounts = await api.accounts.get();
 	renderAccounts();
 	renderAccountTable();
 
 	await loadVersions();
+	const hostVersion = $('#host-version');
+	if (hostVersion) { hostVersion.innerHTML = $('#select-version').innerHTML; hostVersion.value = state.settings.gameVersion; }
+	const modVersion = $('#mods-search-version');
+	if (modVersion) modVersion.textContent = `Fabric · Minecraft ${state.settings.gameVersion}`;
 	await loadLoaders(state.settings.gameVersion);
-	await loadProfiles();
+	applyProfile(state.settings);
 	await loadMods();
 	await loadLogs();
 	await loadServers();
@@ -2704,6 +2836,6 @@ async function loadVersions() {
 }
 
 init().catch((error) => {
-	toast(`The launcher could not start: ${error.message}`, 'error');
-	setStatus('Error', 'error');
+	toast(`Le launcher n'a pas pu démarrer : ${error.message}`, 'error');
+	setStatus('Erreur', 'error');
 });

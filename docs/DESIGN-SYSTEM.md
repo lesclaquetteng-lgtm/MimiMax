@@ -48,8 +48,8 @@ active Java palette is cached by `RenderUtil`, keeping theme resolution out of t
 ## Verification
 
 ```sh
-node tools/check-theme-tokens.mjs
-node tools/check-identity-studio.mjs
-node tools/check-aether-design-system.mjs
+node tools/checks/check-theme-tokens.mjs
+node tools/checks/check-identity-studio.mjs
+node tools/checks/check-aether-design-system.mjs
 cd aether-client && ./gradlew --no-daemon build
 ```

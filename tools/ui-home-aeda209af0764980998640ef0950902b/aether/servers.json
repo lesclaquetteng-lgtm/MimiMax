@@ -1,0 +1,8 @@
+{
+  "servers": [
+    {
+      "name": "Hypixel",
+      "address": "mc.hypixel.net"
+    }
+  ]
+}

@@ -12,12 +12,14 @@ import java.util.Map;
  */
 public final class ModuleManager {
 	private final Map<String, Module> modules = new LinkedHashMap<>();
+	private List<Module> orderedModules = List.of();
 
 	/**
 	 * Registers a module so that it shows up in the click GUI.
 	 */
 	public void register(Module module) {
 		modules.put(module.getName().toLowerCase(java.util.Locale.ROOT), module);
+		orderedModules = List.copyOf(modules.values());
 	}
 
 	/**
@@ -31,7 +33,7 @@ public final class ModuleManager {
 	 * @return every registered module.
 	 */
 	public List<Module> getAll() {
-		return new ArrayList<>(modules.values());
+		return orderedModules;
 	}
 
 	/**

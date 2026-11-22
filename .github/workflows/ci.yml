@@ -73,16 +73,16 @@ jobs:
       # A `var(--…)` without a definition is a rule the browser silently drops: the interface then
       # keeps an inherited value and nobody notices until a screen looks wrong.
       - name: Check every custom property of the interface
-        run: node tools/check-theme-tokens.mjs
+        run: node tools/checks/check-theme-tokens.mjs
       - name: Validate launcher interface scripts
         run: |
           node --check launcher/gui/src/ui/app.js
           node --check launcher/gui/src/ui/bridge.js
-          node tools/check-the-fold.mjs
+          node tools/checks/check-the-fold.mjs
       - name: Verify Identity Studio contracts
-        run: node tools/check-identity-studio.mjs
+        run: node tools/checks/check-identity-studio.mjs
       - name: Verify in-game design-system parity
-        run: node tools/check-aether-design-system.mjs
+        run: node tools/checks/check-aether-design-system.mjs
 
   fabric-mod:
     name: Fabric client

@@ -46,12 +46,16 @@ public class ClickGuiScreen extends Screen {
 	private static final int PANEL_MAX_WIDTH = 820;
 	private static final int PANEL_MAX_HEIGHT = 560;
 	private static final int RAIL_WIDTH = 196;
-	private static final int MARGIN = 16;
+	private static final int MARGIN = AetherDesignSystem.Metrics.SPACE_LG;
 	private static final int HEADER_HEIGHT = 56;
+	private static final int PANEL_RADIUS = AetherDesignSystem.Metrics.RADIUS_XL;
+	private static final int CARD_RADIUS = AetherDesignSystem.Metrics.RADIUS_LG;
+	private static final int CONTROL_RADIUS = AetherDesignSystem.Metrics.RADIUS_MD;
+	private static final int SMALL_RADIUS = AetherDesignSystem.Metrics.RADIUS_XS;
 
 	// ── Rows ──────────────────────────────────────────────────────────────────
 	private static final int ROW_HEIGHT = 46;
-	private static final int ROW_GAP = 6;
+	private static final int ROW_GAP = AetherDesignSystem.Metrics.SPACE_SM;
 	private static final int SETTING_HEIGHT = 22;
 	private static final int SWITCH_WIDTH = 30;
 	private static final int SWITCH_HEIGHT = 16;
@@ -70,10 +74,7 @@ public class ClickGuiScreen extends Screen {
 	private static final int CATEGORY_STEP = 34;
 
 	// ── Animations ────────────────────────────────────────────────────────────
-	private static final long ENTRANCE_NANOS = 200_000_000L;
-	private static final int[] PALETTE = {
-			0x6C5CE7, 0x2ECC8F, 0xF0B429, 0xE05260, 0x3498DB, 0xE67E22, 0xFF6CE8, 0x00D2D3
-	};
+	private static final long ENTRANCE_NANOS = AetherDesignSystem.Metrics.ENTER_NANOS;
 
 	private final Screen previousScreen;
 	private ModuleCategory selectedCategory;
@@ -288,9 +289,9 @@ public class ClickGuiScreen extends Screen {
 	}
 
 	private void renderBackdrop(GuiGraphics graphics) {
+		RenderUtil.auroraBackdrop(graphics, width, height, System.nanoTime(), 0.96f * opacity);
 		AetherDesignSystem.Palette palette = RenderUtil.theme();
-		graphics.fill(0, 0, width, height, ColorUtil.withAlpha(palette.background(), 0.90f));
-		int line = ColorUtil.withAlpha(palette.borderStrong(), 0.17f);
+		int line = ColorUtil.fade(AetherDesignSystem.backdropPattern(palette), opacity);
 		AetherDesignSystem.SurfaceTreatment treatment = AetherDesignSystem.surfaceTreatment(Aether.get().getConfig());
 		if (treatment == AetherDesignSystem.SurfaceTreatment.DRAFT) {
 			for (int x = 16; x < width; x += 64) graphics.fill(x, 0, x + 1, height, line);
@@ -304,23 +305,28 @@ public class ClickGuiScreen extends Screen {
 	}
 
 	private void renderPanel(GuiGraphics graphics, int accent) {
-		RenderUtil.shadow(graphics, panelX, panelY, panelWidth, panelHeight, 12);
 		AetherDesignSystem.Palette palette = RenderUtil.theme();
-		RenderUtil.bordered(graphics, panelX, panelY, panelWidth, panelHeight, 8,
-				fade(palette.elevatedBackground()), fade(palette.border()));
-		RenderUtil.roundedRect(graphics, railX, railY, railWidth, panelHeight - 24, 8, fade(palette.background()));
+		RenderUtil.glassPanel(graphics, panelX, panelY, panelWidth, panelHeight, PANEL_RADIUS, accent, opacity);
+		RenderUtil.glassInset(graphics, railX, railY, railWidth, panelHeight - 24, CARD_RADIUS, accent, opacity);
 		graphics.fill(railX + railWidth - 1, railY + 12, railX + railWidth, railY + panelHeight - 36,
-				fade(0x1AFFFFFF));
+				ColorUtil.fade(AetherDesignSystem.glassBorder(palette), opacity * 0.75f));
+
+		// A thin aurora ribbon slides into place while the screen fades in.
+		int lift = RenderUtil.enterLift(openedAt);
+		RenderUtil.roundedRect(graphics, panelX + 28, panelY - 1 + lift, panelWidth - 56, 2, 1,
+				ColorUtil.fade(AetherDesignSystem.glow(accent, 0.34f), opacity));
 	}
 
 	private void renderRail(GuiGraphics graphics, Font font, int mouseX, int mouseY, int accent) {
-		int x = railX + 16;
+		AetherDesignSystem.Palette palette = RenderUtil.theme();
+		int x = railX + AetherDesignSystem.Metrics.SPACE_LG;
 		int y = railY + (compact ? 10 : 18);
 
-		RenderUtil.roundedRect(graphics, x, y + 3, 6, 6, 3, ColorUtil.withAlpha(accent, opacity));
-		RenderUtil.text(graphics, font, "AETHER", x + 12, y, fade(RenderUtil.theme().textPrimary()));
+		RenderUtil.roundedRect(graphics, x, y + 3, 6, 6, 3, fade(accent));
+		RenderUtil.text(graphics, font, "AETHER", x + 12, y, tone(AetherDesignSystem.TextRole.TITLE));
 		if (!compact) {
-			RenderUtil.text(graphics, font, "v" + Aether.VERSION, x, y + 14, fade(RenderUtil.theme().textDim()));
+			RenderUtil.text(graphics, font, "NIGHTFALL  v" + Aether.VERSION, x, y + 14,
+					tone(AetherDesignSystem.TextRole.HINT));
 		}
 
 		ModuleCategory[] categories = ModuleCategory.values();
@@ -343,9 +349,9 @@ public class ClickGuiScreen extends Screen {
 			pill.setTarget(targetY);
 		}
 		int pillY = Math.round(pill.getValue());
-		RenderUtil.roundedRect(graphics, itemX, pillY, itemWidth, categoryHeight, 7,
-				ColorUtil.withAlpha(accent, 0.16f * opacity));
-		RenderUtil.roundedRect(graphics, itemX, pillY + (categoryHeight - 12) / 2, 2, 12, 1,
+		RenderUtil.roundedRect(graphics, itemX, pillY, itemWidth, categoryHeight, CONTROL_RADIUS,
+				ColorUtil.withAlpha(accent, 0.17f * opacity));
+		RenderUtil.roundedRect(graphics, itemX + 1, pillY + (categoryHeight - 12) / 2, 2, 12, 1,
 				ColorUtil.withAlpha(accent, opacity));
 
 		for (int index = 0; index < categories.length; index++) {
@@ -355,47 +361,66 @@ public class ClickGuiScreen extends Screen {
 			boolean hovered = inside(mouseX, mouseY, itemX, itemY, itemWidth, categoryHeight);
 
 			if (!active && hovered) {
-				RenderUtil.roundedRect(graphics, itemX, itemY, itemWidth, categoryHeight, 7,
-						fade(0x10FFFFFF));
+				RenderUtil.roundedRect(graphics, itemX, itemY, itemWidth, categoryHeight, CONTROL_RADIUS,
+						fade(AetherDesignSystem.surface(palette, AetherDesignSystem.SurfaceState.HOVER)));
 			}
 
 			int count = Aether.get().getModuleManager().getByCategory(category).size();
 			String label = category.getDisplayName();
-			int textColour = active ? ColorUtil.withAlpha(accent, opacity)
-					: hovered ? fade(RenderUtil.theme().textPrimary()) : fade(RenderUtil.theme().textSecondary());
 			int labelY = itemY + (categoryHeight - 9) / 2;
-			RenderUtil.text(graphics, font, label, itemX + 12, labelY, textColour);
+			RenderUtil.roundedRect(graphics, itemX + 10, labelY + 3, 3, 3, 1,
+					active ? fade(accent) : tone(AetherDesignSystem.TextRole.HINT));
+			RenderUtil.text(graphics, font, label, itemX + 18, labelY,
+					active ? fade(accent) : hovered ? tone(AetherDesignSystem.TextRole.TITLE)
+							: tone(AetherDesignSystem.TextRole.LABEL));
+
 			String badge = String.valueOf(count);
-			RenderUtil.text(graphics, font, badge, itemX + itemWidth - 12 - font.width(badge), labelY,
-					fade(RenderUtil.theme().textDim()));
+			int badgeWidth = Math.max(18, font.width(badge) + 10);
+			RenderUtil.badge(graphics, font, badge, itemX + itemWidth - 10 - badgeWidth,
+					itemY + (categoryHeight - 14) / 2, 18, accent, active, hovered, opacity);
 		}
 
 		if (panelHeight > 320) {
-			RenderUtil.text(graphics, font, "ESC  close", railX + 16, railY + panelHeight - 40,
-					fade(RenderUtil.theme().textDim()));
+			RenderUtil.text(graphics, font, "ESC  close  \u00b7  NIGHTFALL", railX + 16,
+					railY + panelHeight - 40, tone(AetherDesignSystem.TextRole.HINT));
 		}
 	}
 
 	private void renderHeader(GuiGraphics graphics, Font font, int mouseX, int mouseY, int accent) {
-		int headerY = panelY + 20;
-		RenderUtil.text(graphics, font, selectedCategory.getDisplayName().toUpperCase(Locale.ROOT),
-				listX, headerY, fade(RenderUtil.theme().textPrimary()));
+		AetherDesignSystem.Palette palette = RenderUtil.theme();
+		int headerY = panelY + 14;
+		String heading = selectedCategory.getDisplayName().toUpperCase(Locale.ROOT);
+		RenderUtil.text(graphics, font, "MODULES  /  " + heading, listX, headerY,
+				tone(AetherDesignSystem.TextRole.HINT));
+		RenderUtil.text(graphics, font, heading, listX, headerY + 12,
+				tone(AetherDesignSystem.TextRole.TITLE));
 
-		int titleWidth = font.width(selectedCategory.getDisplayName().toUpperCase(Locale.ROOT));
+		int titleWidth = font.width(heading);
 		String count = visible.size() + (visible.size() == 1 ? " module" : " modules");
 		if (searchX() - (listX + titleWidth + 10) > font.width(count) + 12) {
-			RenderUtil.text(graphics, font, count, listX + titleWidth + 10, headerY, fade(RenderUtil.theme().textDim()));
+			RenderUtil.text(graphics, font, count, listX + titleWidth + 10, headerY + 12,
+					tone(AetherDesignSystem.TextRole.HINT));
 		}
 
 		int searchX = searchX();
 		boolean hovered = inside(mouseX, mouseY, searchX, searchTop(), searchWidth, SEARCH_HEIGHT);
-		RenderUtil.bordered(graphics, searchX, searchTop(), searchWidth, SEARCH_HEIGHT, 6,
-				fade(RenderUtil.theme().background()), searchFocused ? accent : fade(hovered ? 0x44FFFFFF : 0x22FFFFFF));
+		if (searchFocused) {
+			RenderUtil.roundedRect(graphics, searchX - 2, searchTop() - 2, searchWidth + 4, SEARCH_HEIGHT + 4,
+					CONTROL_RADIUS + 2, ColorUtil.withAlpha(accent, 0.13f * opacity));
+		}
+		RenderUtil.bordered(graphics, searchX, searchTop(), searchWidth, SEARCH_HEIGHT, CONTROL_RADIUS,
+				fade(AetherDesignSystem.field(palette, searchFocused)),
+				fade(AetherDesignSystem.fieldBorder(palette, accent, searchFocused, hovered)));
 
-		String text = search.isEmpty() ? "Search" : search;
-		int colour = search.isEmpty() ? fade(RenderUtil.theme().textDim()) : fade(RenderUtil.theme().textPrimary());
+		String text = search.isEmpty() ? "Search modules" : search;
+		int colour = search.isEmpty() ? tone(AetherDesignSystem.TextRole.HINT)
+				: tone(AetherDesignSystem.TextRole.TITLE);
 		RenderUtil.text(graphics, font, RenderUtil.truncate(font, text, searchWidth - 16), searchX + 8,
-				searchTop() + 7, colour);
+				searchTop() + 6, colour);
+		if (searchFocused) {
+			int caretX = searchX + searchWidth - 6;
+			graphics.fill(caretX, searchTop() + 5, caretX + 1, searchTop() + 15, fade(accent));
+		}
 	}
 
 	private void renderRows(GuiGraphics graphics, Font font, List<Row> rows, int mouseX, int mouseY, int accent) {
@@ -411,39 +436,39 @@ public class ClickGuiScreen extends Screen {
 		graphics.disableScissor();
 
 		if (visible.isEmpty()) {
+			int cardWidth = Math.min(320, listWidth - 48);
+			int cardX = listX + (listWidth - cardWidth) / 2;
+			int cardY = listY + 28;
+			RenderUtil.glassInset(graphics, cardX, cardY, cardWidth, 54, CARD_RADIUS, accent, opacity);
 			String message = search.isEmpty() ? "No module in this category" : "Nothing matches \"" + search + "\"";
-			RenderUtil.centeredText(graphics, font, message, listX + listWidth / 2, listY + 40,
-					fade(RenderUtil.theme().textDim()));
+			RenderUtil.centeredText(graphics, font, message, listX + listWidth / 2, cardY + 15,
+					tone(AetherDesignSystem.TextRole.LABEL));
+			String hint = search.isEmpty() ? "Pick another material category" : "Try a shorter search";
+			RenderUtil.centeredText(graphics, font, hint, listX + listWidth / 2, cardY + 31,
+					tone(AetherDesignSystem.TextRole.HINT));
 		}
 	}
 
 	private void renderRow(GuiGraphics graphics, Font font, Row row, int mouseX, int mouseY, int accent) {
+		AetherDesignSystem.Palette palette = RenderUtil.theme();
 		Module module = row.module;
 		boolean enabled = module.isEnabled();
 		boolean hovered = inside(mouseX, mouseY, row.x, row.y, row.width, rowHeight);
 
-		// The accent tints the surface instead of being mixed with its alpha: blending a
-		// translucent accent into an opaque surface produced a saturated block of colour.
-		int tint = ColorUtil.lerp(RenderUtil.theme().surface(), accent | 0xFF000000, 0.14f);
-		int background = enabled ? fade(tint)
-				: fade(hovered ? RenderUtil.theme().surfaceHover() : RenderUtil.theme().surface());
-		int border = enabled ? ColorUtil.withAlpha(accent, 0.38f * opacity)
-				: fade(hovered ? 0x33FFFFFF : 0x1AFFFFFF);
+		RenderUtil.rowCard(graphics, row.x, row.y, row.width, rowHeight, CARD_RADIUS, accent,
+				enabled, hovered, opacity);
 
-		RenderUtil.bordered(graphics, row.x, row.y, row.width, rowHeight, 8, background, border);
-		if (enabled) {
-			RenderUtil.roundedRect(graphics, row.x + 1, row.y + 12, 2, rowHeight - 24, 1,
-					ColorUtil.withAlpha(accent, opacity));
-		}
-
-		int nameColour = enabled ? fade(0xFFFFFFFF)
-				: hovered ? fade(RenderUtil.theme().textPrimary()) : fade(RenderUtil.theme().textSecondary());
+		int nameColour = enabled ? tone(AetherDesignSystem.TextRole.TITLE)
+				: hovered ? tone(AetherDesignSystem.TextRole.TITLE)
+				: tone(AetherDesignSystem.TextRole.LABEL);
 		int nameY = row.y + (compact ? (rowHeight - 9) / 2 : 9);
-		RenderUtil.text(graphics, font, module.getName(), row.x + 14, nameY, nameColour);
+		RenderUtil.roundedRect(graphics, row.x + 9, nameY + 3, 3, 3, 1,
+				enabled ? fade(accent) : tone(AetherDesignSystem.TextRole.HINT));
+		RenderUtil.text(graphics, font, module.getName(), row.x + 17, nameY, nameColour);
 
 		if (!compact && row.width > 300) {
 			RenderUtil.text(graphics, font, RenderUtil.truncate(font, module.getDescription(), row.width - 200),
-					row.x + 14, row.y + 26, fade(RenderUtil.theme().textDim()));
+					row.x + 17, row.y + 26, tone(AetherDesignSystem.TextRole.HINT));
 		}
 
 		// Keybind chip, left of the chevron.
@@ -453,16 +478,18 @@ public class ClickGuiScreen extends Screen {
 			String label = capturing ? "key?" : mapping.getTranslatedKeyMessage().getString();
 			int chipWidth = font.width(label) + 10;
 			int chipX = chevronX(row) - 8 - chipWidth;
-			RenderUtil.roundedRect(graphics, chipX, chipTop(row), chipWidth, CHIP_HEIGHT, 4,
-					capturing ? ColorUtil.withAlpha(accent, 0.5f * opacity) : fade(0x14FFFFFF));
+			RenderUtil.chip(graphics, chipX, chipTop(row), chipWidth, CHIP_HEIGHT, SMALL_RADIUS,
+					AetherDesignSystem.chip(palette, accent, capturing),
+					AetherDesignSystem.chipBorder(palette, accent, capturing));
 			RenderUtil.text(graphics, font, label, chipX + 5, chipTop(row) + 5,
-					capturing ? fade(0xFFFFFFFF) : fade(RenderUtil.theme().textDim()));
+					capturing ? fade(accent) : tone(AetherDesignSystem.TextRole.HINT));
 		}
 
 		// Chevron: opens the settings of the row.
 		if (!module.getSettings().isEmpty()) {
 			String chevron = row.expanded ? "\u25B4" : "\u25BE";
-			int chevronColour = hovered ? fade(RenderUtil.theme().textPrimary()) : fade(RenderUtil.theme().textDim());
+			int chevronColour = hovered ? tone(AetherDesignSystem.TextRole.TITLE)
+					: tone(AetherDesignSystem.TextRole.HINT);
 			RenderUtil.centeredText(graphics, font, chevron, chevronX(row) + 6, row.y + (rowHeight - 9) / 2,
 					chevronColour);
 		}
@@ -471,7 +498,7 @@ public class ClickGuiScreen extends Screen {
 
 		if (row.expanded) {
 			graphics.fill(row.x + 14, row.y + rowHeight, row.x + row.width - 14, row.y + rowHeight + 1,
-					fade(0x14FFFFFF));
+					ColorUtil.withAlpha(palette.textPrimary(), 0.06f * opacity));
 			List<Setting> settings = module.getSettings();
 			for (int index = 0; index < settings.size(); index++) {
 				renderSetting(graphics, font, row, settings.get(index), index, mouseX, mouseY, accent);
@@ -480,55 +507,71 @@ public class ClickGuiScreen extends Screen {
 	}
 
 	private void drawSwitch(GuiGraphics graphics, int x, int y, float progress, int accent) {
-		int track = ColorUtil.lerp(fade(0x33FFFFFF), ColorUtil.withAlpha(accent, 0.95f * opacity), progress);
-		RenderUtil.roundedRect(graphics, x, y, SWITCH_WIDTH, SWITCH_HEIGHT, SWITCH_HEIGHT / 2, track);
+		AetherDesignSystem.Palette palette = RenderUtil.theme();
+		float clamped = Math.max(0.0f, Math.min(1.0f, progress));
+		if (clamped > 0.05f) {
+			RenderUtil.roundedRect(graphics, x - 2, y - 2, SWITCH_WIDTH + 4, SWITCH_HEIGHT + 4,
+					SWITCH_HEIGHT / 2 + 2, ColorUtil.withAlpha(accent, 0.10f * clamped * opacity));
+		}
+		RenderUtil.roundedRect(graphics, x, y, SWITCH_WIDTH, SWITCH_HEIGHT, SWITCH_HEIGHT / 2,
+				fade(AetherDesignSystem.switchTrack(palette, accent, clamped)));
 
 		int knob = SWITCH_HEIGHT - 4;
-		int knobX = x + 2 + Math.round((SWITCH_WIDTH - knob - 4) * progress);
-		RenderUtil.roundedRect(graphics, knobX, y + 2, knob, knob, knob / 2, fade(0xFFFFFFFF));
+		int knobX = x + 2 + Math.round((SWITCH_WIDTH - knob - 4) * clamped);
+		RenderUtil.roundedRect(graphics, knobX, y + 2, knob, knob, knob / 2,
+				fade(AetherDesignSystem.switchKnob(palette, clamped)));
 	}
 
 	private void renderSetting(GuiGraphics graphics, Font font, Row row, Setting setting, int index,
 			int mouseX, int mouseY, int accent) {
+		AetherDesignSystem.Palette palette = RenderUtil.theme();
 		int x = settingX(row);
 		int y = settingY(row, index);
 		int w = settingWidth(row);
 		boolean hovered = inside(mouseX, mouseY, x - 4, y, w + 8, SETTING_HEIGHT);
 
 		if (hovered) {
-			RenderUtil.roundedRect(graphics, x - 4, y, w + 8, SETTING_HEIGHT - 2, 4, fade(0x0CFFFFFF));
+			RenderUtil.roundedRect(graphics, x - 4, y, w + 8, SETTING_HEIGHT - 2, SMALL_RADIUS,
+					ColorUtil.fade(AetherDesignSystem.surface(palette, AetherDesignSystem.SurfaceState.HOVER),
+							opacity * 0.55f));
 		}
 
 		RenderUtil.text(graphics, font, setting.getName(), x + 4, y + 6,
-				hovered ? fade(RenderUtil.theme().textPrimary()) : fade(RenderUtil.theme().textSecondary()));
+				hovered ? tone(AetherDesignSystem.TextRole.TITLE) : tone(AetherDesignSystem.TextRole.LABEL));
 
 		if (setting instanceof BooleanSetting toggle) {
 			drawSwitch(graphics, x + w - SWITCH_WIDTH, y + 3, toggle.isEnabled() ? 1.0f : 0.0f, accent);
 		} else if (setting instanceof IntegerSetting number) {
 			float ratio = (number.get() - number.getMin())
 					/ (float) Math.max(1, number.getMax() - number.getMin());
-			RenderUtil.bar(graphics, sliderX(x, w), y + 9, SLIDER_WIDTH, 3, ratio,
-					fade(0x26FFFFFF), ColorUtil.withAlpha(accent, opacity));
+			RenderUtil.slider(graphics, sliderX(x, w), y + 9, SLIDER_WIDTH, ratio,
+					fade(AetherDesignSystem.sliderTrack(palette)),
+					fade(AetherDesignSystem.sliderFill(accent)),
+					tone(AetherDesignSystem.TextRole.TITLE));
 			String value = String.valueOf(number.get());
 			RenderUtil.text(graphics, font, value, x + w - font.width(value), y + 6,
-					fade(RenderUtil.theme().textPrimary()));
+					tone(AetherDesignSystem.TextRole.TITLE));
 		} else if (setting instanceof DoubleSetting number) {
 			float ratio = (float) ((number.get() - number.getMin())
 					/ Math.max(0.0001, number.getMax() - number.getMin()));
-			RenderUtil.bar(graphics, sliderX(x, w), y + 9, SLIDER_WIDTH, 3, ratio,
-					fade(0x26FFFFFF), ColorUtil.withAlpha(accent, opacity));
+			RenderUtil.slider(graphics, sliderX(x, w), y + 9, SLIDER_WIDTH, ratio,
+					fade(AetherDesignSystem.sliderTrack(palette)),
+					fade(AetherDesignSystem.sliderFill(accent)),
+					tone(AetherDesignSystem.TextRole.TITLE));
 			String value = String.format(Locale.ROOT, "%.2f", number.get());
 			RenderUtil.text(graphics, font, value, x + w - font.width(value), y + 6,
-					fade(RenderUtil.theme().textPrimary()));
+					tone(AetherDesignSystem.TextRole.TITLE));
 		} else if (setting instanceof ModeSetting mode) {
 			String value = mode.get();
 			int chipWidth = font.width(value) + 16;
-			RenderUtil.roundedRect(graphics, x + w - chipWidth, y + 4, chipWidth, 14, 4,
-					ColorUtil.withAlpha(accent, 0.16f * opacity));
+			RenderUtil.roundedRect(graphics, x + w - chipWidth, y + 4, chipWidth, 14, SMALL_RADIUS,
+					ColorUtil.withAlpha(accent, 0.17f * opacity));
 			RenderUtil.centeredText(graphics, font, value, x + w - chipWidth / 2, y + 7,
-					ColorUtil.withAlpha(accent, opacity));
+					fade(accent));
 		} else if (setting instanceof ColorSetting colour) {
-			RenderUtil.roundedRect(graphics, x + w - 14, y + 4, 14, 14, 3, colour.getColor());
+			RenderUtil.roundedRect(graphics, x + w - 14, y + 4, 14, 14, SMALL_RADIUS, colour.getColor());
+			RenderUtil.outline(graphics, x + w - 15, y + 3, 16, 16,
+					ColorUtil.withAlpha(palette.textPrimary(), 0.28f * opacity));
 		}
 	}
 
@@ -536,14 +579,7 @@ public class ClickGuiScreen extends Screen {
 		if (maxScroll <= 0.0f) {
 			return;
 		}
-		int trackX = listX + listWidth + 4;
-		int thumbHeight = Math.max(24, Math.round(listHeight * (listHeight / contentHeight)));
-		int travel = listHeight - thumbHeight;
-		int thumbY = listY + (maxScroll <= 0.0f ? 0 : Math.round(travel * (scroll / maxScroll)));
-
-		RenderUtil.roundedRect(graphics, trackX, listY, 2, listHeight, 1, fade(0x14FFFFFF));
-		RenderUtil.roundedRect(graphics, trackX, thumbY, 2, thumbHeight, 1,
-				ColorUtil.withAlpha(accent, 0.75f * opacity));
+		RenderUtil.scrollbar(graphics, listX + listWidth + 5, listY, listHeight, scroll, contentHeight, accent);
 	}
 
 	// ══════════════════════════════════════════════════════════════════════════
@@ -672,13 +708,14 @@ public class ClickGuiScreen extends Screen {
 			}
 		} else if (setting instanceof ColorSetting colour) {
 			int index = 0;
-			for (int i = 0; i < PALETTE.length; i++) {
-				if (PALETTE[i] == colour.getColor()) {
+			int[] presets = AetherDesignSystem.COLOR_PRESETS;
+			for (int i = 0; i < presets.length; i++) {
+				if (presets[i] == colour.getColor()) {
 					index = i;
 					break;
 				}
 			}
-			colour.setValue(PALETTE[(index + 1) % PALETTE.length]);
+			colour.setValue(presets[(index + 1) % presets.length]);
 		} else {
 			setSliderFromPos(setting, mouseX, sliderX(x, width), SLIDER_WIDTH);
 		}
@@ -730,10 +767,14 @@ public class ClickGuiScreen extends Screen {
 	public boolean keyPressed(KeyEvent event) {
 		if (rebinding != null) {
 			KeyMapping mapping = rebinding.getKeyBinding();
-			if (mapping != null) {
+			if (mapping != null && (event.key() == 256 || !invalidKey(event))) {
 				// ESC clears the bind, any other key replaces it. The mapping is moved, never
 				// recreated: Fabric refuses a registration made once the options exist.
 				mapping.setKey(event.key() == 256 ? InputConstants.UNKNOWN : InputConstants.getKey(event));
+				// The keyboard handler resolves a press through a table built at registration; setKey
+				// alone leaves the old key there, so the new bind would only work after a restart.
+				KeyMapping.resetMapping();
+				Minecraft.getInstance().options.save();
 			}
 			rebinding = null;
 			Aether.get().save();
@@ -783,6 +824,11 @@ public class ClickGuiScreen extends Screen {
 	//  Helpers
 	// ══════════════════════════════════════════════════════════════════════════
 
+	/** A synthetic or platform event with no GLFW key and no real scancode must not be saved. */
+	private static boolean invalidKey(KeyEvent event) {
+		return event.key() == -1 && (event.scancode() < 0 || event.scancode() > 255);
+	}
+
 	private int searchX() {
 		return listX + listWidth - searchWidth;
 	}
@@ -802,5 +848,9 @@ public class ClickGuiScreen extends Screen {
 
 	private int fade(int colour) {
 		return ColorUtil.fade(colour, opacity);
+	}
+
+	private int tone(AetherDesignSystem.TextRole role) {
+		return ColorUtil.fade(AetherDesignSystem.text(RenderUtil.theme(), role), opacity);
 	}
 }

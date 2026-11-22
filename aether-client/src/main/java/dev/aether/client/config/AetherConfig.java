@@ -73,8 +73,6 @@ public final class AetherConfig {
 	/** Whether the client shows a notification when it joins or leaves a world. */
 	public boolean showNotifications = true;
 
-	/** Whether the click GUI opens with the right shift key. */
-	public boolean openClickGuiWithRightShift = true;
 
 	/** The enabled state of every module, keyed by the lower case module name. */
 	public Map<String, Boolean> modules = new LinkedHashMap<>();

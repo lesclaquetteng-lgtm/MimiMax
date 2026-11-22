@@ -111,6 +111,12 @@ async function setRange(selector, value) {
 	})()`);
 }
 
+/** The delete button lives on the Instances page, next to the profile catalog. */
+async function openInstancesPage() {
+	await click('.nav-item[data-page="versions"]');
+	await waitFor(`document.querySelector('.page.is-active')?.dataset.page === 'versions'`, 'the instances page');
+}
+
 const options = () => evaluate(
 	`Array.from(document.querySelectorAll('#select-profile option')).map((option) => option.value)`
 );
@@ -252,7 +258,7 @@ if (otherVersion) {
 // --- create a profile -------------------------------------------------------------------------
 await click('#btn-profile-new');
 await waitFor(`document.querySelector('#modal').hidden === false`, 'the new profile dialog');
-await type('#profile-name', 'Cinematic');
+await type('#instance-name', 'Cinematic');
 await click('#modal-confirm');
 await waitFor(
 	`window.aether.profiles.list().then((list) => list.profiles.length === 3)`,
@@ -279,6 +285,7 @@ await waitFor(
 record('the new profile can be played', true);
 
 // --- delete a profile, with a confirmation ----------------------------------------------------
+await openInstancesPage();
 await click('#btn-profile-delete');
 await waitFor(`document.querySelector('#modal').hidden === false`, 'the delete dialog');
 
@@ -288,7 +295,7 @@ const dialog = await evaluate(`(() => ({
 	confirm: document.querySelector('#modal-confirm').textContent
 }))()`);
 record('the deletion asks for a confirmation first',
-	dialog.title === 'Delete profile' && dialog.name === 'Cinematic' && dialog.confirm === 'Delete',
+	dialog.title === "Supprimer l'instance" && dialog.name === 'Cinematic' && dialog.confirm === 'Supprimer',
 	JSON.stringify(dialog));
 record('nothing is deleted while the dialog is open',
 	(await profileNamed('Cinematic')) !== null);
@@ -298,6 +305,7 @@ await sleep(300);
 record('the cancel keeps the profile',
 	(await evaluate(`document.querySelector('#modal').hidden`)) === true && (await profileNamed('Cinematic')) !== null);
 
+await openInstancesPage();
 await click('#btn-profile-delete');
 await waitFor(`document.querySelector('#modal').hidden === false`, 'the delete dialog again');
 await click('#modal-confirm');
@@ -319,11 +327,12 @@ record('the account falls back to the active profile after the deletion',
 	JSON.stringify({ profile: resolved.profile.name, stored: back.accounts[0].profile }));
 
 // --- the default profile is protected ---------------------------------------------------------
+await openInstancesPage();
 await click('#btn-profile-delete');
 await waitFor(`document.querySelector('#modal').hidden === false`, 'the delete dialog of the default profile');
 await click('#modal-confirm');
 await waitFor(
-	`document.querySelector('#toasts').textContent.includes('cannot be removed')`,
+	`document.querySelector('#toasts').textContent.includes('ne peut pas être supprimée')`,
 	'the refusal of the core'
 );
 

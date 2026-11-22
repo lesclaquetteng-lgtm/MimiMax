@@ -200,7 +200,7 @@ impl Settings {
     /// Removes a profile. `Default` stays, the flat settings are written through it.
     pub fn remove_profile(&mut self, name: &str) -> Result<(), String> {
         if name.eq_ignore_ascii_case(DEFAULT_PROFILE) {
-            return Err("the default profile cannot be removed".to_string());
+            return Err("l'instance par défaut ne peut pas être supprimée".to_string());
         }
 
         if self.profile(name).is_none() {

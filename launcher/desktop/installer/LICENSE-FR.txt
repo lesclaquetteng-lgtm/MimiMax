@@ -1,41 +1,10 @@
-AETHER CLIENT ‚Äî CONTRAT DE LICENCE D'UTILISATION
-================================================
+CUBE LAUNCHER ó LICENCE D'UTILISATION (v1.0.0)
 
-Version 1.0.0 ‚Äî 14 novembre 2026
-
-En installant Aether Launcher et le client Aether, vous acceptez les conditions ci-dessous.
-
-1. OBJET
-   Le logiciel installe et lance Minecraft avec le client Aether, un ensemble de modules
-   d'interface et d'optimisation ex√©cut√©s par Fabric. Il permet aussi de cr√©er des comptes
-   hors-ligne et d'h√©berger un serveur local en mode hors-ligne.
-
-2. COMPTES ET IDENTIT√â
-   Un compte hors-ligne utilise un identifiant d√©riv√© du pseudo, comme le fait Minecraft.
-   Il ne peut pas rejoindre un serveur configur√© en online-mode=true : cette limitation
-   vient du jeu et non du logiciel. Le launcher l'indique avant le lancement.
-
-3. SERVEURS
-   Un serveur h√©berg√© en mode hors-ligne accepte n'importe quel pseudo : ne l'ouvrez pas
-   sur Internet sans mot de passe, liste blanche ou proxy d'authentification. Vous √™tes
-   responsable du serveur que vous d√©marrez.
-
-4. MODULES
-   Certains serveurs interdisent les modules de combat ou de triche. Activez-les √† vos
-   risques : le logiciel ne contourne aucune protection anti-triche et ne modifie pas
-   l'authentification de Minecraft.
-
-5. DONN√âES
-   Les r√©glages, les comptes et les fichiers de jeu restent sur votre ordinateur, dans le
-   dossier Aether de votre profil utilisateur. Aucune donn√©e n'est envoy√©e √† l'√©diteur.
-   La d√©sinstallation ne supprime pas ce dossier.
-
-6. GARANTIE
-   Le logiciel est fourni ¬´ en l'√©tat ¬ª, sans garantie. Minecraft est une marque de Mojang
-   Studios ; ce projet n'est ni affili√© ni approuv√© par Mojang ou Microsoft.
-
-7. LICENCE DU CODE
-   Le code du launcher et du client est distribu√© sous licence MIT. Les mods tiers
-   conservent leur licence propre, visible dans leur fichier fabric.mod.json.
-
-Vous pouvez refuser ce contrat : l'installation s'arr√™tera et aucun fichier ne sera √©crit.
+En installant le launcher, vous acceptez ces conditions.
+1. OBJET ó Installe Minecraft avec le client Aether (modules Fabric), crÈe des comptes hors-ligne et hÈberge un serveur local.
+2. COMPTES ó Un compte hors-ligne ne rejoint pas un serveur en online-mode=true : limite propre au jeu.
+3. SERVEURS ó Un serveur hors-ligne accepte n'importe quel pseudo : ne l'exposez pas sans mot de passe.
+4. MODULES ó Certains serveurs interdisent les modules de combat. Activez-les ‡ vos risques.
+5. DONN…ES ó RÈglages, comptes et fichiers restent dans le dossier Aether de votre profil.
+6. GARANTIE ó Fourni ´ en l'Ètat ª, sans garantie. Minecraft est une marque de Mojang Studios.
+7. CODE ó Launcher et client sous licence MIT ; les mods tiers gardent leur licence.
