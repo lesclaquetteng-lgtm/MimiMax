@@ -18,7 +18,11 @@ pub const LAUNCHER_NAME: &str = "AetherLauncher";
 pub const LAUNCHER_VERSION: &str = "1.0.0";
 
 /// The separator of the entries of a classpath.
-pub const CLASS_PATH_SEPARATOR: &str = if cfg!(target_os = "windows") { ";" } else { ":" };
+pub const CLASS_PATH_SEPARATOR: &str = if cfg!(target_os = "windows") {
+    ";"
+} else {
+    ":"
+};
 
 /// Everything that is needed to start the game.
 pub struct LaunchOptions {
@@ -280,10 +284,20 @@ pub fn build_game_arguments(options: &LaunchOptions) -> Vec<String> {
     replacements.insert("version_name".to_string(), options.version.id.clone());
     replacements.insert(
         "version_type".to_string(),
-        options.version.kind.clone().unwrap_or_else(|| "release".to_string()),
+        options
+            .version
+            .kind
+            .clone()
+            .unwrap_or_else(|| "release".to_string()),
     );
-    replacements.insert("game_directory".to_string(), options.game_dir.to_string_lossy().to_string());
-    replacements.insert("assets_root".to_string(), options.assets_dir.to_string_lossy().to_string());
+    replacements.insert(
+        "game_directory".to_string(),
+        options.game_dir.to_string_lossy().to_string(),
+    );
+    replacements.insert(
+        "assets_root".to_string(),
+        options.assets_dir.to_string_lossy().to_string(),
+    );
     replacements.insert("assets_index_name".to_string(), options.asset_index.clone());
     replacements.insert("auth_uuid".to_string(), options.uuid.clone());
     replacements.insert(
@@ -296,8 +310,14 @@ pub fn build_game_arguments(options: &LaunchOptions) -> Vec<String> {
     );
     replacements.insert("auth_xuid".to_string(), options.xuid.clone());
     replacements.insert("clientid".to_string(), options.client_id.clone());
-    replacements.insert("resolution_width".to_string(), options.window_width.to_string());
-    replacements.insert("resolution_height".to_string(), options.window_height.to_string());
+    replacements.insert(
+        "resolution_width".to_string(),
+        options.window_width.to_string(),
+    );
+    replacements.insert(
+        "resolution_height".to_string(),
+        options.window_height.to_string(),
+    );
 
     let mut arguments: Vec<String> = template
         .iter()
@@ -551,7 +571,11 @@ mod tests {
         assert_eq!(stop(&data).unwrap(), child.id());
 
         let _ = child.wait();
-        assert_eq!(read_pid(&data), None, "the record survived the stopped game");
+        assert_eq!(
+            read_pid(&data),
+            None,
+            "the record survived the stopped game"
+        );
     }
 
     fn options() -> LaunchOptions {
@@ -629,7 +653,10 @@ mod tests {
     #[test]
     fn the_arguments_carry_the_identity_of_the_player() {
         let arguments = build_game_arguments(&options());
-        assert_eq!(arguments[arguments.iter().position(|e| e == "--username").unwrap() + 1], "Notch");
+        assert_eq!(
+            arguments[arguments.iter().position(|e| e == "--username").unwrap() + 1],
+            "Notch"
+        );
         assert_eq!(
             arguments[arguments.iter().position(|e| e == "--accessToken").unwrap() + 1],
             "0"
@@ -654,11 +681,16 @@ mod tests {
         let arguments = build_jvm_arguments(&options, &classpath);
 
         assert_eq!(
-            arguments.iter().filter(|entry| *entry == "-XX:+UseG1GC").count(),
+            arguments
+                .iter()
+                .filter(|entry| *entry == "-XX:+UseG1GC")
+                .count(),
             1,
             "the collector is configured twice"
         );
-        assert!(arguments.iter().any(|entry| entry.starts_with("-XX:G1NewSizePercent=")));
+        assert!(arguments
+            .iter()
+            .any(|entry| entry.starts_with("-XX:G1NewSizePercent=")));
     }
 
     #[test]
@@ -675,7 +707,11 @@ mod tests {
                 .unwrap_or_else(|| panic!("{} never unlocks the experimental options", preset));
             let first_experimental = arguments
                 .iter()
-                .position(|entry| EXPERIMENTAL_PREFIXES.iter().any(|prefix| entry.starts_with(prefix)))
+                .position(|entry| {
+                    EXPERIMENTAL_PREFIXES
+                        .iter()
+                        .any(|prefix| entry.starts_with(prefix))
+                })
                 .unwrap_or_else(|| panic!("{} uses no experimental option", preset));
 
             assert!(
@@ -684,7 +720,10 @@ mod tests {
                 preset
             );
             assert_eq!(
-                arguments.iter().filter(|entry| *entry == UNLOCK_EXPERIMENTAL).count(),
+                arguments
+                    .iter()
+                    .filter(|entry| *entry == UNLOCK_EXPERIMENTAL)
+                    .count(),
                 1,
                 "{} unlocks the experimental options twice",
                 preset

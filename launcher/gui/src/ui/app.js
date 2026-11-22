@@ -370,16 +370,9 @@ function paintAvatar(element, name) {
 	element.style.color = contrastInk(hslToRgb(hue, 0.20, 0.24));
 }
 
+// The pure helpers live in format.js so that `node --test` can check them without a window.
 function formatBytes(bytes) {
-	if (!bytes) return '0 B';
-	const units = ['B', 'KB', 'MB', 'GB'];
-	let index = 0;
-	let value = bytes;
-	while (value >= 1024 && index < units.length - 1) {
-		value /= 1024;
-		index++;
-	}
-	return `${value.toFixed(value >= 10 || index === 0 ? 0 : 1)} ${units[index]}`;
+	return window.AetherFormat.formatBytes(bytes);
 }
 
 /* --------------------------------------------------------------- rendering */
@@ -2036,10 +2029,7 @@ async function stopGame() {
 
 /** The filled part of a slider follows its value. */
 function paintRange(input) {
-	const min = Number(input.min) || 0;
-	const max = Number(input.max) || 100;
-	const span = max - min;
-	const percent = span > 0 ? ((Number(input.value) - min) / span) * 100 : 0;
+	const percent = window.AetherFormat.rangePercent(input.value, input.min, input.max);
 	input.style.setProperty('--fill', `${percent}%`);
 }
 

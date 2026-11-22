@@ -306,8 +306,7 @@ impl Settings {
 
 /// A process-local sequence makes temporary names distinct even when different files share
 /// the same stem (for example, accounts.json and accounts.credentials).
-static NEXT_TEMP_FILE: std::sync::atomic::AtomicU64 =
-    std::sync::atomic::AtomicU64::new(0);
+static NEXT_TEMP_FILE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
 fn temporary_path(path: &Path, sequence: u64) -> PathBuf {
     let filename = path
@@ -339,7 +338,11 @@ pub fn write_atomic(path: &Path, content: &str) -> std::io::Result<()> {
     for _ in 0..32 {
         let sequence = NEXT_TEMP_FILE.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let candidate = temporary_path(path, sequence);
-        match OpenOptions::new().write(true).create_new(true).open(&candidate) {
+        match OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&candidate)
+        {
             Ok(created) => {
                 temporary = Some(candidate);
                 file = Some(created);
@@ -393,7 +396,10 @@ pub fn read_java_major_version(executable: &Path) -> Option<u32> {
     text.push_str(&String::from_utf8_lossy(&output.stderr));
 
     let start = text.find("version \"")? + "version \"".len();
-    let version: String = text[start..].chars().take_while(|c| c.is_ascii_digit()).collect();
+    let version: String = text[start..]
+        .chars()
+        .take_while(|c| c.is_ascii_digit())
+        .collect();
     version.parse().ok()
 }
 
@@ -495,8 +501,10 @@ pub fn find_client_jar(paths: &Paths) -> Option<PathBuf> {
         if let Some(directory) = executable.parent() {
             candidates.push(directory.join("aether-client.jar"));
             // target/release/../../.. is the root of the project.
-            candidates.push(directory.join("../../../aether-client/build/libs/aether-client-1.0.0.jar"));
-            candidates.push(directory.join("../../aether-client/build/libs/aether-client-1.0.0.jar"));
+            candidates
+                .push(directory.join("../../../aether-client/build/libs/aether-client-1.0.0.jar"));
+            candidates
+                .push(directory.join("../../aether-client/build/libs/aether-client-1.0.0.jar"));
         }
     }
 
@@ -533,7 +541,8 @@ mod tests {
 
     #[test]
     fn a_legacy_dark_theme_is_migrated_to_graphite_and_saved() {
-        let directory = std::env::temp_dir().join(format!("aether-theme-migrate-{}", std::process::id()));
+        let directory =
+            std::env::temp_dir().join(format!("aether-theme-migrate-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&directory);
         std::fs::create_dir_all(&directory).unwrap();
         let file = directory.join("settings.json");
@@ -660,7 +669,8 @@ mod tests {
 
     #[test]
     fn atomic_writes_to_the_account_catalogue_and_vault_do_not_collide() {
-        let directory = std::env::temp_dir().join(format!("aether-atomic-pair-{}", std::process::id()));
+        let directory =
+            std::env::temp_dir().join(format!("aether-atomic-pair-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&directory);
         std::fs::create_dir_all(&directory).unwrap();
 
@@ -692,7 +702,10 @@ mod tests {
         first.join().unwrap();
         second.join().unwrap();
 
-        assert_eq!(std::fs::read_to_string(&accounts).unwrap(), "{\"accounts\":[]}");
+        assert_eq!(
+            std::fs::read_to_string(&accounts).unwrap(),
+            "{\"accounts\":[]}"
+        );
         assert_eq!(
             std::fs::read_to_string(&credentials).unwrap(),
             "AETHER-CREDENTIALS-V1\nprotected"
@@ -753,7 +766,10 @@ mod tests {
 
         settings.put_profile(profile);
 
-        assert_eq!(settings.max_memory, 8192, "the flat settings did not follow");
+        assert_eq!(
+            settings.max_memory, 8192,
+            "the flat settings did not follow"
+        );
         assert_eq!(settings.game_version, "1.20.1");
         assert_eq!(settings.profile(DEFAULT_PROFILE).unwrap().max_memory, 8192);
     }
@@ -767,9 +783,14 @@ mod tests {
         });
         settings.active_profile = "Cinematic".to_string();
 
-        settings.remove_profile("cinematic").expect("the profile was removed");
+        settings
+            .remove_profile("cinematic")
+            .expect("the profile was removed");
         assert_eq!(settings.profiles.len(), 1);
-        assert_eq!(settings.active_profile, DEFAULT_PROFILE, "the active profile was removed");
+        assert_eq!(
+            settings.active_profile, DEFAULT_PROFILE,
+            "the active profile was removed"
+        );
 
         assert!(settings.remove_profile(DEFAULT_PROFILE).is_err());
         assert!(settings.remove_profile("nowhere").is_err());
@@ -820,7 +841,9 @@ mod tests {
         .unwrap();
 
         let loaded = Settings::load(&file);
-        let default = loaded.profile(DEFAULT_PROFILE).expect("the default profile");
+        let default = loaded
+            .profile(DEFAULT_PROFILE)
+            .expect("the default profile");
         assert_eq!(default.max_memory, 8192, "the two values disagree");
 
         std::fs::remove_dir_all(&directory).ok();
@@ -851,7 +874,8 @@ mod tests {
 
     #[test]
     fn the_settings_survive_a_round_trip() {
-        let directory = std::env::temp_dir().join(format!("aether-settings-{}", std::process::id()));
+        let directory =
+            std::env::temp_dir().join(format!("aether-settings-{}", std::process::id()));
         std::fs::create_dir_all(&directory).unwrap();
         let file = directory.join("settings.json");
 

@@ -94,8 +94,8 @@ pub fn set_enabled(mods_dir: &Path, name: &str, enabled: bool) -> Result<ModEntr
     let name = checked_name(name)?;
     let current = mods_dir.join(name);
 
-    let metadata = fs::symlink_metadata(&current)
-        .map_err(|_| format!("the mod does not exist: {}", name))?;
+    let metadata =
+        fs::symlink_metadata(&current).map_err(|_| format!("the mod does not exist: {}", name))?;
     if !metadata.file_type().is_file() {
         return Err(format!("the mod is not a regular file: {}", name));
     }
@@ -133,7 +133,8 @@ mod tests {
 
     /// An empty mods folder that belongs to one test.
     fn temporary(name: &str) -> PathBuf {
-        let root = std::env::temp_dir().join(format!("aether-mods-{}-{}", std::process::id(), name));
+        let root =
+            std::env::temp_dir().join(format!("aether-mods-{}-{}", std::process::id(), name));
         let _ = fs::remove_dir_all(&root);
         fs::create_dir_all(&root).unwrap();
         root
@@ -195,7 +196,10 @@ mod tests {
         use std::os::unix::fs::symlink;
 
         let root = temporary("symlink");
-        let outside = root.parent().unwrap().join(format!("aether-outside-mod-{}.jar", std::process::id()));
+        let outside = root
+            .parent()
+            .unwrap()
+            .join(format!("aether-outside-mod-{}.jar", std::process::id()));
         fs::write(&outside, b"external jar").unwrap();
         symlink(&outside, root.join("linked.jar")).unwrap();
 

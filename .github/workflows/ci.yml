@@ -62,6 +62,22 @@ jobs:
           cargo build --release --locked
           cargo test --release --locked
 
+  formatting:
+    name: Rust formatting
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install rustfmt
+        run: |
+          rustup toolchain install stable --profile minimal --component rustfmt
+          rustup default stable
+      # Formatting is not a matter of taste here: an unformatted diff hides the real change in review,
+      # and `cargo fmt` is the only formatter every contributor already has.
+      - name: Check the core and the shell
+        run: |
+          cargo fmt --manifest-path launcher/Cargo.toml --check
+          cargo fmt --manifest-path launcher/desktop/Cargo.toml --check
+
   theme-tokens:
     name: Theme tokens
     runs-on: ubuntu-latest
@@ -78,7 +94,12 @@ jobs:
         run: |
           node --check launcher/gui/src/ui/app.js
           node --check launcher/gui/src/ui/bridge.js
+          node --check launcher/gui/src/ui/format.js
           node tools/checks/check-the-fold.mjs
+      # The pure helpers of the interface are checked without a window: a byte count and a slider
+      # percentage do not need WebView2, and the end-to-end scripts were their only proof before.
+      - name: Test the interface helpers
+        run: node --test launcher/gui/src/ui/format.test.mjs
       - name: Verify Identity Studio contracts
         run: node tools/checks/check-identity-studio.mjs
       - name: Verify in-game design-system parity

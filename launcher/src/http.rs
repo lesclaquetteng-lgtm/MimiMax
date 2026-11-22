@@ -57,6 +57,8 @@ pub enum HttpError {
         expected: String,
         actual: String,
     },
+    /// The player cancelled the download in the middle of a file.
+    Cancelled,
     /// A URI could not be built.
     Uri(String),
 }
@@ -76,6 +78,8 @@ impl HttpError {
             HttpError::Status { status, .. } => retryable_status(*status),
             HttpError::Io(_) => true,
             HttpError::Checksum { .. } => true,
+            // A cancelled download is not retried: the player asked it to stop.
+            HttpError::Cancelled => false,
             HttpError::Json(_) | HttpError::Uri(_) => false,
         }
     }
@@ -106,6 +110,7 @@ impl std::fmt::Display for HttpError {
                 "checksum mismatch for {} (expected {}, got {})",
                 path, expected, actual
             ),
+            HttpError::Cancelled => write!(formatter, "the download was cancelled"),
             HttpError::Uri(url) => write!(formatter, "invalid url: {}", url),
         }
     }
@@ -349,6 +354,22 @@ impl Client {
         url: &str,
         destination: &Path,
         expected_sha1: Option<&str>,
+        on_progress: impl FnMut(u64, u64),
+    ) -> Result<DownloadReport, HttpError> {
+        self.download_cancellable(url, destination, expected_sha1, None, on_progress)
+    }
+
+    /// [`Client::download`], with a token the player can set to stop in the middle of a file.
+    ///
+    /// The token is read after every chunk: a large jar stops within one chunk instead of running
+    /// to its end after the interface said “Cancel”. The partial file is kept, so a cancelled
+    /// installation resumes from the bytes it already has.
+    pub fn download_cancellable(
+        &self,
+        url: &str,
+        destination: &Path,
+        expected_sha1: Option<&str>,
+        cancel: Option<&std::sync::atomic::AtomicBool>,
         mut on_progress: impl FnMut(u64, u64),
     ) -> Result<DownloadReport, HttpError> {
         // A file that already carries the expected checksum is not downloaded again.
@@ -379,9 +400,22 @@ impl Client {
                 std::thread::sleep(backoff_delay(retry as u32));
             }
 
-            match self.download_once(url, destination, &temporary, expected_sha1, &mut on_progress) {
+            match self.download_once(
+                url,
+                destination,
+                &temporary,
+                expected_sha1,
+                cancel,
+                &mut on_progress,
+            ) {
                 Ok(report) => return Ok(report),
                 Err(error) => {
+                    // A cancellation keeps the partial file: it is exactly what a resumed
+                    // installation continues from.
+                    if matches!(error, HttpError::Cancelled) {
+                        return Err(error);
+                    }
+
                     // A checksum failure or a permanent error means the bytes are worthless. A
                     // network failure keeps the partial file: it is the point where the next
                     // attempt, or the next installation, resumes.
@@ -419,6 +453,7 @@ impl Client {
         destination: &Path,
         temporary: &Path,
         expected_sha1: Option<&str>,
+        cancel: Option<&std::sync::atomic::AtomicBool>,
         on_progress: &mut impl FnMut(u64, u64),
     ) -> Result<DownloadReport, HttpError> {
         let started = Instant::now();
@@ -500,6 +535,14 @@ impl Client {
 
             received += read as u64;
             on_progress(received, total);
+
+            // The token is read after every chunk, so a large jar stops within one chunk instead
+            // of finishing after the interface said “Cancel”.
+            if cancel.is_some_and(|flag| flag.load(Ordering::Relaxed)) {
+                file.flush()?;
+                drop(file);
+                return Err(HttpError::Cancelled);
+            }
         }
 
         file.flush()?;
@@ -906,10 +949,7 @@ mod tests {
             body: Some("{\"error\":\"authorization_pending\"}".to_string()),
         };
 
-        assert_eq!(
-            error.body(),
-            Some("{\"error\":\"authorization_pending\"}")
-        );
+        assert_eq!(error.body(), Some("{\"error\":\"authorization_pending\"}"));
     }
 
     #[test]
@@ -918,6 +958,190 @@ mod tests {
         let text = read_error_body(body.as_slice()).expect("the body is readable");
 
         assert_eq!(text.len(), MAX_ERROR_BODY_BYTES);
+    }
+
+    #[test]
+    fn a_cancelled_download_stops_within_one_chunk_and_keeps_its_partial_file() {
+        use std::io::{Read, Write};
+        use std::net::TcpListener;
+        use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+        use std::sync::Arc;
+        use std::time::{Duration, Instant};
+
+        let listener = TcpListener::bind("127.0.0.1:0").expect("a free loopback port");
+        let address = listener.local_addr().expect("the address of the listener");
+        let body = vec![0x7bu8; CHUNK_SIZE * 3];
+        let length = body.len();
+        let stop = Arc::new(AtomicBool::new(false));
+        let stopped = Arc::clone(&stop);
+
+        // Every attempt of the client finds the listener, and the loop ends when the test says so:
+        // a single `accept` would leave the join blocked when no retry comes.
+        let server = std::thread::spawn(move || {
+            let _ = listener.set_nonblocking(true);
+
+            while !stopped.load(Ordering::Relaxed) {
+                match listener.accept() {
+                    Ok((mut stream, _)) => {
+                        let _ = stream.set_nonblocking(false);
+                        let _ = stream.set_write_timeout(Some(Duration::from_secs(5)));
+                        let mut buffer = [0u8; 4096];
+                        let _ = stream.read(&mut buffer);
+
+                        let header = format!(
+                            "HTTP/1.1 200 OK
+Content-Length: {}
+Connection: close
+
+",
+                            length
+                        );
+                        let _ = stream.write_all(header.as_bytes());
+                        let _ = stream.write_all(&body);
+                        let _ = stream.flush();
+                    }
+                    Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                        std::thread::sleep(Duration::from_millis(2));
+                    }
+                    Err(_) => return,
+                }
+            }
+        });
+
+        // A unique directory: a reused process id must not inherit a partial file of an old run.
+        let stamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|elapsed| elapsed.as_nanos())
+            .unwrap_or(0);
+        let directory =
+            std::env::temp_dir().join(format!("aether-cancel-{}-{}", std::process::id(), stamp));
+        let _ = std::fs::remove_dir_all(&directory);
+        std::fs::create_dir_all(&directory).unwrap();
+
+        let destination = directory.join("big.jar");
+        let cancel = Arc::new(AtomicBool::new(false));
+        let chunks = Arc::new(AtomicUsize::new(0));
+        let flag = Arc::clone(&cancel);
+        let seen = Arc::clone(&chunks);
+
+        let result = Client::new().download_cancellable(
+            &format!("http://{}/big.jar", address),
+            &destination,
+            None,
+            Some(&cancel),
+            |_, _| {
+                // The player presses Cancel while the first chunk is being written.
+                if seen.fetch_add(1, Ordering::Relaxed) == 0 {
+                    flag.store(true, Ordering::Relaxed);
+                }
+            },
+        );
+
+        stop.store(true, Ordering::Relaxed);
+        server.join().unwrap();
+
+        assert!(
+            matches!(result, Err(HttpError::Cancelled)),
+            "the cancellation was not reported: {:?}",
+            result.err()
+        );
+        assert_eq!(
+            chunks.load(Ordering::Relaxed),
+            1,
+            "the download kept reading chunks after the cancel"
+        );
+        assert!(
+            !destination.exists(),
+            "a cancelled download was moved into place"
+        );
+
+        // The bytes are checked once the file system shows them: a freshly closed file can take a
+        // moment under load, which is not the behaviour this test is about.
+        let partial = destination.with_extension("part");
+        let deadline = Instant::now() + Duration::from_secs(5);
+        let written = loop {
+            let written = std::fs::metadata(&partial)
+                .map(|metadata| metadata.len())
+                .unwrap_or(0);
+
+            if written > 0 || Instant::now() >= deadline {
+                break written;
+            }
+
+            std::thread::sleep(Duration::from_millis(10));
+        };
+
+        assert!(written > 0, "the bytes already fetched were thrown away");
+        assert!(
+            written < length as u64,
+            "the cancelled download ran to the end of the file"
+        );
+
+        std::fs::remove_dir_all(&directory).ok();
+    }
+
+    #[test]
+    fn a_corrupted_download_is_fetched_again_and_only_the_verified_bytes_are_kept() {
+        use std::io::{Read, Write};
+        use std::net::TcpListener;
+
+        let listener = TcpListener::bind("127.0.0.1:0").expect("a free loopback port");
+        let address = listener.local_addr().expect("the address of the listener");
+        let good = b"the jar that is announced".to_vec();
+        let served = good.clone();
+
+        let server = std::thread::spawn(move || {
+            // The first answer is a body that does not match its digest, the second is the file.
+            for attempt in 0..2 {
+                let Ok((mut stream, _)) = listener.accept() else {
+                    return;
+                };
+
+                let mut buffer = [0u8; 4096];
+                let _ = stream.read(&mut buffer);
+
+                let payload = if attempt == 0 {
+                    b"a corrupted body".to_vec()
+                } else {
+                    served.clone()
+                };
+
+                let header = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                    payload.len()
+                );
+                let _ = stream.write_all(header.as_bytes());
+                let _ = stream.write_all(&payload);
+                let _ = stream.flush();
+            }
+        });
+
+        let directory =
+            std::env::temp_dir().join(format!("aether-redownload-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&directory);
+        std::fs::create_dir_all(&directory).unwrap();
+
+        let destination = directory.join("mod.jar");
+        let expected = hex_digest(&sha1_digest(&good));
+
+        let report = download(
+            &format!("http://{}/mod.jar", address),
+            &destination,
+            Some(&expected),
+            |_, _| {},
+        )
+        .expect("the corrupted body was replaced by the verified one");
+
+        server.join().unwrap();
+
+        assert_eq!(std::fs::read(&destination).unwrap(), good);
+        assert_eq!(report.bytes, good.len() as u64);
+        assert!(
+            !destination.with_extension("part").exists(),
+            "the partial file of the rejected body was kept"
+        );
+
+        std::fs::remove_dir_all(&directory).ok();
     }
 
     #[test]
@@ -1084,8 +1308,7 @@ mod tests {
 
     #[test]
     fn the_file_sha1_is_computed_in_chunks() {
-        let directory =
-            std::env::temp_dir().join(format!("aether-sha1-{}", std::process::id()));
+        let directory = std::env::temp_dir().join(format!("aether-sha1-{}", std::process::id()));
         std::fs::create_dir_all(&directory).unwrap();
         let file = directory.join("data.bin");
 

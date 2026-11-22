@@ -14,6 +14,7 @@ pub mod minecraft;
 pub mod mods;
 pub mod offline;
 pub mod paths;
+pub mod pending;
 pub mod performance;
 pub mod servers;
 pub mod settings;
@@ -31,6 +32,9 @@ use paths::Paths;
 use settings::{detect_java, find_client_jar};
 use zeroize::Zeroize;
 
+#[cfg(test)]
+pub mod test_server;
+
 pub use settings::Settings;
 
 /// Turns the error of a sign in into a message for the player.
@@ -43,9 +47,11 @@ fn login_error(error: accounts::LoginError) -> String {
     }
 }
 
-
-/// Clears in-memory session values after a vault cannot be loaded or migrated.
-fn clear_session_secrets(accounts: &mut AccountStore) {
+/// Drops the sessions that cannot be protected, then rewrites the catalogue without them.
+///
+/// A vault that cannot be written or read must never leave the tokens in clear text on disk: the
+/// account stays, the player signs in again.
+fn drop_secrets(accounts_file: &std::path::Path, accounts: &mut AccountStore) {
     for account in &mut accounts.accounts {
         account.access_token.zeroize();
         if let Some(token) = &mut account.refresh_token {
@@ -53,6 +59,22 @@ fn clear_session_secrets(accounts: &mut AccountStore) {
         }
         account.refresh_token = None;
     }
+
+    if let Err(error) = write_account_catalogue(accounts_file, accounts) {
+        eprintln!("Aether: could not rewrite the account catalogue: {error}");
+    }
+}
+
+/// Moves the tokens of a legacy catalogue into the vault, then rewrites the catalogue without them.
+///
+/// The protected file is written first: an interruption leaves the tokens recoverable there, and
+/// the next start scrubs the catalogue as soon as the vault loads.
+pub(crate) fn migrate_legacy_secrets(
+    accounts_file: &std::path::Path,
+    accounts: &mut AccountStore,
+) -> Result<(), String> {
+    credentials::save(accounts_file, accounts)?;
+    write_account_catalogue(accounts_file, accounts)
 }
 
 /// Writes the non-secret account catalogue. The Account serializer intentionally omits session tokens.
@@ -106,14 +128,17 @@ impl Launcher {
                     // A previous interrupted migration may have written the vault but not yet
                     // removed legacy plaintext token fields from accounts.json.
                     if let Err(error) = write_account_catalogue(&paths.accounts_file, &accounts) {
-                        eprintln!("Aether: could not scrub legacy account tokens from disk: {error}");
+                        eprintln!(
+                            "Aether: could not scrub legacy account tokens from disk: {error}"
+                        );
                     }
                 }
                 Err(error) => {
-                    eprintln!("Aether: {error}. Sign in to the Microsoft account again to restore it.");
+                    eprintln!(
+                        "Aether: {error}. Sign in to the Microsoft account again to restore it."
+                    );
                     secrets_unavailable = true;
-                    clear_session_secrets(&mut accounts);
-                    write_account_catalogue(&paths.accounts_file, &accounts).ok();
+                    drop_secrets(&paths.accounts_file, &mut accounts);
                 }
             }
         }
@@ -129,11 +154,14 @@ impl Launcher {
         // Upgrade older accounts.json files that kept tokens in clear text. The DPAPI file is
         // written first; only then is the public catalogue rewritten without the tokens.
         if legacy_secrets {
-            if let Err(error) = launcher.save() {
-                eprintln!("Aether: could not migrate Microsoft credentials: {error}. Sign in again.");
-                clear_session_secrets(&mut launcher.accounts);
+            if let Err(error) =
+                migrate_legacy_secrets(&launcher.paths.accounts_file, &mut launcher.accounts)
+            {
+                eprintln!(
+                    "Aether: could not migrate Microsoft credentials: {error}. Sign in again."
+                );
                 launcher.secrets_unavailable = true;
-                write_account_catalogue(&launcher.paths.accounts_file, &launcher.accounts).ok();
+                drop_secrets(&launcher.paths.accounts_file, &mut launcher.accounts);
             }
         }
 
@@ -281,10 +309,16 @@ impl Launcher {
         )
     }
 
-	/// Creates a hosted server using the newest Fabric loader for the chosen Minecraft version.
-	pub fn create_hosted_server_for_version(&self, name: &str, port: u16, max_players: u32, game_version: &str) -> Result<hosting::HostedServer, String> {
-		hosting::create_for_version(&self.paths, name, port, max_players, game_version)
-	}
+    /// Creates a hosted server using the newest Fabric loader for the chosen Minecraft version.
+    pub fn create_hosted_server_for_version(
+        &self,
+        name: &str,
+        port: u16,
+        max_players: u32,
+        game_version: &str,
+    ) -> Result<hosting::HostedServer, String> {
+        hosting::create_for_version(&self.paths, name, port, max_players, game_version)
+    }
 
     /// Starts a local server in the background.
     pub fn start_hosted_server(&self, name: &str) -> Result<hosting::HostedServer, String> {
@@ -309,12 +343,40 @@ impl Launcher {
         only: &[String],
         on_progress: impl FnMut(&performance::ModProgress),
     ) -> performance::InstallReport {
-        performance::install(
-            &self.paths,
-            &self.settings.game_version,
-            only,
-            on_progress,
-        )
+        performance::install(&self.paths, &self.settings.game_version, only, on_progress)
+    }
+
+    /// The installation that was interrupted, if the last run did not finish.
+    pub fn pending_installation(&self) -> Option<pending::PendingInstall> {
+        pending::read(&self.paths)
+    }
+
+    /// Removes the journal of an interrupted installation and its partial downloads.
+    pub fn discard_pending_installation(&self) -> Result<usize, String> {
+        pending::discard(&self.paths)
+    }
+
+    /// Checks the files of an installed version against their published digest, and optionally
+    /// re-downloads only the files that are missing or altered.
+    pub fn verify_installation(
+        &self,
+        version: Option<&str>,
+        repair: bool,
+    ) -> Result<installer::VerifyReport, installer::InstallError> {
+        let version = version
+            .map(str::to_string)
+            .unwrap_or_else(|| self.settings.game_version.clone());
+
+        if repair {
+            installer::repair(&self.paths, &version)
+        } else {
+            installer::verify(&self.paths, &version)
+        }
+    }
+
+    /// Checks the jars of the optimisation pack against the manifest of their checksums.
+    pub fn verify_optimisation(&self) -> performance::PackReport {
+        performance::verify(&self.paths)
     }
 
     /// Applies a preset of `options.txt` and records it in the settings.
@@ -338,7 +400,10 @@ impl Launcher {
 
     /// Adds an offline account.
     pub fn add_offline_account(&mut self, username: &str) -> Result<Account, String> {
-        let account = self.accounts.add_offline(username).map_err(|error| error.to_string())?;
+        let account = self
+            .accounts
+            .add_offline(username)
+            .map_err(|error| error.to_string())?;
         self.save()?;
         Ok(account)
     }
@@ -387,7 +452,9 @@ impl Launcher {
             .unwrap_or_else(|| self.settings.fabric_api_version.clone());
 
         let mod_jar = self.client_jar().ok_or_else(|| {
-            installer::InstallError::MissingMod("aether-client/build/libs/aether-client-1.0.0.jar".to_string())
+            installer::InstallError::MissingMod(
+                "aether-client/build/libs/aether-client-1.0.0.jar".to_string(),
+            )
         })?;
 
         installer::install_version(
@@ -403,9 +470,8 @@ impl Launcher {
         self.settings.game_version = game_version.clone();
         self.settings.loader_version = loader_version.clone();
         self.settings.fabric_api_version = fabric_api_version.clone();
-        self.save().map_err(|error| {
-            installer::InstallError::Io(std::io::Error::other(error))
-        })?;
+        self.save()
+            .map_err(|error| installer::InstallError::Io(std::io::Error::other(error)))?;
 
         Ok((game_version, loader_version, fabric_api_version))
     }
@@ -462,8 +528,9 @@ impl Launcher {
             .unwrap_or_else(|| profile.game_version.clone());
 
         let java_path = if self.settings.java_path.is_empty() {
-            detect_java("", self.settings.required_java_version)
-                .ok_or_else(|| "no Java runtime found, set the Java path in the settings".to_string())?
+            detect_java("", self.settings.required_java_version).ok_or_else(|| {
+                "no Java runtime found, set the Java path in the settings".to_string()
+            })?
         } else {
             PathBuf::from(&self.settings.java_path)
         };
@@ -494,9 +561,10 @@ impl Launcher {
                 .join(&game_version)
                 .join(format!("{}.jar", game_version)),
             extra_jars: vec![
-                self.paths
-                    .mods
-                    .join(format!("fabric-api-{}.jar", self.settings.fabric_api_version)),
+                self.paths.mods.join(format!(
+                    "fabric-api-{}.jar",
+                    self.settings.fabric_api_version
+                )),
                 self.paths.mods.join("aether-client.jar"),
             ],
             natives_dir: self.paths.versions.join(&game_version).join("natives"),
@@ -574,5 +642,116 @@ impl Launcher {
     /// shell itself was killed, or for a game started from the command line.
     pub fn stop_game(&self) -> Result<u32, String> {
         game::stop(&self.paths.data)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A catalogue written by a version that kept the Microsoft tokens in clear text.
+    const LEGACY_CATALOGUE: &str = r#"{
+        "accounts": [
+            {
+                "type": "microsoft",
+                "id": "account-1",
+                "username": "AetherTester",
+                "uuid": "00000000-0000-0000-0000-000000000001",
+                "accessToken": "legacy-access-token",
+                "refreshToken": "legacy-refresh-token",
+                "expiresAt": 1900000000
+            }
+        ],
+        "selected": "account-1"
+    }"#;
+
+    fn scratch(name: &str) -> Paths {
+        let stamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|elapsed| elapsed.as_nanos())
+            .unwrap_or(0);
+        let home =
+            std::env::temp_dir().join(format!("aether-{}-{}-{}", name, std::process::id(), stamp));
+        let game = home.join(".minecraft");
+        let data = home.join("aether");
+
+        let paths = Paths {
+            assets: game.join("assets"),
+            asset_indexes: game.join("assets").join("indexes"),
+            asset_objects: game.join("assets").join("objects"),
+            libraries: game.join("libraries"),
+            versions: game.join("versions"),
+            mods: game.join("mods"),
+            settings_file: data.join("settings.json"),
+            accounts_file: data.join("accounts.json"),
+            servers_file: data.join("servers.json"),
+            server_root: home.join("servers"),
+            options_file: game.join("options.txt"),
+            logs: data.join("logs"),
+            home,
+            game,
+            data,
+        };
+        paths.ensure().unwrap();
+        paths
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn a_legacy_catalogue_is_migrated_into_the_vault_and_scrubbed() {
+        let paths = scratch("legacy-catalogue");
+        std::fs::write(&paths.accounts_file, LEGACY_CATALOGUE).unwrap();
+
+        let mut accounts: AccountStore =
+            serde_json::from_str(&std::fs::read_to_string(&paths.accounts_file).unwrap()).unwrap();
+        assert!(
+            credentials::has_secrets(&accounts),
+            "the fixture must start with clear-text tokens"
+        );
+
+        migrate_legacy_secrets(&paths.accounts_file, &mut accounts).unwrap();
+
+        let vault = std::fs::read_to_string(credentials::file_path(&paths.accounts_file)).unwrap();
+        assert!(vault.starts_with("AETHER-CREDENTIALS-V1"));
+        assert!(!vault.contains("legacy-access-token"));
+        assert!(!vault.contains("legacy-refresh-token"));
+
+        let catalogue = std::fs::read_to_string(&paths.accounts_file).unwrap();
+        assert!(!catalogue.contains("legacy-access-token"));
+        assert!(!catalogue.contains("legacy-refresh-token"));
+        assert!(!catalogue.contains("accessToken"), "{}", catalogue);
+        assert!(catalogue.contains("AetherTester"));
+
+        // The tokens are not lost: the next start reads them back from the vault.
+        let mut reloaded: AccountStore = serde_json::from_str(&catalogue).unwrap();
+        assert!(!credentials::has_secrets(&reloaded));
+        assert!(credentials::load(&paths.accounts_file, &mut reloaded).unwrap());
+        assert_eq!(reloaded.accounts[0].access_token, "legacy-access-token");
+        assert_eq!(
+            reloaded.accounts[0].refresh_token.as_deref(),
+            Some("legacy-refresh-token")
+        );
+
+        std::fs::remove_dir_all(&paths.home).ok();
+    }
+
+    #[test]
+    fn a_catalogue_loses_its_tokens_when_the_vault_cannot_be_written() {
+        let paths = scratch("legacy-unprotected");
+        std::fs::write(&paths.accounts_file, LEGACY_CATALOGUE).unwrap();
+        let mut accounts: AccountStore = serde_json::from_str(LEGACY_CATALOGUE).unwrap();
+
+        drop_secrets(&paths.accounts_file, &mut accounts);
+
+        assert!(accounts.accounts[0].access_token.is_empty());
+        assert!(accounts.accounts[0].refresh_token.is_none());
+        assert!(!credentials::has_secrets(&accounts));
+
+        let catalogue = std::fs::read_to_string(&paths.accounts_file).unwrap();
+        assert!(!catalogue.contains("legacy-access-token"));
+        assert!(!catalogue.contains("legacy-refresh-token"));
+        assert!(!catalogue.contains("accessToken"), "{}", catalogue);
+
+        std::fs::remove_dir_all(&paths.home).ok();
     }
 }

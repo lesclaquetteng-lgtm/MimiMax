@@ -149,10 +149,7 @@ pub fn read_tail(file: &Path, limit: usize) -> Result<Tail, io::Error> {
         path,
         exists: true,
         total,
-        lines: all[start..]
-            .iter()
-            .map(|line| line.to_string())
-            .collect(),
+        lines: all[start..].iter().map(|line| line.to_string()).collect(),
     })
 }
 
@@ -252,9 +249,8 @@ pub fn prune_with_budget(directory: &Path, keep: usize, max_bytes: u64) -> usize
 
     for (index, entry) in sessions_in(directory, usize::MAX).into_iter().enumerate() {
         let too_many = index >= keep.max(1);
-        let too_big = max_bytes > 0
-            && index > 0
-            && kept_bytes.saturating_add(entry.size) > max_bytes;
+        let too_big =
+            max_bytes > 0 && index > 0 && kept_bytes.saturating_add(entry.size) > max_bytes;
 
         if too_many || too_big {
             if fs::remove_file(&entry.path).is_ok() {
@@ -346,7 +342,8 @@ mod tests {
 
     /// An empty folder that belongs to one test.
     fn temporary(name: &str) -> PathBuf {
-        let root = std::env::temp_dir().join(format!("aether-logs-{}-{}", std::process::id(), name));
+        let root =
+            std::env::temp_dir().join(format!("aether-logs-{}-{}", std::process::id(), name));
         let _ = fs::remove_dir_all(&root);
         fs::create_dir_all(&root).unwrap();
         root
@@ -484,10 +481,18 @@ mod tests {
         assert_eq!(removed, 2, "the two oldest sessions pass the budget");
 
         let left = sessions_in(&root, 100);
-        assert_eq!(left.len(), 2, "{:?}", left.iter().map(|s| &s.name).collect::<Vec<_>>());
+        assert_eq!(
+            left.len(),
+            2,
+            "{:?}",
+            left.iter().map(|s| &s.name).collect::<Vec<_>>()
+        );
         assert_eq!(left[0].name, "session-20261104-090000.log");
         assert_eq!(left[1].name, "session-20261103-090000.log");
-        assert!(root.join(INSTALL_LOG).exists(), "the install log is not a session");
+        assert!(
+            root.join(INSTALL_LOG).exists(),
+            "the install log is not a session"
+        );
 
         fs::remove_dir_all(&root).ok();
     }
@@ -556,7 +561,10 @@ mod tests {
         let kept = fs::read_to_string(&file).unwrap();
         assert!(kept.starts_with("download "), "{}", &kept[..40]);
         assert!(kept.ends_with('\n'), "the last line is complete");
-        assert!(kept.contains("download libraries/3999"), "the newest line is kept");
+        assert!(
+            kept.contains("download libraries/3999"),
+            "the newest line is kept"
+        );
         assert!(!root.join("install.log.tmp").exists());
 
         fs::remove_dir_all(&root).ok();
@@ -590,7 +598,10 @@ mod tests {
 
         assert!(sessions_in(&root, 10).is_empty());
         assert!(read_session_in(&root, name, 10).is_err());
-        assert_eq!(fs::read_to_string(&outside).unwrap(), "external secret log\n");
+        assert_eq!(
+            fs::read_to_string(&outside).unwrap(),
+            "external secret log\n"
+        );
 
         fs::remove_file(&outside).ok();
         fs::remove_dir_all(&root).ok();
@@ -608,12 +619,26 @@ mod tests {
         let tail = read_session_in(&root, "session-20261113-181500.log", 10).unwrap();
         assert!(tail.exists);
         assert_eq!(tail.total, 3);
-        assert!(tail.lines[1].contains("fake java started"), "{:?}", tail.lines);
+        assert!(
+            tail.lines[1].contains("fake java started"),
+            "{:?}",
+            tail.lines
+        );
 
         // Anything that is not a session of this folder is refused.
-        for name in ["../aether/settings.json", "install.log", "session-.log/../x", ""] {
+        for name in [
+            "../aether/settings.json",
+            "install.log",
+            "session-.log/../x",
+            "",
+        ] {
             let error = read_session_in(&root, name, 10).expect_err(name);
-            assert!(error.contains("invalid session name"), "{}: {}", name, error);
+            assert!(
+                error.contains("invalid session name"),
+                "{}: {}",
+                name,
+                error
+            );
         }
 
         fs::remove_dir_all(&root).ok();

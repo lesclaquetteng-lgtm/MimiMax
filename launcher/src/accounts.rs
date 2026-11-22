@@ -69,7 +69,14 @@ impl std::fmt::Debug for Account {
             .field("id", &self.id)
             .field("username", &self.username)
             .field("uuid", &self.uuid)
-            .field("access_token", &if self.access_token.is_empty() { "" } else { "<redacted>" })
+            .field(
+                "access_token",
+                &if self.access_token.is_empty() {
+                    ""
+                } else {
+                    "<redacted>"
+                },
+            )
             .field(
                 "refresh_token",
                 &self.refresh_token.as_ref().map(|_| "<redacted>"),
@@ -166,7 +173,11 @@ impl AccountStore {
 
     /// Replaces an account by its identifier, the selection of the player is kept.
     pub fn replace(&mut self, account: Account) {
-        if let Some(position) = self.accounts.iter().position(|entry| entry.id == account.id) {
+        if let Some(position) = self
+            .accounts
+            .iter()
+            .position(|entry| entry.id == account.id)
+        {
             self.accounts[position] = account;
         }
     }
@@ -189,7 +200,14 @@ impl std::fmt::Debug for Session {
             .debug_struct("Session")
             .field("username", &self.username)
             .field("uuid", &self.uuid)
-            .field("access_token", &if self.access_token == "0" { "0" } else { "<redacted>" })
+            .field(
+                "access_token",
+                &if self.access_token == "0" {
+                    "0"
+                } else {
+                    "<redacted>"
+                },
+            )
             .field("offline", &self.offline)
             .field("xuid", &self.xuid)
             .field("client_id", &self.client_id)
@@ -330,7 +348,11 @@ impl std::fmt::Display for LoginError {
                 if description.is_empty() {
                     write!(formatter, "The Microsoft sign in was declined.")
                 } else {
-                    write!(formatter, "The Microsoft sign in was declined: {}", description)
+                    write!(
+                        formatter,
+                        "The Microsoft sign in was declined: {}",
+                        description
+                    )
                 }
             }
             LoginError::OAuth { code, description } => write!(
@@ -409,7 +431,12 @@ pub fn poll_device_code(code: &DeviceCode) -> Result<TokenResponse, LoginError> 
                             return Err(LoginError::Declined(description));
                         }
                         "expired_token" | "code_expired" => return Err(LoginError::Expired),
-                        _ => return Err(LoginError::OAuth { code: name, description }),
+                        _ => {
+                            return Err(LoginError::OAuth {
+                                code: name,
+                                description,
+                            })
+                        }
                     }
                 } else if !is_pending_status(&error) {
                     return Err(LoginError::Http(error));
@@ -455,7 +482,10 @@ fn oauth_error(error: &HttpError) -> Option<(String, String)> {
 fn is_pending_status(error: &HttpError) -> bool {
     matches!(
         error,
-        HttpError::Status { status: 400 | 429, .. }
+        HttpError::Status {
+            status: 400 | 429,
+            ..
+        }
     )
 }
 
@@ -559,7 +589,8 @@ pub fn complete_microsoft_login(token: &TokenResponse) -> Result<Account, HttpEr
         .filter(|uhs| !uhs.is_empty())
         .ok_or_else(|| {
             HttpError::Json(
-                "Microsoft did not return an Xbox user hash: DisplayClaims.xui is empty".to_string(),
+                "Microsoft did not return an Xbox user hash: DisplayClaims.xui is empty"
+                    .to_string(),
             )
         })?;
 
@@ -574,7 +605,10 @@ pub fn complete_microsoft_login(token: &TokenResponse) -> Result<Account, HttpEr
         let request = ureq::AgentBuilder::new().build();
         request
             .get(MC_PROFILE_URL)
-            .set("authorization", &format!("Bearer {}", minecraft.access_token))
+            .set(
+                "authorization",
+                &format!("Bearer {}", minecraft.access_token),
+            )
             .call()
             .map_err(|error| HttpError::Io(std::io::Error::other(error.to_string())))
             .and_then(|response| {
@@ -617,7 +651,10 @@ pub fn refresh_account(account: &Account) -> Result<Account, LoginError> {
             ("client_id", MICROSOFT_CLIENT_ID),
             ("grant_type", REFRESH_TOKEN_GRANT),
             ("refresh_token", &refresh_token),
-            ("scope", "service::user.auth.xboxlive.com::MBI_SSL offline_access"),
+            (
+                "scope",
+                "service::user.auth.xboxlive.com::MBI_SSL offline_access",
+            ),
         ],
     )
     .map_err(login_error_from)?;
@@ -730,7 +767,8 @@ mod tests {
 
             assert_eq!(id.len(), 36, "{}", id);
             assert!(
-                id.chars().all(|value| value.is_ascii_hexdigit() || value == '-'),
+                id.chars()
+                    .all(|value| value.is_ascii_hexdigit() || value == '-'),
                 "{}",
                 id
             );
@@ -870,10 +908,14 @@ mod tests {
     #[test]
     fn a_name_nobody_owns_is_not_premium() {
         for status in [204, 404] {
-            let answer = read_name_answer("https://example.invalid/Somebody", "Somebody", status, "")
-                .expect("an empty answer is a valid answer");
+            let answer =
+                read_name_answer("https://example.invalid/Somebody", "Somebody", status, "")
+                    .expect("an empty answer is a valid answer");
 
-            assert!(!answer.premium, "a free name was read as premium on {status}");
+            assert!(
+                !answer.premium,
+                "a free name was read as premium on {status}"
+            );
             assert_eq!(answer.name, "Somebody");
         }
     }

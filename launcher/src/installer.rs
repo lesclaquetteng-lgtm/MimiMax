@@ -59,11 +59,17 @@ impl std::fmt::Display for InstallError {
         match self {
             InstallError::Cancelled => write!(formatter, "the installation was cancelled"),
             InstallError::MissingClient(version) => {
-                write!(formatter, "version {} does not provide a client download", version)
+                write!(
+                    formatter,
+                    "version {} does not provide a client download",
+                    version
+                )
             }
             InstallError::Io(error) => write!(formatter, "{}", error),
             InstallError::Http(error) => write!(formatter, "{}", error),
-            InstallError::MissingMod(path) => write!(formatter, "the Aether client jar was not found at {}", path),
+            InstallError::MissingMod(path) => {
+                write!(formatter, "the Aether client jar was not found at {}", path)
+            }
         }
     }
 }
@@ -78,7 +84,11 @@ impl From<io::Error> for InstallError {
 
 impl From<HttpError> for InstallError {
     fn from(error: HttpError) -> Self {
-        InstallError::Http(error)
+        match error {
+            // A token the player set stops the installation as a whole, not one file.
+            HttpError::Cancelled => InstallError::Cancelled,
+            other => InstallError::Http(other),
+        }
     }
 }
 
@@ -106,8 +116,55 @@ pub struct Installed {
     pub natives_dir: PathBuf,
 }
 
+/// The steps an installation reports, the journal counts them.
+const TASKS: usize = 5;
+
 /// Installs a version of Minecraft together with the Fabric loader and the client.
+///
+/// The run is journalled: a start that dies midway leaves `install.pending.json`, and the next run
+/// resumes it, because every file that is already verified is skipped instead of downloaded again.
 pub fn install_version(
+    game_version: &str,
+    loader_version: &str,
+    fabric_api_version: &str,
+    mod_jar: &Path,
+    paths: &Paths,
+    cancel: &AtomicBool,
+    on_progress: impl FnMut(&InstallProgress),
+) -> Result<Installed, InstallError> {
+    // A run that is cancelled before it starts touches nothing, not even its journal.
+    check_cancelled(cancel)?;
+
+    let mut journal = crate::pending::PendingInstall::new("game", game_version);
+    journal.loader = loader_version.to_string();
+    journal.fabric_api = fabric_api_version.to_string();
+    journal.total = TASKS;
+    crate::pending::begin(paths, &journal)
+        .map_err(|error| InstallError::Io(io::Error::other(error)))?;
+
+    let result = install_steps(
+        game_version,
+        loader_version,
+        fabric_api_version,
+        mod_jar,
+        paths,
+        cancel,
+        on_progress,
+    );
+
+    match &result {
+        Ok(_) => crate::pending::close(paths),
+        // A cancellation and a failure both keep the journal: the files that were verified are
+        // exactly what the next run does not download again.
+        Err(error) => crate::pending::record(paths, &format!("stopped: {}", error), 0),
+    }
+
+    result
+}
+
+/// The body of [`install_version`], the journal wraps it.
+#[allow(clippy::too_many_arguments)]
+fn install_steps(
     game_version: &str,
     loader_version: &str,
     fabric_api_version: &str,
@@ -124,7 +181,7 @@ pub fn install_version(
         return Err(invalid_path("Fabric API version", fabric_api_version));
     }
 
-    let total_tasks = 5;
+    let total_tasks = TASKS;
     let mut completed = 0usize;
 
     let mut report = |task: &str, received: u64, total: u64, completed: usize| {
@@ -166,10 +223,11 @@ pub fn install_version(
         client_download.size,
         completed,
     );
-    let metrics = client.download(
+    let metrics = client.download_cancellable(
         &client_download.url,
         &client_jar,
         Some(&client_download.sha1),
+        Some(cancel),
         |received, total| report("Downloading Minecraft client", received, total, completed),
     )?;
     log_download(
@@ -178,6 +236,7 @@ pub fn install_version(
         &metrics,
     );
     completed += 1;
+    crate::pending::record(paths, "Downloading libraries", completed);
 
     // --- the libraries ----------------------------------------------------------------
     report("Downloading libraries", 0, 0, completed);
@@ -186,15 +245,17 @@ pub fn install_version(
         check_cancelled(cancel)?;
 
         let destination = library_destination(paths, &library.path)?;
-        let metrics = client.download(
+        let metrics = client.download_cancellable(
             &library.url,
             &destination,
             library.sha1.as_deref(),
+            Some(cancel),
             |received, total| report("Downloading libraries", received, total, completed),
         )?;
         log_download(paths, &library.path, &metrics);
     }
     completed += 1;
+    crate::pending::record(paths, "Downloading assets", completed);
 
     // --- the assets ---------------------------------------------------------------------
     report("Downloading assets", 0, 0, completed);
@@ -202,6 +263,7 @@ pub fn install_version(
         report("Downloading assets", received, total, completed)
     })?;
     completed += 1;
+    crate::pending::record(paths, "Downloading Fabric API", completed);
 
     // --- the Fabric API -----------------------------------------------------------------
     report("Downloading Fabric API", 0, 0, completed);
@@ -228,10 +290,11 @@ pub fn install_version(
                 actual: "none, the .sha1 file was missing or unreadable".to_string(),
             })
         })?;
-    let metrics = client.download(
+    let metrics = client.download_cancellable(
         &fabric_api_url,
         &fabric_api_jar,
         Some(&fabric_api_sha1),
+        Some(cancel),
         |received, total| report("Downloading Fabric API", received, total, completed),
     )?;
     log_download(
@@ -240,6 +303,7 @@ pub fn install_version(
         &metrics,
     );
     completed += 1;
+    crate::pending::record(paths, "Preparing natives", completed);
 
     // --- the natives ---------------------------------------------------------------------
     report("Preparing natives", 0, 0, completed);
@@ -247,13 +311,17 @@ pub fn install_version(
     let natives_dir = paths.versions.join(game_version).join("natives");
     install_natives(&libraries, paths, &client, cancel, &natives_dir)?;
     completed += 1;
+    crate::pending::record(paths, "Writing the version description", completed);
 
     // --- the description of the version ---------------------------------------------------
     let version_dir = paths.versions.join(game_version);
     fs::create_dir_all(&version_dir)?;
     let description = serde_json::to_string_pretty(&vanilla)
         .map_err(|error| InstallError::Io(io::Error::other(error.to_string())))?;
-    fs::write(version_dir.join(format!("{}.json", game_version)), description)?;
+    fs::write(
+        version_dir.join(format!("{}.json", game_version)),
+        description,
+    )?;
 
     // --- the mod --------------------------------------------------------------------------
     check_cancelled(cancel)?;
@@ -265,6 +333,7 @@ pub fn install_version(
     fs::copy(mod_jar, &target)?;
 
     report("Ready", 0, 0, completed);
+    crate::pending::record(paths, "Ready", completed);
 
     Ok(Installed {
         version,
@@ -312,7 +381,10 @@ fn unique_asset_objects(
             Some(size) if *size != object.size => {
                 return Err(invalid_path(
                     "asset duplicate hash size",
-                    &format!("{} has conflicting sizes {} and {}", object.hash, size, object.size),
+                    &format!(
+                        "{} has conflicting sizes {} and {}",
+                        object.hash, size, object.size
+                    ),
                 ));
             }
             Some(_) => continue,
@@ -329,9 +401,9 @@ fn unique_asset_objects(
 /// Adds remote asset sizes without allowing a malformed index to wrap the progress total.
 fn total_asset_size(objects: &[AssetObject]) -> Result<u64, InstallError> {
     objects.iter().try_fold(0u64, |total, object| {
-        total.checked_add(object.size).ok_or_else(|| {
-            invalid_path("asset index total size", "the sum exceeds the u64 range")
-        })
+        total
+            .checked_add(object.size)
+            .ok_or_else(|| invalid_path("asset index total size", "the sum exceeds the u64 range"))
     })
 }
 
@@ -373,13 +445,18 @@ fn install_assets(
                 .as_ref()
                 .ok_or_else(|| InstallError::MissingClient(index_id.clone()))?;
             let _ = fs::remove_file(&index_file);
-            let metrics = client.download(
+            let metrics = client.download_cancellable(
                 &index_download.url,
                 &index_file,
                 Some(&index_download.sha1),
+                Some(cancel),
                 |_, _| {},
             )?;
-            log_download(paths, &format!("assets/indexes/{}.json", index_id), &metrics);
+            log_download(
+                paths,
+                &format!("assets/indexes/{}.json", index_id),
+                &metrics,
+            );
             read_asset_index(&index_file).ok_or_else(|| {
                 InstallError::Io(io::Error::other(format!(
                     "the index {} of the assets could not be read",
@@ -512,10 +589,11 @@ fn download_assets(
                     let destination = paths.assets.join(asset_path(&object.hash));
                     let mut reported = 0u64;
 
-                    match client.download(
+                    match client.download_cancellable(
                         &asset_url_from(host, &object.hash),
                         &destination,
                         Some(object.hash.as_str()),
+                        Some(cancel),
                         |file_received, _| {
                             // A download that is retried starts at zero again, only the bytes that
                             // were not counted yet are forwarded.
@@ -571,9 +649,7 @@ fn download_assets(
         Ok(Some(error)) => Err(error),
         Ok(None) => Ok(()),
         Err(poisoned) => Err(poisoned.into_inner().unwrap_or_else(|| {
-            InstallError::Io(io::Error::other(
-                "the asset installer stopped unexpectedly",
-            ))
+            InstallError::Io(io::Error::other("the asset installer stopped unexpectedly"))
         })),
     }
 }
@@ -591,10 +667,11 @@ fn install_natives(
     for library in libraries.iter().filter(|entry| entry.native) {
         check_cancelled(cancel)?;
         let destination = library_destination(paths, &library.path)?;
-        let metrics = client.download(
+        let metrics = client.download_cancellable(
             &library.url,
             &destination,
             library.sha1.as_deref(),
+            Some(cancel),
             |_, _| {},
         )?;
         log_download(paths, &library.path, &metrics);
@@ -610,7 +687,10 @@ fn install_natives(
 fn extract_zip(bytes: &[u8], destination: &Path) -> Result<(), InstallError> {
     let reader = std::io::Cursor::new(bytes);
     let mut archive = zip::ZipArchive::new(reader).map_err(|error| {
-        InstallError::Io(io::Error::other(format!("not a valid zip archive: {}", error)))
+        InstallError::Io(io::Error::other(format!(
+            "not a valid zip archive: {}",
+            error
+        )))
     })?;
 
     for index in 0..archive.len() {
@@ -663,11 +743,7 @@ fn log_download(paths: &Paths, name: &str, report: &DownloadReport) {
     let path = logs::install_log(paths);
     let line = format_download(name, report);
 
-    if let Ok(mut file) = fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(&path)
-    {
+    if let Ok(mut file) = fs::OpenOptions::new().create(true).append(true).open(&path) {
         let _ = file.write_all(line.as_bytes());
     }
 
@@ -722,6 +798,217 @@ pub fn read_version_json(paths: &Paths, version: &str) -> Option<VersionJson> {
     )
     .ok()?;
     serde_json::from_str(&content).ok()
+}
+
+/// One file whose digest the metadata publishes, with the address it can be fetched from.
+struct Check {
+    /// The path the report shows.
+    label: String,
+    path: PathBuf,
+    expected: String,
+    url: String,
+    /// `true` for an asset object, whose address is built from the resource host.
+    asset: bool,
+}
+
+/// One file that a verification looked at.
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VerifiedFile {
+    /// The path of the file, relative to the game directory.
+    pub path: String,
+    pub expected: String,
+    /// `None` when the file is missing altogether.
+    pub actual: Option<String>,
+}
+
+/// The result of the verification of an installation.
+#[derive(Clone, Debug, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VerifyReport {
+    pub version: String,
+    /// The number of files that carry a published digest.
+    pub checked: usize,
+    pub missing: Vec<VerifiedFile>,
+    pub altered: Vec<VerifiedFile>,
+    /// The files whose metadata publishes no digest; they cannot be verified.
+    pub unverified: Vec<String>,
+}
+
+impl VerifyReport {
+    /// `true` when every file that can be verified is where it should be.
+    pub fn is_clean(&self) -> bool {
+        self.missing.is_empty() && self.altered.is_empty()
+    }
+}
+
+/// Every file of an installed version that its metadata lets the launcher verify.
+///
+/// The assets are named by their digest, so a file is verified by hashing it and comparing the
+/// result to its own name: a truncated or replaced object is caught even when its size matches.
+fn checks(paths: &Paths, version: &str) -> Result<(Vec<Check>, Vec<String>), InstallError> {
+    let Some(description) = read_version_json(paths, version) else {
+        return Err(InstallError::Io(io::Error::new(
+            io::ErrorKind::NotFound,
+            format!(
+                "version {} is not installed: its version description is missing",
+                version
+            ),
+        )));
+    };
+
+    let mut files = Vec::new();
+    let mut unverified = Vec::new();
+
+    let client_label = format!("versions/{}/{}.jar", version, version);
+    match description
+        .downloads
+        .client
+        .as_ref()
+        .filter(|client| !client.sha1.trim().is_empty())
+    {
+        Some(client) => files.push(Check {
+            label: client_label,
+            path: paths
+                .versions
+                .join(version)
+                .join(format!("{}.jar", version)),
+            expected: client.sha1.trim().to_ascii_lowercase(),
+            url: client.url.clone(),
+            asset: false,
+        }),
+        None => unverified.push(client_label),
+    }
+
+    for library in resolve_libraries(&description, &crate::minecraft::detect_os()) {
+        let Ok(path) = library_destination(paths, &library.path) else {
+            continue;
+        };
+
+        match library
+            .sha1
+            .as_deref()
+            .map(str::trim)
+            .filter(|sha1| !sha1.is_empty())
+        {
+            Some(sha1) => files.push(Check {
+                label: library.path.clone(),
+                path,
+                expected: sha1.to_ascii_lowercase(),
+                url: library.url.clone(),
+                asset: false,
+            }),
+            None => unverified.push(library.path),
+        }
+    }
+
+    if let Some(index) = &description.asset_index {
+        let index_file = paths.asset_indexes.join(format!("{}.json", index.id));
+        let index_label = format!("assets/indexes/{}.json", index.id);
+
+        if index.sha1.trim().is_empty() {
+            unverified.push(index_label);
+        } else {
+            files.push(Check {
+                label: index_label,
+                path: index_file.clone(),
+                expected: index.sha1.trim().to_ascii_lowercase(),
+                url: index.url.clone(),
+                asset: false,
+            });
+        }
+
+        if let Some(objects) = read_asset_index(&index_file) {
+            for (name, object) in objects.objects {
+                if !crate::minecraft::is_sha1_hash(&object.hash) {
+                    continue;
+                }
+
+                let relative = asset_path(&object.hash);
+                files.push(Check {
+                    label: format!("{} ({})", relative, name),
+                    path: paths.assets.join(&relative),
+                    expected: object.hash.to_ascii_lowercase(),
+                    url: asset_url_from(RESOURCE_HOST, &object.hash),
+                    asset: true,
+                });
+            }
+        }
+    }
+
+    Ok((files, unverified))
+}
+
+/// Recomputes the SHA-1 of every file an installation declares.
+///
+/// Nothing is downloaded and nothing is deleted: the report names the files that are missing or
+/// whose bytes no longer match the digest the metadata publishes.
+pub fn verify(paths: &Paths, version: &str) -> Result<VerifyReport, InstallError> {
+    let (files, unverified) = checks(paths, version)?;
+    Ok(report(version, &files, unverified))
+}
+
+/// Re-downloads only the files that are missing or altered, then verifies the installation again.
+pub fn repair(paths: &Paths, version: &str) -> Result<VerifyReport, InstallError> {
+    repair_from(paths, version, &Client::new(), RESOURCE_HOST)
+}
+
+/// [`repair`] with an explicit resource host, so a test can serve the assets from loopback.
+fn repair_from(
+    paths: &Paths,
+    version: &str,
+    client: &Client,
+    resources: &str,
+) -> Result<VerifyReport, InstallError> {
+    let (files, unverified) = checks(paths, version)?;
+
+    for check in &files {
+        if crate::http::sha1(&check.path).as_deref() == Some(check.expected.as_str()) {
+            continue;
+        }
+
+        let url = if check.asset {
+            asset_url_from(resources, &check.expected)
+        } else {
+            check.url.clone()
+        };
+
+        // A download is verified while it is written and only moved into place once its digest
+        // matched, so a repair can never install a corrupt file either.
+        client.download(&url, &check.path, Some(&check.expected), |_, _| {})?;
+        log_download(paths, &check.label, &DownloadReport::default());
+    }
+
+    Ok(report(version, &files, unverified))
+}
+
+/// Builds the report of a set of checks from what is on the disk now.
+fn report(version: &str, files: &[Check], unverified: Vec<String>) -> VerifyReport {
+    let mut report = VerifyReport {
+        version: version.to_string(),
+        unverified,
+        ..VerifyReport::default()
+    };
+
+    for check in files {
+        report.checked += 1;
+
+        match crate::http::sha1(&check.path) {
+            None => report.missing.push(VerifiedFile {
+                path: check.label.clone(),
+                expected: check.expected.clone(),
+                actual: None,
+            }),
+            Some(actual) if actual != check.expected => report.altered.push(VerifiedFile {
+                path: check.label.clone(),
+                expected: check.expected.clone(),
+                actual: Some(actual),
+            }),
+            Some(_) => {}
+        }
+    }
+
+    report
 }
 
 #[cfg(test)]
@@ -797,8 +1084,14 @@ mod tests {
     fn duplicate_asset_hashes_are_downloaded_only_once() {
         let hash = "0123456789abcdef0123456789abcdef01234567".to_string();
         let objects = vec![
-            AssetObject { hash: hash.clone(), size: 128 },
-            AssetObject { hash: hash.clone(), size: 128 },
+            AssetObject {
+                hash: hash.clone(),
+                size: 128,
+            },
+            AssetObject {
+                hash: hash.clone(),
+                size: 128,
+            },
             AssetObject {
                 hash: "abcdef0123456789abcdef0123456789abcdef01".to_string(),
                 size: 64,
@@ -816,8 +1109,14 @@ mod tests {
         let lower = "abcdef0123456789abcdef0123456789abcdef01".to_string();
         let upper = lower.to_ascii_uppercase();
         let objects = vec![
-            AssetObject { hash: lower.clone(), size: 64 },
-            AssetObject { hash: upper, size: 64 },
+            AssetObject {
+                hash: lower.clone(),
+                size: 64,
+            },
+            AssetObject {
+                hash: upper,
+                size: 64,
+            },
         ];
 
         let unique = unique_asset_objects(objects).unwrap();
@@ -830,7 +1129,10 @@ mod tests {
     fn duplicate_asset_hashes_with_conflicting_sizes_are_rejected() {
         let hash = "0123456789abcdef0123456789abcdef01234567".to_string();
         let objects = vec![
-            AssetObject { hash: hash.clone(), size: 128 },
+            AssetObject {
+                hash: hash.clone(),
+                size: 128,
+            },
             AssetObject { hash, size: 256 },
         ];
 
@@ -851,10 +1153,7 @@ mod tests {
         ];
 
         assert!(total_asset_size(&objects).is_err());
-        assert_eq!(
-            total_asset_size(&objects[..1]).unwrap(),
-            u64::MAX
-        );
+        assert_eq!(total_asset_size(&objects[..1]).unwrap(), u64::MAX);
     }
 
     #[test]
@@ -898,7 +1197,10 @@ mod tests {
 
         extract_zip(&archive, &destination).expect("the archive can be extracted");
 
-        assert_eq!(fs::read(destination.join("safe/inside.txt")).unwrap(), b"inside");
+        assert_eq!(
+            fs::read(destination.join("safe/inside.txt")).unwrap(),
+            b"inside"
+        );
         assert!(
             !root.join("outside.txt").exists(),
             "an entry escaped the extraction directory"
@@ -1016,7 +1318,8 @@ mod tests {
         let _guard = LOG_WRITER_LOCK.lock().unwrap();
         LOG_BYTES_SINCE_CHECK.store(0, Ordering::Relaxed);
 
-        let root = std::env::temp_dir().join(format!("aether-log-frequency-{}", std::process::id()));
+        let root =
+            std::env::temp_dir().join(format!("aether-log-frequency-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
 
         let paths = test_paths(&root);
@@ -1059,7 +1362,9 @@ mod tests {
             size
         );
         assert!(
-            fs::read_to_string(&file).unwrap().contains("assets/o/0399/"),
+            fs::read_to_string(&file)
+                .unwrap()
+                .contains("assets/o/0399/"),
             "the newest lines are kept"
         );
 
@@ -1088,14 +1393,18 @@ mod tests {
         .expect("the installation was cancelled");
 
         assert!(matches!(error, InstallError::Cancelled), "{:?}", error);
-        assert!(!paths.versions.exists(), "a cancelled installation wrote files");
+        assert!(
+            !paths.versions.exists(),
+            "a cancelled installation wrote files"
+        );
 
         fs::remove_dir_all(&root).ok();
     }
 
     #[test]
     fn the_assets_stop_when_the_installation_is_cancelled() {
-        let root = std::env::temp_dir().join(format!("aether-cancel-assets-{}", std::process::id()));
+        let root =
+            std::env::temp_dir().join(format!("aether-cancel-assets-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
 
         let paths = test_paths(&root);
@@ -1134,13 +1443,22 @@ mod tests {
         let file = root.join("29.json");
 
         fs::write(&file, "{\"objects\": {\"a\": {\"hash\":").unwrap();
-        assert!(read_asset_index(&file).is_none(), "a truncated index was accepted");
+        assert!(
+            read_asset_index(&file).is_none(),
+            "a truncated index was accepted"
+        );
 
         fs::write(&file, "{}").unwrap();
-        assert!(read_asset_index(&file).is_some(), "a valid index was refused");
+        assert!(
+            read_asset_index(&file).is_some(),
+            "a valid index was refused"
+        );
 
         fs::remove_file(&file).unwrap();
-        assert!(read_asset_index(&file).is_none(), "a missing index was accepted");
+        assert!(
+            read_asset_index(&file).is_none(),
+            "a missing index was accepted"
+        );
 
         fs::remove_dir_all(&root).ok();
     }
@@ -1198,13 +1516,13 @@ mod tests {
             0,
             &AtomicBool::new(false),
             |received, reported_total| {
-            assert_eq!(reported_total, total);
-            assert!(
-                received >= highest,
-                "the progress went backwards ({} after {})",
-                received,
-                highest
-            );
+                assert_eq!(reported_total, total);
+                assert!(
+                    received >= highest,
+                    "the progress went backwards ({} after {})",
+                    received,
+                    highest
+                );
                 highest = received;
                 reports += 1;
             },
@@ -1223,6 +1541,134 @@ mod tests {
         );
         assert_eq!(highest, total, "the progress never reached the total");
         assert!(reports > 0);
+
+        fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn a_verification_reports_a_missing_client_and_an_altered_asset() {
+        use crate::minecraft::{AssetIndex, Download, Downloads};
+        use crate::test_server::TestServer;
+
+        let root = std::env::temp_dir().join(format!("aether-verify-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        let paths = test_paths(&root);
+        fs::create_dir_all(paths.versions.join("1.21.11")).unwrap();
+        fs::create_dir_all(&paths.asset_indexes).unwrap();
+
+        let client_bytes = b"the client jar".to_vec();
+        let client_sha1 = hex_digest(&sha1_digest(&client_bytes));
+        let asset_bytes = b"the sound".to_vec();
+        let asset_sha1 = hex_digest(&sha1_digest(&asset_bytes));
+        let index_bytes = serde_json::to_vec(&serde_json::json!({
+            "objects": { "minecraft/sounds/a.ogg": { "hash": asset_sha1, "size": asset_bytes.len() } }
+        }))
+        .unwrap();
+        let index_sha1 = hex_digest(&sha1_digest(&index_bytes));
+
+        let asset_route = format!("/{}/{}", &asset_sha1[..2], asset_sha1);
+        let server = TestServer::start(vec![
+            ("/client.jar".to_string(), client_bytes.clone()),
+            ("/index.json".to_string(), index_bytes.clone()),
+            (asset_route.clone(), asset_bytes.clone()),
+        ]);
+
+        let description = VersionJson {
+            id: "1.21.11".to_string(),
+            main_class: String::new(),
+            assets: None,
+            asset_index: Some(AssetIndex {
+                id: "test".to_string(),
+                sha1: index_sha1,
+                size: index_bytes.len() as u64,
+                url: server.url("/index.json"),
+            }),
+            downloads: Downloads {
+                client: Some(Download {
+                    path: String::new(),
+                    sha1: client_sha1,
+                    size: client_bytes.len() as u64,
+                    url: server.url("/client.jar"),
+                }),
+                server: None,
+            },
+            libraries: Vec::new(),
+            arguments: Default::default(),
+            inherits_from: None,
+            kind: None,
+            java_version: None,
+        };
+
+        fs::write(
+            paths.versions.join("1.21.11/1.21.11.json"),
+            serde_json::to_vec(&description).unwrap(),
+        )
+        .unwrap();
+        fs::write(paths.asset_indexes.join("test.json"), &index_bytes).unwrap();
+
+        // The asset is there, but its bytes are not the ones its own name announces.
+        let asset_file = paths.assets.join(asset_path(&asset_sha1));
+        fs::create_dir_all(asset_file.parent().unwrap()).unwrap();
+        fs::write(&asset_file, b"truncated").unwrap();
+
+        let report = verify(&paths, "1.21.11").expect("the installation was verified");
+        assert_eq!(report.checked, 3, "the client, the index and the asset");
+        assert_eq!(report.missing.len(), 1, "{:?}", report.missing);
+        assert!(report.missing[0].path.ends_with("1.21.11.jar"));
+        assert_eq!(report.altered.len(), 1, "{:?}", report.altered);
+        assert!(report.altered[0].path.contains(&asset_sha1));
+        assert!(!report.is_clean());
+
+        let repaired = repair_from(&paths, "1.21.11", &Client::new(), &server.url(""))
+            .expect("the files were repaired");
+        assert!(repaired.is_clean(), "{:?}", repaired);
+        assert_eq!(fs::read(&asset_file).unwrap(), asset_bytes);
+        assert_eq!(
+            fs::read(paths.versions.join("1.21.11/1.21.11.jar")).unwrap(),
+            client_bytes
+        );
+
+        // Only the two broken files were fetched again: a valid file is never re-downloaded.
+        assert_eq!(server.count("/client.jar"), 1, "{}", server.report());
+        assert_eq!(server.count(&asset_route), 1, "{}", server.report());
+        assert_eq!(
+            server.count("/index.json"),
+            0,
+            "a valid index was downloaded again: {}",
+            server.report()
+        );
+
+        fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn verifying_a_version_that_is_not_installed_is_an_error() {
+        let root =
+            std::env::temp_dir().join(format!("aether-verify-missing-{}", std::process::id()));
+        let paths = test_paths(&root);
+        fs::create_dir_all(&root).unwrap();
+
+        assert!(verify(&paths, "9.9.9").is_err());
+
+        fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn the_journal_of_an_installation_is_closed_when_it_finishes() {
+        let root = std::env::temp_dir().join(format!("aether-journal-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        let paths = test_paths(&root);
+        fs::create_dir_all(&paths.data).unwrap();
+
+        crate::pending::begin(
+            &paths,
+            &crate::pending::PendingInstall::new("game", "1.21.11"),
+        )
+        .unwrap();
+        assert!(crate::pending::read(&paths).is_some());
+
+        crate::pending::close(&paths);
+        assert!(crate::pending::read(&paths).is_none());
 
         fs::remove_dir_all(&root).ok();
     }

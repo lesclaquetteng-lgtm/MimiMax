@@ -10,6 +10,7 @@ use aether_launcher::game::{
     build_classpath, build_command, build_game_arguments, build_jvm_arguments, LaunchOptions,
     CLASS_PATH_SEPARATOR,
 };
+use aether_launcher::logs::SessionLog;
 use aether_launcher::minecraft::{
     apply_replacements, evaluate_argument_template, evaluate_rules, is_native_coordinate,
     maven_path, merge_libraries, merge_version_json, parse_maven_coordinate, resolve_libraries,
@@ -29,7 +30,12 @@ const REFERENCE: [(&str, &str); 4] = [
 #[test]
 fn the_offline_identifier_matches_the_reference_implementation_of_minecraft() {
     for (name, expected) in REFERENCE {
-        assert_eq!(offline_player_uuid(name), expected, "uuid mismatch for {}", name);
+        assert_eq!(
+            offline_player_uuid(name),
+            expected,
+            "uuid mismatch for {}",
+            name
+        );
     }
 }
 
@@ -97,7 +103,9 @@ fn the_maven_coordinates_become_library_paths() {
 
 #[test]
 fn the_native_libraries_are_detected() {
-    assert!(is_native_coordinate("org.lwjgl:lwjgl:3.3.3:natives-windows"));
+    assert!(is_native_coordinate(
+        "org.lwjgl:lwjgl:3.3.3:natives-windows"
+    ));
     assert!(is_native_coordinate(
         "io.netty:netty-transport-native-epoll:4.2.7:linux-x86_64"
     ));
@@ -129,11 +137,7 @@ fn the_rules_are_evaluated() {
         &windows(),
         &FeatureContext::default()
     ));
-    assert!(evaluate_rules(
-        &[],
-        &windows(),
-        &FeatureContext::default()
-    ));
+    assert!(evaluate_rules(&[], &windows(), &FeatureContext::default()));
 
     let disallow = vec![
         Rule {
@@ -221,10 +225,17 @@ fn the_fabric_profile_is_merged_into_the_vanilla_version() {
     };
 
     let merged = merge_version_json(&vanilla, &fabric);
-    assert_eq!(merged.main_class, "net.fabricmc.loader.impl.launch.knot.KnotClient");
+    assert_eq!(
+        merged.main_class,
+        "net.fabricmc.loader.impl.launch.knot.KnotClient"
+    );
     assert_eq!(merged.inherits_from.as_deref(), Some("1.21.11"));
     assert_eq!(merged.libraries.len(), 1, "the libraries were not merged");
-    assert!(merged.arguments.game.iter().any(|entry| matches!(entry, Argument::Value(value) if value == "--username")));
+    assert!(merged
+        .arguments
+        .game
+        .iter()
+        .any(|entry| matches!(entry, Argument::Value(value) if value == "--username")));
 }
 
 #[test]
@@ -395,6 +406,57 @@ fn the_command_starts_the_main_class_of_the_version() {
     assert!(built
         .arguments
         .contains(&"-Dfabric.gameVersion=1.21.11".to_string()));
+}
+
+#[cfg(windows)]
+#[test]
+fn a_session_log_never_contains_the_access_token() {
+    let directory = std::env::temp_dir().join(format!("aether-session-log-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&directory);
+    std::fs::create_dir_all(&directory).unwrap();
+
+    let mut options = launch_options();
+    options.offline = false;
+    options.access_token = "secret-microsoft-access-token".to_string();
+    // A real child process, so the launcher's output path runs end to end. It rejects the JVM
+    // arguments and exits at once, which is enough: the log must hold what the child printed, never
+    // the command line that carries the token.
+    options.java_path = std::env::var("SystemRoot")
+        .map(|root| format!("{root}\\System32\\where.exe"))
+        .unwrap_or_else(|_| "where.exe".to_string())
+        .into();
+
+    // The canary is armed: the token really travels in the command line of the child.
+    let command = build_command(&options);
+    assert!(command
+        .arguments
+        .iter()
+        .any(|argument| argument.contains("secret-microsoft-access-token")));
+
+    let mut session = SessionLog::create(directory.join("session.log")).unwrap();
+    let mut printed: Vec<String> = Vec::new();
+    let _ = aether_launcher::game::launch(
+        &options,
+        |_| {},
+        |line| {
+            session.line(line);
+            printed.push(line.to_string());
+        },
+    );
+    session.finish(1);
+
+    let log = std::fs::read_to_string(directory.join("session.log")).unwrap();
+    assert!(
+        !log.trim().is_empty(),
+        "the output of the child was not written to the session log"
+    );
+    assert!(
+        !log.contains("secret-microsoft-access-token"),
+        "the session log holds the token: {log}"
+    );
+    assert!(!printed.join("\n").contains("secret-microsoft-access-token"));
+
+    std::fs::remove_dir_all(&directory).ok();
 }
 
 #[test]
