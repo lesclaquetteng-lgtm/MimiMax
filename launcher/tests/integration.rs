@@ -436,7 +436,7 @@ fn a_session_log_never_contains_the_access_token() {
     let mut printed: Vec<String> = Vec::new();
     let _ = aether_launcher::game::launch(
         &options,
-        |_| {},
+        |_, _| Ok(()),
         |line| {
             session.line(line);
             printed.push(line.to_string());
