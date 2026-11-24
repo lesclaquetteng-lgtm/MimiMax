@@ -1211,7 +1211,7 @@ mod tests {
 
     #[test]
     fn a_properties_file_disables_the_authentication() {
-        let content = properties("Test", 25565, 25575, "secret", 20);
+        let content = properties("Test", 25565, 25575, "secret", 20, false);
 
         assert!(content.contains("online-mode=false"));
         assert!(content.contains("enforce-secure-profile=false"));
@@ -1262,6 +1262,44 @@ mod tests {
         assert!(!list[0].running);
 
         std::fs::remove_dir_all(&directory).ok();
+    }
+
+    #[test]
+    fn reconfiguring_a_stopped_server_updates_authentication_and_bound_ports() {
+        let root = std::env::temp_dir().join(format!(
+            "aether-host-reconfigure-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).unwrap();
+        let paths = test_paths(&root);
+
+        let first = create(&paths, "Reconfigure", 0, None, 8, false, "1.21.11", "0.20.1")
+            .expect("offline server creation");
+        let directory = PathBuf::from(&first.directory);
+
+        let premium = create(&paths, "Reconfigure", 0, None, 8, true, "1.21.11", "0.20.1")
+            .expect("switching to authenticated mode");
+        let premium_properties =
+            fs::read_to_string(directory.join("server.properties")).unwrap();
+        assert!(premium_properties.contains("online-mode=true"));
+        assert!(premium_properties.contains("enforce-secure-profile=true"));
+        assert!(premium_properties.contains("server-ip=127.0.0.1"));
+        assert!(premium_properties.contains(&format!("server-port={}", premium.port)));
+        assert!(premium_properties.contains(&format!("rcon.port={}", premium.rcon_port)));
+
+        let offline = create(&paths, "Reconfigure", 0, None, 8, false, "1.21.11", "0.20.1")
+            .expect("switching back to offline mode");
+        let offline_properties =
+            fs::read_to_string(directory.join("server.properties")).unwrap();
+        assert!(offline_properties.contains("online-mode=false"));
+        assert!(offline_properties.contains("enforce-secure-profile=false"));
+        assert!(offline_properties.contains("server-ip=127.0.0.1"));
+        assert!(offline_properties.contains(&format!("server-port={}", offline.port)));
+        assert!(offline_properties.contains(&format!("rcon.port={}", offline.rcon_port)));
+        assert!(!offline.running);
+
+        fs::remove_dir_all(&root).ok();
     }
 
     #[test]
@@ -1420,7 +1458,7 @@ mod tests {
 
     #[test]
     fn the_server_listens_on_the_loopback_only() {
-        let content = properties("Test", 25565, 25575, "secret", 10);
+        let content = properties("Test", 25565, 25575, "secret", 10, false);
 
         assert!(content.contains("\nserver-ip=127.0.0.1\n"));
         assert!(
@@ -1437,6 +1475,7 @@ mod tests {
             25575,
             "secret",
             10,
+            false,
         );
 
         assert_eq!(
