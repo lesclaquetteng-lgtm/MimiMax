@@ -98,17 +98,19 @@ The shell holds the child it started and kills it when the window closes. That c
 path, not the abnormal one: a shell killed from the task manager (or a game started from the command
 line) would leave Java running with nothing able to name it.
 
-`game::launch` therefore calls back with the process identifier as soon as Java exists, and
-`Launcher::launch` writes it to `<home>/aether/game.pid`. The record is:
+`game::launch` creates a random process marker, passes it to Java as
+`-Daether.launcher.process-token=…`, and writes the PID plus marker to
+`<home>/aether/game.pid`. The marker is checked against the operating system's process command
+line before any termination. A legacy numeric PID record remains readable for diagnostics but is
+never sufficient authority to kill a process.
 
-- removed when the game exits, whatever the exit code;
-- read by `Launcher::running_game()` / `game::running()`, which clear a record that names a dead
-  process instead of trusting it;
-- used by `Launcher::stop_game()` / `game::stop()`, which kills the tree (`taskkill /T /F`, or
-  `SIGTERM` elsewhere) and waits for the process to disappear before deleting the record;
-- exposed as `aether-launcher stop`, and as the fallback of the shell's `game_stop`: when the
-  in-memory slot is empty, the command runs the core's `stop` instead of answering "no game is
-  running" while an orphan keeps running.
+- the record is removed after the process has actually exited; a failed wait keeps it for retry;
+- `Launcher::running_game()` / `game::running()` keep unverified records occupied so a second
+  game is not launched over a process the launcher cannot identify;
+- `Launcher::stop_game()` / `game::stop()` refuse to terminate a reused, legacy, or unverifiable
+  PID, and terminate only a process carrying the launch marker;
+- the native shell routes `game_stop` through the core's `stop` command rather than killing the
+  PID directly, so the same ownership check applies after the shell requests a stop.
 
 ## Launcher data flow
 
