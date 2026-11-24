@@ -591,6 +591,13 @@ impl Launcher {
         server: Option<&str>,
         mut on_output: impl FnMut(&str),
     ) -> Result<(u32, bool), String> {
+        if let Some(pid) = game::running(&self.paths.data) {
+            return Err(format!(
+                "Minecraft or an unverified previous process is already recorded (PID {}). Close it manually before starting another instance.",
+                pid
+            ));
+        }
+
         let options = self.launch_options_for(account_id, game_version, server)?;
         let offline = options.offline;
 
@@ -604,7 +611,7 @@ impl Launcher {
 
         let mut child = game::launch(
             &options,
-            |pid: u32| game::record_pid(&data, pid),
+            |pid: u32, token: &str| game::record_pid(&data, pid, token),
             |line: &str| {
                 if let Some(session) = session.as_mut() {
                     session.line(line);
@@ -617,7 +624,7 @@ impl Launcher {
         let status = match child.wait() {
             Ok(status) => status,
             Err(error) => {
-                game::forget_pid(&self.paths.data);
+                // Keep the marker record: a wait failure is not proof that the game process exited.
                 return Err(format!("the game stopped: {}", error));
             }
         };
