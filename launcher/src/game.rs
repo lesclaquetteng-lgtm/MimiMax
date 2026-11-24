@@ -574,11 +574,13 @@ mod tests {
     }
 
     /// A process that lives long enough to be stopped by the test.
-    fn long_running_child() -> Child {
+    fn long_running_child(token: &str) -> Child {
         #[cfg(windows)]
         {
+            let marker = format!("-Daether.launcher.process-token={}", token);
+            let script = format!("ping -n 30 127.0.0.1 >NUL & echo {}", marker);
             Command::new("cmd")
-                .args(["/C", "ping", "-n", "30", "127.0.0.1"])
+                .args(["/C", &script])
                 .stdout(Stdio::null())
                 .spawn()
                 .unwrap()
@@ -586,7 +588,13 @@ mod tests {
 
         #[cfg(not(windows))]
         {
-            Command::new("sleep").arg("30").spawn().unwrap()
+            let marker = format!("-Daether.launcher.process-token={}", token);
+            let script = format!("exec -a {} sleep 30", marker);
+            Command::new("bash")
+                .args(["-c", &script])
+                .stdout(Stdio::null())
+                .spawn()
+                .unwrap()
         }
     }
 
@@ -595,7 +603,7 @@ mod tests {
         let data = scratch("record");
 
         assert_eq!(read_pid(&data), None);
-        record_pid(&data, 4242);
+        record_pid(&data, 4242, "test-token").unwrap();
 
         assert_eq!(read_pid(&data), Some(4242));
         assert!(pid_file(&data).is_file());
@@ -605,7 +613,7 @@ mod tests {
     fn a_record_that_names_a_dead_process_is_cleared() {
         let data = scratch("stale");
         // PID 0 is never a process the launcher manages.
-        record_pid(&data, 0);
+        fs::write(pid_file(&data), "0").unwrap();
 
         assert_eq!(running(&data), None);
         assert_eq!(read_pid(&data), None, "the stale record was left behind");
@@ -621,8 +629,9 @@ mod tests {
     #[test]
     fn stop_kills_the_process_named_by_the_record() {
         let data = scratch("stop");
-        let mut child = long_running_child();
-        record_pid(&data, child.id());
+        let token = format!("test-{}", std::process::id());
+        let mut child = long_running_child(&token);
+        record_pid(&data, child.id(), &token).unwrap();
 
         assert_eq!(running(&data), Some(child.id()));
         assert_eq!(stop(&data).unwrap(), child.id());
@@ -633,6 +642,30 @@ mod tests {
             None,
             "the record survived the stopped game"
         );
+    }
+
+    #[test]
+    fn a_legacy_pid_record_is_never_used_to_kill_an_unrelated_process() {
+        let data = scratch("legacy-pid");
+        // A numeric PID record from an older release cannot prove that it still names Minecraft.
+        fs::write(pid_file(&data), std::process::id().to_string()).unwrap();
+
+        let error = stop(&data).unwrap_err();
+
+        assert!(error.contains("legacy PID-only record"));
+        assert_eq!(read_pid(&data), Some(std::process::id()));
+        assert!(crate::hosting::process_alive(std::process::id()));
+    }
+
+    #[test]
+    fn a_failed_stop_keeps_the_game_process_record() {
+        let data = scratch("failed-stop");
+        record_pid(&data, 4242, "test-token").unwrap();
+
+        let error = finish_stop(&data, 4242, false).unwrap_err();
+
+        assert!(error.contains("process record was kept"));
+        assert_eq!(read_pid(&data), Some(4242));
     }
 
     fn options() -> LaunchOptions {
