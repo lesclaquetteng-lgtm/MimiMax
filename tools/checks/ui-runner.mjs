@@ -4,6 +4,7 @@ import { setTimeout as sleep } from 'node:timers/promises';
 
 const port = process.argv[2] || '9233';
 const outDir = process.argv[3] || 'new-ui-shots';
+const failedChecks = [];
 
 const answer = await fetch(`http://127.0.0.1:${port}/json/list`);
 const targets = await answer.json();
@@ -76,7 +77,8 @@ async function checkProbe(pageName) {
 	})()`);
 
 	const ok = probeResult.docOverflow === 0 && probeResult.contentOverflow === 0 && probeResult.clippedCount === 0;
-	console.log(`[PROBE] ${pageName}: ${ok ? 'PASS' : 'WARN'} => ${JSON.stringify(probeResult)}`);
+	console.log(`[PROBE] ${pageName}: ${ok ? 'PASS' : 'FAIL'} => ${JSON.stringify(probeResult)}`);
+	if (!ok) failedChecks.push(`layout:${pageName}`);
 	return ok;
 }
 
@@ -110,6 +112,7 @@ const memorySlider = await evaluate(`(() => {
 	};
 })()`);
 console.log(`Slider interaction: value=${memorySlider.val}, fill=${memorySlider.fill}`);
+if (memorySlider.val !== '8192') failedChecks.push('slider:value');
 
 // Test Modal interaction
 console.log('\n--- Testing Modal ---');
@@ -118,12 +121,18 @@ await sleep(400);
 await captureShot('modal-open');
 const modalVisible = await evaluate(`!document.querySelector('#modal').hidden`);
 console.log(`Modal visible: ${modalVisible}`);
+if (!modalVisible) failedChecks.push('modal:open');
 await evaluate(`document.querySelector('#modal-cancel').click()`);
 await sleep(300);
 const modalClosed = await evaluate(`document.querySelector('#modal').hidden`);
 console.log(`Modal closed: ${modalClosed}`);
+if (!modalClosed) failedChecks.push('modal:close');
 
-console.log('\nAll UI tests completed successfully!');
 socket.close();
+if (failedChecks.length > 0) {
+	console.error(`UI E2E failed: ${failedChecks.join(', ')}`);
+	process.exit(1);
+}
+console.log('All UI tests completed successfully!');
 process.exit(0);
 
