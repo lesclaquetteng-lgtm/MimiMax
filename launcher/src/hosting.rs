@@ -925,7 +925,28 @@ pub fn process_alive(pid: u32) -> bool {
         }
     }
 
-    #[cfg(not(windows))]
+    #[cfg(target_os = "linux")]
+    {
+        // kill -0 also reports zombies as alive. A dead Java child can remain a zombie until its
+        // parent reaps it; treating that as live would make a successful stop look like a failure.
+        if let Ok(stat) = fs::read_to_string(format!("/proc/{}/stat", pid)) {
+            if let Some((_, fields)) = stat.rsplit_once(')') {
+                let state = fields.split_whitespace().next();
+                return !matches!(state, Some("Z" | "X"));
+            }
+        }
+
+        let Ok(pid) = i32::try_from(pid) else {
+            return false;
+        };
+        Command::new("kill")
+            .args(["-0", &pid.to_string()])
+            .status()
+            .map(|status| status.success())
+            .unwrap_or(false)
+    }
+
+    #[cfg(all(not(windows), not(target_os = "linux")))]
     {
         // Passing a u32 above i32::MAX to kill(1) can be parsed as a negative
         // process-group ID. Reject it instead of probing an unintended group.
