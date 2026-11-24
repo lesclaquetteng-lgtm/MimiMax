@@ -6,6 +6,8 @@
 use std::collections::HashMap;
 
 use aether_launcher::accounts::AccountStore;
+#[cfg(windows)]
+use aether_launcher::logs::SessionLog;
 use aether_launcher::game::{
     build_classpath, build_command, build_game_arguments, build_jvm_arguments, LaunchOptions,
     CLASS_PATH_SEPARATOR,
