@@ -365,13 +365,16 @@ pub fn build_command(options: &LaunchOptions) -> CommandLine {
 /// output is read: the caller records it so that the game can still be stopped later.
 pub fn launch(
     options: &LaunchOptions,
-    on_start: impl FnOnce(u32),
+    on_start: impl FnOnce(u32, &str) -> std::io::Result<()>,
     mut on_output: impl FnMut(&str),
 ) -> Result<Child, std::io::Error> {
     let command = build_command(options);
+    let process_token = crate::hosting::new_process_token()
+        .map_err(std::io::Error::other)?;
 
     let mut process = Command::new(&command.program);
     process
+        .arg(format!("-Daether.launcher.process-token={}", process_token))
         .args(&command.arguments)
         .current_dir(&options.game_dir)
         .stdin(Stdio::null())
@@ -386,7 +389,16 @@ pub fn launch(
     }
 
     let mut child = process.spawn()?;
-    on_start(child.id());
+    let pid = child.id();
+    if let Err(error) = on_start(pid, &process_token) {
+        let record = crate::hosting::ProcessRecord {
+            pid,
+            token: Some(process_token),
+        };
+        let _ = crate::hosting::kill_tracked_tree(&record);
+        let _ = child.wait();
+        return Err(error);
+    }
 
     // Both streams are forwarded through a channel, so the caller keeps a single output callback.
     let (sender, receiver) = mpsc::channel::<String>();
@@ -428,14 +440,18 @@ pub fn pid_file(data: &Path) -> PathBuf {
 
 /// The identifier written in the record, even when the process it names is long gone.
 fn read_pid(data: &Path) -> Option<u32> {
-    fs::read_to_string(pid_file(data))
-        .ok()
-        .and_then(|value| value.trim().parse().ok())
+    crate::hosting::read_process_record(&pid_file(data)).map(|record| record.pid)
 }
 
-/// Records the process that was just started.
-pub fn record_pid(data: &Path, pid: u32) {
-    let _ = crate::settings::write_atomic(&pid_file(data), &pid.to_string());
+/// Records the process and its launch marker.
+pub fn record_pid(data: &Path, pid: u32, token: &str) -> std::io::Result<()> {
+    crate::hosting::write_process_record(
+        &pid_file(data),
+        &crate::hosting::ProcessRecord {
+            pid,
+            token: Some(token.to_string()),
+        },
+    )
 }
 
 /// Removes the record, the game is over.
@@ -444,43 +460,84 @@ pub(crate) fn forget_pid(data: &Path) {
 }
 
 /// The game that is still running, including the one of a launcher that is gone.
+///
+/// An unverified legacy record is treated as occupied so the launcher does not start a second
+/// process on top of one it cannot safely identify.
 pub fn running(data: &Path) -> Option<u32> {
-    let pid = read_pid(data)?;
-    if crate::hosting::process_alive(pid) {
-        return Some(pid);
-    }
+    let Some(record) = crate::hosting::read_process_record(&pid_file(data)) else {
+        if pid_file(data).exists() {
+            forget_pid(data);
+        }
+        return None;
+    };
 
-    // A record that names a dead process is a leftover, not a running game.
+    match crate::hosting::process_state(&record) {
+        crate::hosting::ProcessState::Owned => Some(record.pid),
+        crate::hosting::ProcessState::Unverified | crate::hosting::ProcessState::Unknown => {
+            Some(record.pid)
+        }
+        crate::hosting::ProcessState::Exited | crate::hosting::ProcessState::Reused => {
+            forget_pid(data);
+            None
+        }
+    }
+}
+
+/// Waits until the recorded PID no longer exists.
+fn wait_for_process_exit(pid: u32, timeout: Duration) -> bool {
+    let deadline = Instant::now() + timeout;
+    while Instant::now() < deadline {
+        if !crate::hosting::process_alive(pid) {
+            return true;
+        }
+        std::thread::sleep(Duration::from_millis(200));
+    }
+    !crate::hosting::process_alive(pid)
+}
+
+/// Removes the persistent record only after termination has been confirmed.
+fn finish_stop(data: &Path, pid: u32, stopped: bool) -> Result<u32, String> {
+    if !stopped {
+        return Err(format!(
+            "Minecraft PID {} did not stop; its process record was kept so Stop can be retried",
+            pid
+        ));
+    }
     forget_pid(data);
-    None
+    Ok(pid)
 }
 
 /// Stops the game from its record, even when the shell that started it is gone.
 ///
-/// The whole tree is killed: stopping the first process alone would leave the game visible in the
-/// task manager, because Java starts children of its own.
+/// A PID is never enough to authorize termination: the process command line must contain the
+/// random marker written when Java was launched.
 pub fn stop(data: &Path) -> Result<u32, String> {
-    let pid = read_pid(data).ok_or_else(|| "no game is running".to_string())?;
+    let record = crate::hosting::read_process_record(&pid_file(data))
+        .ok_or_else(|| "no game is running".to_string())?;
+    let pid = record.pid;
 
-    if !crate::hosting::process_alive(pid) {
-        forget_pid(data);
-        return Err("the game is no longer running".to_string());
-    }
-
-    crate::hosting::kill_tree(pid);
-
-    // The record is only removed once the process is really gone, so that a second Stop still finds
-    // the game it has to close.
-    let deadline = Instant::now() + Duration::from_secs(5);
-    while Instant::now() < deadline {
-        if !crate::hosting::process_alive(pid) {
-            break;
+    match crate::hosting::process_state(&record) {
+        crate::hosting::ProcessState::Exited | crate::hosting::ProcessState::Reused => {
+            forget_pid(data);
+            return Err("the game is no longer running".to_string());
         }
-        std::thread::sleep(Duration::from_millis(200));
+        crate::hosting::ProcessState::Unverified => {
+            return Err(format!(
+                "cannot safely stop PID {}: this is a legacy PID-only record without a launch identity; close Minecraft manually",
+                pid
+            ));
+        }
+        crate::hosting::ProcessState::Unknown => {
+            return Err(format!(
+                "cannot verify ownership of PID {}; the game process record was kept",
+                pid
+            ));
+        }
+        crate::hosting::ProcessState::Owned => {}
     }
 
-    forget_pid(data);
-    Ok(pid)
+    crate::hosting::kill_tracked_tree(&record)?;
+    finish_stop(data, pid, wait_for_process_exit(pid, Duration::from_secs(5)))
 }
 
 /// Spawns a thread that forwards every line of a stream of the process.
