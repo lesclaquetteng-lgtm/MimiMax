@@ -741,31 +741,26 @@ pub async fn game_launch(app: AppHandle, options: Option<Value>) -> Value {
 // in a block of its own; the answer is a `Result` because the command is asynchronous.
 #[tauri::command(rename_all = "snake_case")]
 pub async fn game_stop(app: AppHandle) -> Result<Value, String> {
-    let pid = {
+    // The persistent PID record belongs to the Rust core, not to the shell. Ask that core to stop
+    // the game so it can verify the launch marker before terminating a process. Killing the PID
+    // directly here would bypass that ownership check and reintroduce the PID-reuse hazard.
+    let stopped_flag = {
         let state = app.state::<RunState>();
         let mut guard = state
             .game
             .lock()
             .map_err(|_| "The state of the game is unavailable.".to_string())?;
-
-        match guard.as_mut() {
-            Some(active) => {
-                active.stopped.store(true, Ordering::SeqCst);
-                Some(active.pid)
-            }
-            None => None,
-        }
+        guard.as_mut().map(|active| active.stopped.clone())
     };
 
-    if let Some(pid) = pid {
-        core::kill_tree(pid);
-        return Ok(json!({ "ok": true }));
+    let answer = core::run_core(app, vec!["stop".to_string()]).await;
+    if answer.get("ok").and_then(Value::as_bool) == Some(true) {
+        if let Some(flag) = stopped_flag {
+            flag.store(true, Ordering::SeqCst);
+        }
     }
 
-    // The shell has no child of its own: the game may have been started by a previous run that was
-    // killed, and only the record of the core still names it. Without this fallback that game would
-    // survive every restart of the launcher.
-    Ok(core::run_core(app, vec!["stop".to_string()]).await)
+    Ok(answer)
 }
 
 #[cfg(test)]
