@@ -28,6 +28,24 @@ pub const PID_FILE: &str = "server.pid";
 /// The console of the server.
 pub const CONSOLE_LOG: &str = "console.log";
 
+/// A process record includes a random marker passed to the process at launch.
+/// The marker distinguishes our process from an unrelated process that later receives the same PID.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub(crate) struct ProcessRecord {
+    pub pid: u32,
+    #[serde(default)]
+    pub token: Option<String>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum ProcessState {
+    Owned,
+    Exited,
+    Reused,
+    Unverified,
+    Unknown,
+}
+
 /// A server hosted by the launcher.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -94,19 +112,46 @@ fn pid_path(directory: &Path) -> PathBuf {
     directory.join(PID_FILE)
 }
 
+/// Reads a process record. Numeric records from older versions remain readable, but are treated
+/// as unverified and are never terminated automatically.
+pub(crate) fn read_process_record(file: &Path) -> Option<ProcessRecord> {
+    let content = fs::read_to_string(file).ok()?;
+    if let Ok(record) = serde_json::from_str::<ProcessRecord>(&content) {
+        return (record.pid > 0).then_some(record);
+    }
+
+    let pid = content.trim().parse::<u32>().ok()?;
+    (pid > 0).then_some(ProcessRecord { pid, token: None })
+}
+
+/// Writes a process record atomically.
+pub(crate) fn write_process_record(file: &Path, record: &ProcessRecord) -> io::Result<()> {
+    let content = serde_json::to_string(record)
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+    write_atomic(file, &content)
+}
+
+/// Creates an unguessable marker that is passed as a JVM system property.
+pub(crate) fn new_process_token() -> Result<String, String> {
+    let mut bytes = [0u8; 16];
+    getrandom::fill(&mut bytes)
+        .map_err(|error| format!("could not generate a process identity token: {}", error))?;
+    Ok(bytes.iter().map(|byte| format!("{:02x}", byte)).collect())
+}
+
 /// Reads the metadata of a server.
 fn read_metadata(directory: &Path) -> Option<HostedServer> {
     let content = fs::read_to_string(metadata_path(directory)).ok()?;
     let mut server: HostedServer = serde_json::from_str(&content).ok()?;
-    server.pid = read_pid(directory);
-    server.running = server.pid.is_some_and(process_alive);
+    let record = read_process_record(&pid_path(directory));
+    server.pid = record.as_ref().map(|record| record.pid);
+    // Informational only: every operation that mutates or terminates a process checks its marker.
+    server.running = record.as_ref().is_some_and(|record| process_alive(record.pid));
     Some(server)
 }
 
 fn read_pid(directory: &Path) -> Option<u32> {
-    fs::read_to_string(pid_path(directory))
-        .ok()
-        .and_then(|value| value.trim().parse().ok())
+    read_process_record(&pid_path(directory)).map(|record| record.pid)
 }
 
 /// Lists every server the launcher created.
@@ -180,14 +225,21 @@ fn property_value(value: &str) -> String {
 /// The server listens on the loopback interface only. An offline server accepts every name without
 /// a password: bound to `0.0.0.0` it would be an open server for the whole local network, and its
 /// RCON, which travels in clear, would be reachable too.
-fn properties(name: &str, port: u16, rcon_port: u16, password: &str, max_players: u32) -> String {
+fn properties(
+    name: &str,
+    port: u16,
+    rcon_port: u16,
+    password: &str,
+    max_players: u32,
+    online_mode: bool,
+) -> String {
     [
         "# Written by Aether Launcher.".to_string(),
-        "# online-mode=false is what lets a cracked account join this server.".to_string(),
+        "# Offline mode does not authenticate player names; keep this server on loopback.".to_string(),
         format!("server-port={}", port),
         "server-ip=127.0.0.1".to_string(),
-        "online-mode=false".to_string(),
-        "enforce-secure-profile=false".to_string(),
+        format!("online-mode={}", online_mode),
+        format!("enforce-secure-profile={}", online_mode),
         // An offline server accepts every name it is given: the whitelist is the only thing that
         // keeps a stranger who reaches the port from joining under the operator's name.
         "white-list=true".to_string(),
@@ -302,8 +354,28 @@ pub fn create(
         .map_err(|error| format!("could not create the folder: {}", error))?;
 
     let metadata_file = metadata_path(&directory);
-    let existing = read_metadata(&directory);
+    let process_file = pid_path(&directory);
 
+    // Never rewrite the configuration of a live server. Its bound ports and properties cannot be
+    // changed safely until it has stopped.
+    if let Some(record) = read_process_record(&process_file) {
+        match process_state(&record) {
+            ProcessState::Owned => {
+                return Err("stop the hosted server before changing its configuration".to_string())
+            }
+            ProcessState::Unverified | ProcessState::Unknown => {
+                return Err(
+                    "a process record exists but its ownership cannot be verified; close the old server manually before changing this configuration"
+                        .to_string(),
+                )
+            }
+            ProcessState::Exited | ProcessState::Reused => {
+                let _ = fs::remove_file(&process_file);
+            }
+        }
+    }
+
+    let existing = read_metadata(&directory);
     let port = free_port(existing.as_ref().map(|server| server.port).unwrap_or(port));
     let rcon_port = free_port(
         existing
@@ -322,16 +394,22 @@ pub fn create(
 
     if !properties_file.exists() {
         let motd = motd.unwrap_or(name);
-        let content = properties(motd, port, rcon_port, &password, max_players);
+        let content = properties(motd, port, rcon_port, &password, max_players, online_mode);
         write_atomic(&properties_file, &content)
             .map_err(|error| format!("could not write server.properties: {}", error))?;
     } else {
-        if online_mode {
-            // A server that already exists keeps its world, but the mode is explicit in the request.
-            set_property(&properties_file, "online-mode", "true")?;
-        }
-        // An offline world that already exists cannot keep its whitelist off either: the
-        // properties are repaired the same way a missing RCON secret is.
+        // Keep metadata, server.properties and the actual bound ports in sync. Reconfiguration
+        // is only allowed after the process marker above proves that the previous server is gone.
+        set_property(&properties_file, "online-mode", &online_mode.to_string())?;
+        set_property(
+            &properties_file,
+            "enforce-secure-profile",
+            &online_mode.to_string(),
+        )?;
+        set_property(&properties_file, "server-ip", "127.0.0.1")?;
+        set_property(&properties_file, "server-port", &port.to_string())?;
+        set_property(&properties_file, "enable-rcon", "true")?;
+        set_property(&properties_file, "rcon.port", &rcon_port.to_string())?;
         set_property(&properties_file, "white-list", "true")?;
         set_property(&properties_file, "enforce-whitelist", "true")?;
         // Migrate an old or incomplete configuration without replacing an existing secret.
@@ -620,8 +698,29 @@ pub fn start(paths: &Paths, name: &str) -> Result<HostedServer, String> {
     let mut server = read_metadata(&directory)
         .ok_or_else(|| format!("unknown server: {}, create it first", name))?;
 
+    if let Some(record) = read_process_record(&pid_path(&directory)) {
+        match process_state(&record) {
+            ProcessState::Owned => {
+                server.pid = Some(record.pid);
+                server.running = true;
+                return Ok(server);
+            }
+            ProcessState::Exited | ProcessState::Reused => {
+                let _ = fs::remove_file(pid_path(&directory));
+                server.pid = None;
+                server.running = false;
+            }
+            ProcessState::Unverified | ProcessState::Unknown => {
+                return Err(
+                    "the previous server process cannot be verified safely; close it manually before starting another instance"
+                        .to_string(),
+                )
+            }
+        }
+    }
+
     if server.running {
-        return Ok(server);
+        return Err("the server appears to be running but its process identity is unavailable".to_string());
     }
 
     // A world created before the player added an account is whitelisted before it opens.
@@ -659,8 +758,10 @@ pub fn start(paths: &Paths, name: &str) -> Result<HostedServer, String> {
         .try_clone()
         .map_err(|error| format!("could not duplicate the console log: {}", error))?;
 
+    let process_token = new_process_token()?;
     let mut process = Command::new(&java);
     process
+        .arg(format!("-Daether.launcher.process-token={}", process_token))
         .arg("-Xms1G")
         .arg("-Xmx2G")
         .arg("-jar")
@@ -683,9 +784,13 @@ pub fn start(paths: &Paths, name: &str) -> Result<HostedServer, String> {
         .map_err(|error| format!("could not start the Java server: {}", error))?;
 
     let pid = child.id();
-    if let Err(error) = write_atomic(&pid_path(&directory), &pid.to_string()) {
-        // Do not leave a server running without the record that lets the launcher stop it later.
-        kill_tree(pid);
+    let record = ProcessRecord {
+        pid,
+        token: Some(process_token),
+    };
+    if let Err(error) = write_process_record(&pid_path(&directory), &record) {
+        // Do not leave a server running without an ownership record.
+        let _ = kill_tracked_tree(&record);
         if wait_for_exit(pid, Duration::from_secs(5)) {
             return Err(format!(
                 "could not record the hosted server process ({}); the server was stopped",
@@ -711,17 +816,33 @@ pub fn stop(paths: &Paths, name: &str) -> Result<HostedServer, String> {
     let mut server =
         read_metadata(&directory).ok_or_else(|| format!("unknown server: {}", name))?;
 
-    let Some(pid) = server.pid else {
-        server.running = false;
-        let _ = fs::remove_file(pid_path(&directory));
-        return Ok(server);
-    };
-
-    if !process_alive(pid) {
+    let Some(record) = read_process_record(&pid_path(&directory)) else {
         server.running = false;
         server.pid = None;
-        let _ = fs::remove_file(pid_path(&directory));
         return Ok(server);
+    };
+    let pid = record.pid;
+
+    match process_state(&record) {
+        ProcessState::Exited | ProcessState::Reused => {
+            let _ = fs::remove_file(pid_path(&directory));
+            server.running = false;
+            server.pid = None;
+            return Ok(server);
+        }
+        ProcessState::Unverified => {
+            return Err(format!(
+                "cannot safely stop hosted server PID {}: this is a legacy PID-only record; close the process manually and remove the stale record",
+                pid
+            ))
+        }
+        ProcessState::Unknown => {
+            return Err(format!(
+                "cannot verify ownership of hosted server PID {}; the process record was kept",
+                pid
+            ))
+        }
+        ProcessState::Owned => {}
     }
 
     // The clean path: RCON tells the server to save and to shut down. A server that is still
@@ -737,7 +858,7 @@ pub fn stop(paths: &Paths, name: &str) -> Result<HostedServer, String> {
     let stopped = if wait_for_exit(pid, Duration::from_secs(20)) {
         true
     } else {
-        kill_tree(pid);
+        kill_tracked_tree(&record)?;
         wait_for_exit(pid, Duration::from_secs(5))
     };
 
@@ -820,27 +941,118 @@ pub fn process_alive(pid: u32) -> bool {
     }
 }
 
-/// Kills a process and its children.
-///
-/// Shared with the game: a hosted server and a game are both trees that outlive the process the
-/// launcher holds.
-pub(crate) fn kill_tree(pid: u32) {
+/// Checks whether a PID still names the process started by this launcher.
+pub(crate) fn process_state(record: &ProcessRecord) -> ProcessState {
+    if record.pid == 0 {
+        return ProcessState::Exited;
+    }
+    let Some(token) = record.token.as_deref().filter(|token| !token.is_empty()) else {
+        return if process_alive(record.pid) {
+            ProcessState::Unverified
+        } else {
+            ProcessState::Exited
+        };
+    };
+    let marker = format!("-Daether.launcher.process-token={}", token);
+
     #[cfg(windows)]
     {
-        let _ = Command::new("taskkill")
-            .args(["/PID", &pid.to_string(), "/T", "/F"])
+        // Query the command line only when an operation needs to prove ownership. Normal status
+        // polling continues to use tasklist and does not launch PowerShell on every refresh.
+        let script = format!(
+            "$ErrorActionPreference='Stop'; $p=Get-CimInstance -ClassName Win32_Process -Filter 'ProcessId = {}'; if ($null -eq $p) {{ exit 2 }}; if ($p.CommandLine -and $p.CommandLine.Contains('{}')) {{ exit 0 }}; exit 1",
+            record.pid, marker
+        );
+        let status = Command::new("powershell.exe")
+            .args(["-NoProfile", "-NonInteractive", "-Command", &script])
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .status();
+        return match status.ok().and_then(|status| status.code()) {
+            Some(0) => ProcessState::Owned,
+            Some(1) => ProcessState::Reused,
+            Some(2) => ProcessState::Exited,
+            _ => ProcessState::Unknown,
+        };
     }
 
-    #[cfg(not(windows))]
+    #[cfg(target_os = "linux")]
     {
-        let _ = Command::new("kill")
-            .args(["-TERM", &pid.to_string()])
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status();
+        return match fs::read(format!("/proc/{}/cmdline", record.pid)) {
+            Ok(command_line)
+                if command_line
+                    .windows(marker.len())
+                    .any(|part| part == marker.as_bytes()) =>
+            {
+                ProcessState::Owned
+            }
+            Ok(_) => ProcessState::Reused,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => ProcessState::Exited,
+            Err(_) => ProcessState::Unknown,
+        };
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        let output = Command::new("ps")
+            .args(["-p", &record.pid.to_string(), "-o", "command="])
+            .output();
+        return match output {
+            Ok(output) if output.status.success() => {
+                if String::from_utf8_lossy(&output.stdout).contains(&marker) {
+                    ProcessState::Owned
+                } else {
+                    ProcessState::Reused
+                }
+            }
+            Ok(_) if !process_alive(record.pid) => ProcessState::Exited,
+            _ => ProcessState::Unknown,
+        };
+    }
+
+    #[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
+    {
+        let _ = marker;
+        ProcessState::Unknown
+    }
+}
+
+/// Terminates a process tree only after its command line proves that it belongs to this launcher.
+pub(crate) fn kill_tracked_tree(record: &ProcessRecord) -> Result<(), String> {
+    match process_state(record) {
+        ProcessState::Owned => kill_tree(record.pid),
+        ProcessState::Exited | ProcessState::Reused => Ok(()),
+        ProcessState::Unverified => Err(format!(
+            "refusing to terminate PID {} because its legacy record has no ownership token",
+            record.pid
+        )),
+        ProcessState::Unknown => Err(format!(
+            "refusing to terminate PID {} because process ownership could not be verified",
+            record.pid
+        )),
+    }
+}
+
+/// Kills a process and its children after ownership has been verified by the caller.
+fn kill_tree(pid: u32) -> Result<(), String> {
+    #[cfg(windows)]
+    let status = Command::new("taskkill")
+        .args(["/PID", &pid.to_string(), "/T", "/F"])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status();
+
+    #[cfg(not(windows))]
+    let status = Command::new("kill")
+        .args(["-TERM", &pid.to_string()])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status();
+
+    match status {
+        Ok(status) if status.success() || !process_alive(pid) => Ok(()),
+        Ok(_) => Err(format!("the operating system refused to terminate PID {}", pid)),
+        Err(error) => Err(format!("could not terminate PID {}: {}", pid, error)),
     }
 }
 
