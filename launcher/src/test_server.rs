@@ -133,6 +133,12 @@ fn serve(
     hits: &Mutex<Vec<String>>,
     base: &str,
 ) {
+    // The listener is nonblocking so its accept loop can be polled. On Windows, accepted
+    // sockets can inherit the listener's mode; restore blocking I/O before reading a request,
+    // otherwise a fragmented HTTP header can produce WouldBlock and the server drops the reply.
+    if stream.set_nonblocking(false).is_err() {
+        return;
+    }
     let _ = stream.set_read_timeout(Some(Duration::from_secs(30)));
     let _ = stream.set_write_timeout(Some(Duration::from_secs(30)));
 
