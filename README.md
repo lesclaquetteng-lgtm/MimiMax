@@ -82,10 +82,13 @@ aether-launcher servers ping mc.hypixel.net
 aether-launcher servers probe mc.hypixel.net
 ```
 
-The **host** part of the page starts a local Fabric server with `online-mode=false` in one click (the
-Fabric installer is downloaded once and shared by every hosted server), prints its address and lets
-the player join it with the same button as any other server. Stopping it goes through RCON so the
-world is saved before the process ends.
+The **host** part of the page starts a local Fabric server bound to `127.0.0.1`. It can use
+authenticated `online-mode=true` or offline `online-mode=false` authentication. Offline mode accepts
+a submitted player name without proving ownership: a whitelist is only a name filter and cannot
+prevent an attacker from impersonating an allowed offline username. Do not expose an offline-mode
+server to a LAN or the Internet on the strength of its whitelist. RCON also remains on loopback
+because its traffic is not encrypted. Stopping the hosted server goes through RCON so the world is
+saved before the process ends.
 
 ## Maximum FPS
 
