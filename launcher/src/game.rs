@@ -594,7 +594,6 @@ mod tests {
 
         #[cfg(not(windows))]
         {
-            let marker = format!("-Daether.launcher.process-token={}", token);
             Command::new("sleep")
                 .arg("30")
                 .env("AETHER_LAUNCHER_PROCESS_TOKEN", token)
