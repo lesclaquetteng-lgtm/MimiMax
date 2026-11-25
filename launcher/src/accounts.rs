@@ -601,12 +601,11 @@ pub fn complete_microsoft_login(token: &TokenResponse) -> Result<Account, HttpEr
     )?;
 
     // 4. The profile
-    let profile: MinecraftProfile = Client::new()
-        .get_json_with_header(
-            MC_PROFILE_URL,
-            "authorization",
-            &format!("Bearer {}", minecraft.access_token),
-        )?;
+    let profile: MinecraftProfile = Client::new().get_json_with_header(
+        MC_PROFILE_URL,
+        "authorization",
+        &format!("Bearer {}", minecraft.access_token),
+    )?;
 
     Ok(Account {
         kind: "microsoft".to_string(),
