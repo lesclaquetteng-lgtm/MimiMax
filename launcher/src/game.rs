@@ -375,6 +375,7 @@ pub fn launch(
     let mut process = Command::new(&command.program);
     process
         .arg(format!("-Daether.launcher.process-token={}", process_token))
+        .env("AETHER_LAUNCHER_PROCESS_TOKEN", &process_token)
         .args(&command.arguments)
         .current_dir(&options.game_dir)
         .stdin(Stdio::null())
@@ -590,9 +591,9 @@ mod tests {
         #[cfg(not(windows))]
         {
             let marker = format!("-Daether.launcher.process-token={}", token);
-            let script = format!("exec -a {} sleep 30", marker);
-            Command::new("bash")
-                .args(["-c", &script])
+            Command::new("sleep")
+                .arg("30")
+                .env("AETHER_LAUNCHER_PROCESS_TOKEN", token)
                 .stdout(Stdio::null())
                 .spawn()
                 .unwrap()
