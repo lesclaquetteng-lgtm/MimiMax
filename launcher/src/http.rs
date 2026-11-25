@@ -311,7 +311,10 @@ impl Client {
     pub fn get_text(&self, url: &str) -> Result<String, HttpError> {
         let agent = &self.agent;
         with_retry(|| {
-            let mut response = agent.get(url).call().map_err(|error| map_error(url, error))?;
+            let mut response = agent
+                .get(url)
+                .call()
+                .map_err(|error| map_error(url, error))?;
             check_status(url, &mut response)?;
             response
                 .body_mut()
@@ -324,7 +327,10 @@ impl Client {
     pub fn get_bytes(&self, url: &str) -> Result<Vec<u8>, HttpError> {
         let agent = &self.agent;
         with_retry(|| {
-            let mut response = agent.get(url).call().map_err(|error| map_error(url, error))?;
+            let mut response = agent
+                .get(url)
+                .call()
+                .map_err(|error| map_error(url, error))?;
             check_status(url, &mut response)?;
             let mut buffer = Vec::new();
             response.body_mut().as_reader().read_to_end(&mut buffer)?;
@@ -533,7 +539,9 @@ impl Client {
         }
 
         let length = response
-            .header("content-length")
+            .headers()
+            .get("content-length")
+            .and_then(|value| value.to_str().ok())
             .and_then(|value| value.parse::<u64>().ok())
             .unwrap_or(0);
 
@@ -648,7 +656,10 @@ pub fn get_with_status(url: &str) -> Result<(u16, String), HttpError> {
             body: Some(body),
         };
 
-        let mut response = agent.get(url).call().map_err(|error| map_error(url, error))?;
+        let mut response = agent
+            .get(url)
+            .call()
+            .map_err(|error| map_error(url, error))?;
         let status = response.status().as_u16();
         let body = response
             .body_mut()
@@ -687,16 +698,13 @@ pub fn download(
 ///
 /// `Content-Range: bytes 512-1023/1024` starts at 512. A header that is missing or that does not
 /// have that shape yields `None`: a resume never trusts a range it cannot read.
-fn content_range_start(
-    response: &ureq::http::Response<ureq::Body>,
-) -> Option<u64> {
+fn content_range_start(response: &ureq::http::Response<ureq::Body>) -> Option<u64> {
     response
         .headers()
         .get("content-range")
         .and_then(|value| value.to_str().ok())
         .and_then(parse_content_range)
 }
-
 
 /// Reads the first byte of a `Content-Range` value.
 fn parse_content_range(value: &str) -> Option<u64> {
