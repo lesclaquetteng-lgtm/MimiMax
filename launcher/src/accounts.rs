@@ -601,22 +601,13 @@ pub fn complete_microsoft_login(token: &TokenResponse) -> Result<Account, HttpEr
     )?;
 
     // 4. The profile
-    let profile: MinecraftProfile = {
-        let request = ureq::AgentBuilder::new().build();
-        request
-            .get(MC_PROFILE_URL)
-            .set(
-                "authorization",
-                &format!("Bearer {}", minecraft.access_token),
-            )
-            .call()
-            .map_err(|error| HttpError::Io(std::io::Error::other(error.to_string())))
-            .and_then(|response| {
-                response
-                    .into_json()
-                    .map_err(|error| HttpError::Json(error.to_string()))
-            })
-    }?;
+    let profile: MinecraftProfile = http::Client::new()
+        .get_json_with_header(
+            MC_PROFILE_URL,
+            "authorization",
+            &format!("Bearer {}", minecraft.access_token),
+        )
+        .map_err(LoginError::Http)?;
 
     Ok(Account {
         kind: "microsoft".to_string(),
