@@ -697,7 +697,6 @@ fn content_range_start(
         .and_then(parse_content_range)
 }
 
-}
 
 /// Reads the first byte of a `Content-Range` value.
 fn parse_content_range(value: &str) -> Option<u64> {
