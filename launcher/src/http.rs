@@ -145,8 +145,6 @@ fn agent() -> ureq::Agent {
     ureq::Agent::new_with_config(config)
 }
 
-}
-
 /// The delay before the attempt that follows the given failure.
 fn backoff_delay(retry: u32) -> Duration {
     let factor = 1u32 << retry.min(5);
@@ -184,8 +182,6 @@ fn check_status(
         status,
         body,
     })
-}
-
 }
 
 /// Reads at most [`MAX_ERROR_BODY_BYTES`] from an error response.
@@ -658,20 +654,6 @@ pub fn get_with_status(url: &str) -> Result<(u16, String), HttpError> {
             .body_mut()
             .read_to_string()
             .map_err(|error| map_error(url, error))?;
-
-        if retryable_status(status) {
-                    return Err(failure(status, body));
-                }
-
-                return Ok((status, body));
-            }
-            Err(other) => return Err(HttpError::Io(std::io::Error::other(other.to_string()))),
-        };
-
-        let status = response.status();
-        let body = response
-            .into_string()
-            .map_err(|error| HttpError::Io(std::io::Error::other(error.to_string())))?;
 
         if retryable_status(status) {
             return Err(failure(status, body));
