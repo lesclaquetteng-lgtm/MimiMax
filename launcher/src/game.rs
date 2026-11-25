@@ -1,6 +1,7 @@
+//! The classpath and the arguments of the game.
+
 #[cfg(unix)]
 use std::os::unix::process::CommandExt;
-//! The classpath and the arguments of the game.
 
 use std::collections::HashMap;
 use std::fs;
