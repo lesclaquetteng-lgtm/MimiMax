@@ -136,7 +136,11 @@ pub(crate) fn new_process_token() -> Result<String, String> {
     let mut bytes = [0u8; 16];
     getrandom::fill(&mut bytes)
         .map_err(|error| format!("could not generate a process identity token: {}", error))?;
-    Ok(bytes.iter().map(|byte| format!("{:02x}", byte)).collect())
+    Ok(bytes
+        .iter()
+        .map(|byte| format!("{:02x}", byte))
+        .collect::<Vec<_>>()
+        .join(""))
 }
 
 /// Reads the metadata of a server.
@@ -150,6 +154,7 @@ fn read_metadata(directory: &Path) -> Option<HostedServer> {
     Some(server)
 }
 
+#[cfg(test)]
 fn read_pid(directory: &Path) -> Option<u32> {
     read_process_record(&pid_path(directory)).map(|record| record.pid)
 }
@@ -240,8 +245,8 @@ fn properties(
         "server-ip=127.0.0.1".to_string(),
         format!("online-mode={}", online_mode),
         format!("enforce-secure-profile={}", online_mode),
-        // An offline server accepts every name it is given: the whitelist is the only thing that
-        // keeps a stranger who reaches the port from joining under the operator's name.
+        // Keep the whitelist enabled as an extra name filter. It is not an identity check in
+        // offline mode; authentication is provided only when online-mode is enabled.
         "white-list=true".to_string(),
         "enforce-whitelist=true".to_string(),
         "op-permission-level=2".to_string(),
