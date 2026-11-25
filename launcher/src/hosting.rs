@@ -1238,12 +1238,13 @@ mod tests {
         }
         #[cfg(not(windows))]
         {
-            Command::new("sleep")
+            let mut command = Command::new("sleep");
+            command
                 .arg("30")
                 .env("AETHER_LAUNCHER_PROCESS_TOKEN", token)
-                .stdout(Stdio::null())
-                .spawn()
-                .unwrap()
+                .stdout(Stdio::null());
+            command.process_group(0);
+            command.spawn().unwrap()
         }
     }
 
