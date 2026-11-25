@@ -148,7 +148,9 @@ fn read_metadata(directory: &Path) -> Option<HostedServer> {
     let record = read_process_record(&pid_path(directory));
     server.pid = record.as_ref().map(|record| record.pid);
     // Informational only: every operation that mutates or terminates a process checks its marker.
-    server.running = record.as_ref().is_some_and(|record| process_alive(record.pid));
+    server.running = record
+        .as_ref()
+        .is_some_and(|record| process_alive(record.pid));
     Some(server)
 }
 
@@ -238,7 +240,8 @@ fn properties(
 ) -> String {
     [
         "# Written by Aether Launcher.".to_string(),
-        "# Offline mode does not authenticate player names; keep this server on loopback.".to_string(),
+        "# Offline mode does not authenticate player names; keep this server on loopback."
+            .to_string(),
         format!("server-port={}", port),
         "server-ip=127.0.0.1".to_string(),
         format!("online-mode={}", online_mode),
@@ -723,7 +726,9 @@ pub fn start(paths: &Paths, name: &str) -> Result<HostedServer, String> {
     }
 
     if server.running {
-        return Err("the server appears to be running but its process identity is unavailable".to_string());
+        return Err(
+            "the server appears to be running but its process identity is unavailable".to_string(),
+        );
     }
 
     // A world created before the player added an account is whitelisted before it opens.
@@ -1091,7 +1096,10 @@ fn kill_tree(pid: u32) -> Result<(), String> {
 
     match status {
         Ok(status) if status.success() || !process_alive(pid) => Ok(()),
-        Ok(_) => Err(format!("the operating system refused to terminate PID {}", pid)),
+        Ok(_) => Err(format!(
+            "the operating system refused to terminate PID {}",
+            pid
+        )),
         Err(error) => Err(format!("could not terminate PID {}: {}", pid, error)),
     }
 }
@@ -1181,6 +1189,7 @@ mod tests {
     use std::net::TcpListener;
 
     fn marked_test_child(token: &str) -> std::process::Child {
+        #[cfg(windows)]
         let marker = format!("-Daether.launcher.process-token={}", token);
         #[cfg(windows)]
         {
@@ -1307,32 +1316,46 @@ mod tests {
 
     #[test]
     fn reconfiguring_a_stopped_server_updates_authentication_and_bound_ports() {
-        let root = std::env::temp_dir().join(format!(
-            "aether-host-reconfigure-{}",
-            std::process::id()
-        ));
+        let root =
+            std::env::temp_dir().join(format!("aether-host-reconfigure-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
         fs::create_dir_all(&root).unwrap();
         let paths = test_paths(&root);
 
-        let first = create(&paths, "Reconfigure", 0, None, 8, false, "1.21.11", "0.20.1")
-            .expect("offline server creation");
+        let first = create(
+            &paths,
+            "Reconfigure",
+            0,
+            None,
+            8,
+            false,
+            "1.21.11",
+            "0.20.1",
+        )
+        .expect("offline server creation");
         let directory = PathBuf::from(&first.directory);
 
         let premium = create(&paths, "Reconfigure", 0, None, 8, true, "1.21.11", "0.20.1")
             .expect("switching to authenticated mode");
-        let premium_properties =
-            fs::read_to_string(directory.join("server.properties")).unwrap();
+        let premium_properties = fs::read_to_string(directory.join("server.properties")).unwrap();
         assert!(premium_properties.contains("online-mode=true"));
         assert!(premium_properties.contains("enforce-secure-profile=true"));
         assert!(premium_properties.contains("server-ip=127.0.0.1"));
         assert!(premium_properties.contains(&format!("server-port={}", premium.port)));
         assert!(premium_properties.contains(&format!("rcon.port={}", premium.rcon_port)));
 
-        let offline = create(&paths, "Reconfigure", 0, None, 8, false, "1.21.11", "0.20.1")
-            .expect("switching back to offline mode");
-        let offline_properties =
-            fs::read_to_string(directory.join("server.properties")).unwrap();
+        let offline = create(
+            &paths,
+            "Reconfigure",
+            0,
+            None,
+            8,
+            false,
+            "1.21.11",
+            "0.20.1",
+        )
+        .expect("switching back to offline mode");
+        let offline_properties = fs::read_to_string(directory.join("server.properties")).unwrap();
         assert!(offline_properties.contains("online-mode=false"));
         assert!(offline_properties.contains("enforce-secure-profile=false"));
         assert!(offline_properties.contains("server-ip=127.0.0.1"));
@@ -1345,10 +1368,7 @@ mod tests {
 
     #[test]
     fn a_running_server_cannot_be_reconfigured() {
-        let root = std::env::temp_dir().join(format!(
-            "aether-host-running-{}",
-            std::process::id()
-        ));
+        let root = std::env::temp_dir().join(format!("aether-host-running-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
         fs::create_dir_all(&root).unwrap();
         let paths = test_paths(&root);
@@ -1364,8 +1384,7 @@ mod tests {
         };
         write_process_record(&pid_path(&directory), &record).unwrap();
 
-        let error = create(&paths, "Busy", 0, None, 8, true, "1.21.11", "0.20.1")
-            .unwrap_err();
+        let error = create(&paths, "Busy", 0, None, 8, true, "1.21.11", "0.20.1").unwrap_err();
         assert!(error.contains("stop the hosted server"));
         assert_eq!(
             fs::read_to_string(directory.join("server.properties")).unwrap(),
