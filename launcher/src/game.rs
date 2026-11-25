@@ -659,6 +659,18 @@ mod tests {
     }
 
     #[test]
+    fn a_reused_pid_is_not_terminated() {
+        let data = scratch("reused-pid");
+        record_pid(&data, std::process::id(), "not-the-current-process-token").unwrap();
+
+        let error = stop(&data).unwrap_err();
+
+        assert_eq!(error, "the game is no longer running");
+        assert!(crate::hosting::process_alive(std::process::id()));
+        assert_eq!(read_pid(&data), None);
+    }
+
+    #[test]
     fn a_failed_stop_keeps_the_game_process_record() {
         let data = scratch("failed-stop");
         record_pid(&data, 4242, "test-token").unwrap();
