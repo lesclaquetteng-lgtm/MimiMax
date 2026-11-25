@@ -1124,7 +1124,10 @@ fn kill_tree(pid: u32) -> Result<(), String> {
             .stderr(Stdio::null())
             .status()
     } else {
-        return Err(format!("PID {} is outside the supported process-group range", pid));
+        return Err(format!(
+            "PID {} is outside the supported process-group range",
+            pid
+        ));
     };
 
     match status {
@@ -1401,10 +1404,8 @@ mod tests {
 
     #[test]
     fn a_corrupt_server_pid_record_blocks_start_and_reconfiguration() {
-        let root = std::env::temp_dir().join(format!(
-            "aether-host-corrupt-record-{}",
-            std::process::id()
-        ));
+        let root =
+            std::env::temp_dir().join(format!("aether-host-corrupt-record-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
         fs::create_dir_all(&root).unwrap();
         let paths = test_paths(&root);
@@ -1416,10 +1417,13 @@ mod tests {
 
         let start_error = start(&paths, "Corrupt").unwrap_err();
         assert!(start_error.contains("process record is unreadable"));
-        let create_error = create(&paths, "Corrupt", 0, None, 8, true, "1.21.11", "0.20.1")
-            .unwrap_err();
+        let create_error =
+            create(&paths, "Corrupt", 0, None, 8, true, "1.21.11", "0.20.1").unwrap_err();
         assert!(create_error.contains("process record is unreadable"));
-        assert_eq!(fs::read_to_string(&process_file).unwrap(), "{not-valid-json");
+        assert_eq!(
+            fs::read_to_string(&process_file).unwrap(),
+            "{not-valid-json"
+        );
 
         let stop_error = stop(&paths, "Corrupt").unwrap_err();
         assert!(stop_error.contains("process record is unreadable"));
