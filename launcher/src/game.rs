@@ -369,8 +369,7 @@ pub fn launch(
     mut on_output: impl FnMut(&str),
 ) -> Result<Child, std::io::Error> {
     let command = build_command(options);
-    let process_token = crate::hosting::new_process_token()
-        .map_err(std::io::Error::other)?;
+    let process_token = crate::hosting::new_process_token().map_err(std::io::Error::other)?;
 
     let mut process = Command::new(&command.program);
     process
@@ -539,7 +538,11 @@ pub fn stop(data: &Path) -> Result<u32, String> {
     }
 
     crate::hosting::kill_tracked_tree(&record)?;
-    finish_stop(data, pid, wait_for_process_exit(pid, Duration::from_secs(5)))
+    finish_stop(
+        data,
+        pid,
+        wait_for_process_exit(pid, Duration::from_secs(5)),
+    )
 }
 
 /// Spawns a thread that forwards every line of a stream of the process.
@@ -579,6 +582,7 @@ mod tests {
     fn long_running_child(token: &str) -> Child {
         #[cfg(windows)]
         {
+            #[cfg(windows)]
             let marker = format!("-Daether.launcher.process-token={}", token);
             let script = format!("ping -n 30 127.0.0.1 >NUL & echo {}", marker);
             Command::new("cmd")
