@@ -286,7 +286,9 @@ pub async fn mods_install(
 	game_version: String,
 ) -> Result<Value, String> {
 	let Some(_operation) = state.acquire_install() else {
-		return Ok(failure("Mods cannot be installed while Minecraft is starting, running or another install is active."));
+		return Ok(failure(
+ 			"Mods cannot be installed while Minecraft is starting, running or another install is active.",
+ 		));
 	};
 	Ok(blocking_stream_tracked(
 		app,
@@ -311,7 +313,9 @@ pub async fn mods_toggle(
 	enabled: bool,
 ) -> Result<Value, String> {
 	let Some(_operation) = state.acquire_install() else {
-		return Ok(failure("Mods cannot be changed while Minecraft is starting, running or another install is active."));
+		return Ok(failure(
+ 			"Mods cannot be changed while Minecraft is starting, running or another install is active.",
+ 		));
 	};
 	Ok(core::run_core(
 		app,
@@ -493,7 +497,9 @@ pub async fn performance_tune(
 	preset: String,
 ) -> Result<Value, String> {
 	let Some(_operation) = state.acquire_install() else {
-		return Ok(failure("Game options cannot be changed while Minecraft is starting, running or installing."));
+		return Ok(failure(
+ 			"Game options cannot be changed while Minecraft is starting, running or installing.",
+ 		));
 	};
 	Ok(core::run_core(
 		app,
@@ -527,7 +533,9 @@ pub async fn performance_install(
 	slugs: Option<Value>,
 ) -> Result<Value, String> {
 	let Some(_operation) = state.acquire_install() else {
-		return Ok(failure("The optimization pack cannot be installed while Minecraft is starting, running or another install is active."));
+		return Ok(failure(
+ 			"The optimization pack cannot be installed while Minecraft is starting, running or another install is active.",
+ 		));
 	};
 	let mut args = vec!["performance".to_string(), "install".to_string()];
 
@@ -628,7 +636,9 @@ pub async fn install_start(
 	profile: Option<Value>,
 ) -> Result<Value, String> {
 	let Some(_operation) = state.acquire_install() else {
-		return Ok(failure("Minecraft cannot be installed or repaired while the game is starting or running."));
+		return Ok(failure(
+ 			"Minecraft cannot be installed or repaired while the game is starting or running.",
+ 		));
 	};
 	let mut args = vec!["install".to_string()];
 	if let Some(version) = profile
@@ -733,7 +743,9 @@ pub async fn game_launch(
 	options: Option<Value>,
 ) -> Result<Value, String> {
 	let Some(_operation) = state.acquire_game() else {
-		return Ok(failure("Minecraft is already running or the game files are being changed."));
+		return Ok(failure(
+ 			"Minecraft is already running or the game files are being changed.",
+ 		));
 	};
 	let mut args = vec!["launch".to_string()];
 
