@@ -998,12 +998,12 @@ pub(crate) fn process_state(record: &ProcessRecord) -> ProcessState {
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .status();
-        return match status.ok().and_then(|status| status.code()) {
+        match status.ok().and_then(|status| status.code()) {
             Some(0) => ProcessState::Owned,
             Some(1) => ProcessState::Reused,
             Some(2) => ProcessState::Exited,
             _ => ProcessState::Unknown,
-        };
+        }
     }
 
     #[cfg(target_os = "linux")]
