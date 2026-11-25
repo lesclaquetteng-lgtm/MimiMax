@@ -284,13 +284,13 @@ pub async fn mods_install(
 	state: State<'_, RunState>,
 	project_id: String,
 	game_version: String,
-) -> Value {
+) -> Result<Value, String> {
 	let Some(_operation) = state.acquire_install() else {
-		return failure("Mods cannot be installed while Minecraft is starting, running or another install is active.");
+		return Ok(failure("Mods cannot be installed while Minecraft is starting, running or another install is active."));
 	};
-	blocking_stream_tracked(
+	Ok(blocking_stream_tracked(
 		app,
-		&state,
+		state,
 		vec![
 			"mods".to_string(),
 			"install".to_string(),
@@ -300,7 +300,7 @@ pub async fn mods_install(
 		],
 		StreamKind::Modrinth,
 	)
-	.await
+	.await)
 }
 
 #[tauri::command(rename_all = "snake_case")]
@@ -309,11 +309,11 @@ pub async fn mods_toggle(
 	state: State<'_, RunState>,
 	name: String,
 	enabled: bool,
-) -> Value {
+) -> Result<Value, String> {
 	let Some(_operation) = state.acquire_install() else {
-		return failure("Mods cannot be changed while Minecraft is starting, running or another install is active.");
+		return Ok(failure("Mods cannot be changed while Minecraft is starting, running or another install is active."));
 	};
-	core::run_core(
+	Ok(core::run_core(
 		app,
 		vec![
 			"mods".to_string(),
@@ -323,7 +323,7 @@ pub async fn mods_toggle(
 			enabled.to_string(),
 		],
 	)
-	.await
+	.await)
 }
 
 #[tauri::command(rename_all = "snake_case")]
@@ -491,11 +491,11 @@ pub async fn performance_tune(
 	app: AppHandle,
 	state: State<'_, RunState>,
 	preset: String,
-) -> Value {
+) -> Result<Value, String> {
 	let Some(_operation) = state.acquire_install() else {
-		return failure("Game options cannot be changed while Minecraft is starting, running or installing.");
+		return Ok(failure("Game options cannot be changed while Minecraft is starting, running or installing."));
 	};
-	core::run_core(
+	Ok(core::run_core(
 		app,
 		vec![
 			"performance".to_string(),
@@ -504,7 +504,7 @@ pub async fn performance_tune(
 			if preset.is_empty() { "max".to_string() } else { preset },
 		],
 	)
-	.await
+	.await)
 }
 
 #[tauri::command(rename_all = "snake_case")]
@@ -525,9 +525,9 @@ pub async fn performance_install(
 	app: AppHandle,
 	state: State<'_, RunState>,
 	slugs: Option<Value>,
-) -> Value {
+) -> Result<Value, String> {
 	let Some(_operation) = state.acquire_install() else {
-		return failure("The optimization pack cannot be installed while Minecraft is starting, running or another install is active.");
+		return Ok(failure("The optimization pack cannot be installed while Minecraft is starting, running or another install is active."));
 	};
 	let mut args = vec!["performance".to_string(), "install".to_string()];
 
@@ -543,7 +543,7 @@ pub async fn performance_install(
 		}
 	}
 
-	blocking_stream_tracked(app, &state, args, StreamKind::Optimisation).await
+	Ok(blocking_stream_tracked(app, state, args, StreamKind::Optimisation).await)
 }
 
 /* ------------------------------------------------------------------- logs */
@@ -588,7 +588,7 @@ async fn blocking_stream(app: AppHandle, args: Vec<String>, kind: StreamKind) ->
 /// Runs a long operation while recording its child process so closing the shell cannot orphan it.
 async fn blocking_stream_tracked(
 	app: AppHandle,
-	state: &RunState,
+	state: State<'_, RunState>,
 	args: Vec<String>,
 	kind: StreamKind,
 ) -> Value {
@@ -626,9 +626,9 @@ pub async fn install_start(
 	app: AppHandle,
 	state: State<'_, RunState>,
 	profile: Option<Value>,
-) -> Value {
+) -> Result<Value, String> {
 	let Some(_operation) = state.acquire_install() else {
-		return failure("Minecraft cannot be installed or repaired while the game is starting or running.");
+		return Ok(failure("Minecraft cannot be installed or repaired while the game is starting or running."));
 	};
 	let mut args = vec!["install".to_string()];
 	if let Some(version) = profile
@@ -674,7 +674,7 @@ pub async fn install_start(
 		*guard = None;
 	}
 
-	if cancelled.load(Ordering::SeqCst) {
+	Ok(if cancelled.load(Ordering::SeqCst) {
 		json!({
 			"ok": false,
 			"cancelled": true,
@@ -682,7 +682,7 @@ pub async fn install_start(
 		})
 	} else {
 		result
-	}
+	})
 }
 
 #[tauri::command(rename_all = "snake_case")]
@@ -731,9 +731,9 @@ pub async fn game_launch(
 	app: AppHandle,
 	state: State<'_, RunState>,
 	options: Option<Value>,
-) -> Value {
+) -> Result<Value, String> {
 	let Some(_operation) = state.acquire_game() else {
-		return failure("Minecraft is already running or the game files are being changed.");
+		return Ok(failure("Minecraft is already running or the game files are being changed."));
 	};
 	let mut args = vec!["launch".to_string()];
 
@@ -787,11 +787,11 @@ pub async fn game_launch(
 		*guard = None;
 	}
 
-	if stopped.load(Ordering::SeqCst) {
+	Ok(if stopped.load(Ordering::SeqCst) {
 		json!({ "ok": true, "stopped": true })
 	} else {
 		result
-	}
+	})
 }
 
 // An asynchronous command cannot borrow the state across its await, so the slot is read and released
