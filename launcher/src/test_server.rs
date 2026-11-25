@@ -186,6 +186,29 @@ fn serve(
     let _ = stream.write_all(&body);
     let _ = stream.flush();
     let _ = stream.shutdown(std::net::Shutdown::Write);
+
+    // Keep the receive half open until the client has observed EOF and closed its side. Dropping
+    // the socket immediately after a half-close can produce a TCP reset on Windows when request
+    // bytes are still in flight; ureq then reports WSAECONNABORTED instead of the HTTP response.
+    let _ = stream.set_read_timeout(Some(Duration::from_secs(5)));
+    let mut discarded = [0u8; 1024];
+    loop {
+        match stream.read(&mut discarded) {
+            Ok(0) => break,
+            Ok(_) => continue,
+            Err(error)
+                if matches!(
+                    error.kind(),
+                    std::io::ErrorKind::Interrupted
+                        | std::io::ErrorKind::WouldBlock
+                        | std::io::ErrorKind::TimedOut
+                ) =>
+            {
+                break;
+            }
+            Err(_) => break,
+        }
+    }
 }
 
 /// Replaces the `{base}` placeholder of a body with the address of the server.
