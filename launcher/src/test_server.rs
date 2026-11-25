@@ -36,22 +36,36 @@ impl TestServer {
             .local_addr()
             .expect("the address of the listener")
             .to_string();
-        let routes: HashMap<String, Vec<u8>> = routes.into_iter().collect();
+        let routes = Arc::new(HashMap::<String, Vec<u8>>::from_iter(routes));
         let hits = Arc::new(Mutex::new(Vec::new()));
         let shutdown = Arc::new(AtomicBool::new(false));
 
         let thread_hits = Arc::clone(&hits);
         let thread_shutdown = Arc::clone(&shutdown);
+        let thread_routes = Arc::clone(&routes);
         let base = format!("http://{}", address);
         let handle = thread::spawn(move || {
+            // Downloads are deliberately concurrent in the real installer. Serve each accepted
+            // connection independently so a slow request cannot starve the others on Windows.
+            let mut workers = Vec::new();
             while !thread_shutdown.load(Ordering::Relaxed) {
                 match listener.accept() {
-                    Ok((stream, _)) => serve(stream, &routes, &thread_hits, &base),
+                    Ok((stream, _)) => {
+                        let routes = Arc::clone(&thread_routes);
+                        let hits = Arc::clone(&thread_hits);
+                        let base = base.clone();
+                        workers.push(thread::spawn(move || {
+                            serve(stream, routes.as_ref(), hits.as_ref(), &base)
+                        }));
+                    }
                     Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
                         thread::sleep(Duration::from_millis(2));
                     }
                     Err(_) => break,
                 }
+            }
+            for worker in workers {
+                let _ = worker.join();
             }
         });
 
