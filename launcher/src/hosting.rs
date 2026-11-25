@@ -765,6 +765,7 @@ pub fn start(paths: &Paths, name: &str) -> Result<HostedServer, String> {
     let mut process = Command::new(&java);
     process
         .arg(format!("-Daether.launcher.process-token={}", process_token))
+        .env("AETHER_LAUNCHER_PROCESS_TOKEN", &process_token)
         .arg("-Xms1G")
         .arg("-Xmx2G")
         .arg("-jar")
@@ -1002,18 +1003,33 @@ pub(crate) fn process_state(record: &ProcessRecord) -> ProcessState {
 
     #[cfg(target_os = "linux")]
     {
-        return match fs::read(format!("/proc/{}/cmdline", record.pid)) {
-            Ok(command_line)
-                if command_line
-                    .windows(marker.len())
-                    .any(|part| part == marker.as_bytes()) =>
+        let command_line = fs::read(format!("/proc/{}/cmdline", record.pid));
+        let environment = fs::read(format!("/proc/{}/environ", record.pid));
+        let marker_present = |bytes: &[u8]| {
+            bytes
+                .split(|byte| *byte == 0)
+                .any(|argument| argument == marker.as_bytes())
+        };
+        let env_marker = format!("AETHER_LAUNCHER_PROCESS_TOKEN={}", token);
+        let environment_present = |bytes: &[u8]| {
+            bytes
+                .split(|byte| *byte == 0)
+                .any(|entry| entry == env_marker.as_bytes())
+        };
+
+        match (command_line, environment) {
+            (Ok(command_line), Ok(environment))
+                if marker_present(&command_line) || environment_present(&environment) =>
             {
                 ProcessState::Owned
             }
-            Ok(_) => ProcessState::Reused,
-            Err(error) if error.kind() == io::ErrorKind::NotFound => ProcessState::Exited,
-            Err(_) => ProcessState::Unknown,
-        };
+            (Ok(_), Ok(_)) => ProcessState::Reused,
+            (Err(error), _) | (_, Err(error)) if error.kind() == io::ErrorKind::NotFound => {
+                ProcessState::Exited
+            }
+            _ if !process_alive(record.pid) => ProcessState::Exited,
+            _ => ProcessState::Unknown,
+        }
     }
 
     #[cfg(target_os = "macos")]
@@ -1177,9 +1193,9 @@ mod tests {
         }
         #[cfg(not(windows))]
         {
-            let script = format!("exec -a {} sleep 30", marker);
-            Command::new("bash")
-                .args(["-c", &script])
+            Command::new("sleep")
+                .arg("30")
+                .env("AETHER_LAUNCHER_PROCESS_TOKEN", token)
                 .stdout(Stdio::null())
                 .spawn()
                 .unwrap()
