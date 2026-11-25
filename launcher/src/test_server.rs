@@ -136,15 +136,29 @@ fn serve(
     let _ = stream.set_read_timeout(Some(Duration::from_secs(5)));
     let _ = stream.set_write_timeout(Some(Duration::from_secs(5)));
 
-    let mut buffer = [0u8; 4096];
-    let Ok(read) = stream.read(&mut buffer) else {
-        return;
-    };
-    if read == 0 {
-        return;
+    // Read the complete HTTP header before replying. A single TCP read is not guaranteed to
+    // contain the whole request; closing a socket with unread request bytes can reset the
+    // connection on Windows and surface as WSAECONNABORTED (10053) in the client.
+    const MAX_HEADER_BYTES: usize = 16 * 1024;
+    let mut buffer = Vec::with_capacity(1024);
+    let mut chunk = [0u8; 1024];
+    loop {
+        let Ok(read) = stream.read(&mut chunk) else {
+            return;
+        };
+        if read == 0 {
+            return;
+        }
+        buffer.extend_from_slice(&chunk[..read]);
+        if buffer.windows(4).any(|window| window == b"\r\n\r\n") {
+            break;
+        }
+        if buffer.len() >= MAX_HEADER_BYTES {
+            return;
+        }
     }
 
-    let request = String::from_utf8_lossy(&buffer[..read]);
+    let request = String::from_utf8_lossy(&buffer);
     let Some(line) = request.lines().next() else {
         return;
     };
