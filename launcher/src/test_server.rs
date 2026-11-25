@@ -133,8 +133,8 @@ fn serve(
     hits: &Mutex<Vec<String>>,
     base: &str,
 ) {
-    let _ = stream.set_read_timeout(Some(Duration::from_secs(30));
-    let _ = stream.set_write_timeout(Some(Duration::from_secs(30));
+    let _ = stream.set_read_timeout(Some(Duration::from_secs(30)));
+    let _ = stream.set_write_timeout(Some(Duration::from_secs(30)));
 
     // Read the complete HTTP header before replying. A single TCP read is not guaranteed to
     // contain the whole request; closing a socket with unread request bytes can reset the
