@@ -115,7 +115,8 @@ fn command_info() -> Result<(), String> {
     let java_runtime = match settings::detect_java(&launcher.settings.java_path, required_java) {
         Some(path) => {
             let major = settings::read_java_major_version(&path);
-            let selected_custom = custom_java && path == std::path::PathBuf::from(&launcher.settings.java_path);
+            let selected_custom =
+                custom_java && path.as_path() == std::path::Path::new(&launcher.settings.java_path);
             serde_json::json!({
                 "available": true,
                 "compatible": major.map(|value| value >= required_java).unwrap_or(false),
