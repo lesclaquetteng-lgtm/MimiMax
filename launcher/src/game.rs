@@ -631,8 +631,8 @@ mod tests {
     #[test]
     fn a_record_that_names_a_dead_process_is_cleared() {
         let data = scratch("stale");
-        // PID 0 is never a process the launcher manages.
-        fs::write(pid_file(&data), "0").unwrap();
+        // A high, unused positive PID is a valid legacy record that can be proved exited.
+        fs::write(pid_file(&data), "4000000000").unwrap();
 
         assert_eq!(running(&data).unwrap(), None);
         assert_eq!(read_pid(&data), None, "the stale record was left behind");
