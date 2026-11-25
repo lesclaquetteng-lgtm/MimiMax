@@ -671,7 +671,10 @@ mod tests {
         let error = running(&data).unwrap_err();
 
         assert!(error.contains("process record is unreadable"));
-        assert!(pid_file(&data).exists(), "the corrupt record must not be discarded");
+        assert!(
+            pid_file(&data).exists(),
+            "the corrupt record must not be discarded"
+        );
     }
 
     #[test]
