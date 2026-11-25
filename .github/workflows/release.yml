@@ -10,11 +10,40 @@ permissions:
   contents: write
 
 jobs:
+  # Validate the exact tag commit with the same full CI suite used for pull requests.
+  validate:
+    name: Validate the tagged commit
+    uses: ./.github/workflows/ci.yml
+
   windows:
+    needs: validate
     name: Installers and mod jar
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Verify tag and shipped package versions
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          $tagVersion = $env:RELEASE_TAG -replace '^v', ''
+          $core = [regex]::Match((Get-Content launcher/Cargo.toml -Raw), '(?m)^version\s*=\s*"([^"]+)"').Groups[1].Value
+          $shell = [regex]::Match((Get-Content launcher/desktop/Cargo.toml -Raw), '(?m)^version\s*=\s*"([^"]+)"').Groups[1].Value
+          $tauri = (Get-Content launcher/desktop/tauri.conf.json -Raw | ConvertFrom-Json).version
+          $fabric = [regex]::Match((Get-Content aether-client/gradle.properties -Raw), '(?m)^version=([^\r\n]+)').Groups[1].Value
+          $versions = [ordered]@{
+            'launcher/Cargo.toml' = $core
+            'launcher/desktop/Cargo.toml' = $shell
+            'tauri.conf.json' = $tauri
+            'aether-client/gradle.properties' = $fabric
+          }
+          $versions.GetEnumerator() | ForEach-Object {
+            Write-Host "$($_.Key): $($_.Value)"
+          }
+          if (-not $tagVersion -or @($versions.Values | Where-Object { $_ -ne $tagVersion }).Count -gt 0) {
+            throw "Release tag v$tagVersion does not match every shipped package version."
+          }
 
       - name: Install Rust
         run: |

@@ -180,18 +180,26 @@ Fabric installer is downloaded once and shared by every hosted server), prints i
 the player join it with the same button as any other server. Stopping it goes through RCON so the
 world is saved before the process ends.
 
-An offline server accepts any name, so the generated `server.properties` never relies on that:
+An offline server does **not** authenticate the player who submits a username. Its UUID is
+derived from that submitted name. The whitelist is only a name filter: it can restrict which names
+are accepted, but it cannot prove that the connecting player owns an allowed account or protect an
+operator name from impersonation.
 
-- `server-ip=127.0.0.1` keeps it on the loopback interface, and RCON travels in clear text on the
-  same interface;
-- `white-list=true` and `enforce-whitelist=true` are always written, and `whitelist.json` is seeded
-  with every account of the launcher (a world created before the first account is whitelisted at
-  its first start), so a stranger who reaches the port cannot take the operator's name;
-- the RCON password is 32 random hexadecimal characters, written only in `server.properties` and
-  never shown in clear text or in the server metadata.
+The launcher therefore keeps hosted servers local-only:
 
-Opening the server to the local network is not a one-click action: it requires editing
-`server.properties` on purpose, and the whitelist is already in place when you do.
+- `server-ip=127.0.0.1` binds the game server to the loopback interface; RCON also stays on that
+  interface and is never exposed by the launcher;
+- `white-list=true` and `enforce-whitelist=true` are enabled, and `whitelist.json` is seeded
+  from launcher accounts. This is an access filter, **not authentication**;
+- the RCON password is 32 random hexadecimal characters, written only in `server.properties`
+  and never shown in the interface or server metadata;
+- recreating or reconfiguring a stopped hosted server restores loopback binding and synchronizes
+  the selected authentication mode and actual game/RCON ports.
+
+Do not expose an `online-mode=false` server to a LAN or the Internet on the strength of its
+whitelist. For network-accessible servers, use authenticated accounts with `online-mode=true`,
+keep RCON private, and configure the network deliberately. Editing `server-ip` manually is outside
+the launcher's local-only hosting guarantee.
 
 ## Maximum FPS
 
