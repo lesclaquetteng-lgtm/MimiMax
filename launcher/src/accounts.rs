@@ -606,8 +606,7 @@ pub fn complete_microsoft_login(token: &TokenResponse) -> Result<Account, HttpEr
             MC_PROFILE_URL,
             "authorization",
             &format!("Bearer {}", minecraft.access_token),
-        )
-        .map_err(LoginError::Http)?;
+        )?;
 
     Ok(Account {
         kind: "microsoft".to_string(),
