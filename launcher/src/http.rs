@@ -512,7 +512,7 @@ impl Client {
             Err(error) => return Err(error),
         };
 
-        let mut resumed = offset > 0 && response.status() == 206;
+        let mut resumed = offset > 0 && response.status().as_u16() == 206;
 
         // A resume appends the bytes that follow the ones on the disk, so the range the server
         // announces has to start exactly where the request asked. Anything else, a missing or
