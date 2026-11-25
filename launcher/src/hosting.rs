@@ -1119,7 +1119,7 @@ fn kill_tree(pid: u32) -> Result<(), String> {
     #[cfg(not(windows))]
     let status = if let Ok(group) = i32::try_from(pid) {
         Command::new("kill")
-            .args(["-TERM", &format!("-{}", group)])
+            .args(["--", &format!("-{}", group)])
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .status()
