@@ -591,7 +591,7 @@ impl Launcher {
         server: Option<&str>,
         mut on_output: impl FnMut(&str),
     ) -> Result<(u32, bool), String> {
-        if let Some(pid) = game::running(&self.paths.data) {
+        if let Some(pid) = game::running(&self.paths.data)? {
             return Err(format!(
                 "Minecraft or an unverified previous process is already recorded (PID {}). Close it manually before starting another instance.",
                 pid
@@ -639,7 +639,7 @@ impl Launcher {
     }
 
     /// The game that is still running, including the one of a launcher that is gone.
-    pub fn running_game(&self) -> Option<u32> {
+    pub fn running_game(&self) -> Result<Option<u32>, String> {
         game::running(&self.paths.data)
     }
 
