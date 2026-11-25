@@ -1652,7 +1652,12 @@ mod tests {
         let report = install_from(&paths, "1.21.11", &[], &server.url(""), |_| {});
 
         assert!(!report.aborted, "{:?}", report.unresolved);
-        assert!(report.failed.is_empty(), "{:?}", report.failed);
+        assert!(
+            report.failed.is_empty(),
+            "{:?}; HTTP requests: {}",
+            report.failed,
+            server.report()
+        );
         assert_eq!(report.installed.len(), PACK.len(), "{:?}", report.installed);
 
         // Cloth Config is an entry of the pack and a required dependency of MoreCulling: one

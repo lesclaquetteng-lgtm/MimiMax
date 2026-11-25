@@ -135,11 +135,14 @@ impl From<serde_json::Error> for HttpError {
 /// The timeouts are the same for every request of the session, the pool of connections is kept by
 /// the agent itself.
 fn agent() -> ureq::Agent {
-    ureq::AgentBuilder::new()
-        .timeout_connect(Duration::from_secs(15))
-        .timeout(Duration::from_secs(120))
+    let config = ureq::Agent::config_builder()
+        .timeout_connect(Some(Duration::from_secs(15)))
+        .timeout_global(Some(Duration::from_secs(120)))
         .user_agent(USER_AGENT)
-        .build()
+        // Preserve HTTP error response bodies for OAuth and server diagnostics.
+        .http_status_as_error(false)
+        .build();
+    ureq::Agent::new_with_config(config)
 }
 
 /// The delay before the attempt that follows the given failure.
@@ -154,16 +157,31 @@ fn backoff_delay(retry: u32) -> Duration {
 /// error code from it.
 fn map_error(url: &str, error: ureq::Error) -> HttpError {
     match error {
-        ureq::Error::Status(status, response) => {
-            let body = read_error_body(response.into_reader());
-            HttpError::Status {
-                url: url.to_string(),
-                status,
-                body,
-            }
-        }
+        ureq::Error::StatusCode(status) => HttpError::Status {
+            url: url.to_string(),
+            status,
+            body: None,
+        },
         other => HttpError::Io(std::io::Error::other(other.to_string())),
     }
+}
+
+/// Converts a non-success response while keeping only a bounded diagnostic body.
+fn check_status(
+    url: &str,
+    response: &mut ureq::http::Response<ureq::Body>,
+) -> Result<(), HttpError> {
+    let status = response.status().as_u16();
+    if status < 400 {
+        return Ok(());
+    }
+
+    let body = read_error_body(response.body_mut().as_reader());
+    Err(HttpError::Status {
+        url: url.to_string(),
+        status,
+        body,
+    })
 }
 
 /// Reads at most [`MAX_ERROR_BODY_BYTES`] from an error response.
@@ -262,15 +280,30 @@ impl Client {
     }
     /// Downloads a JSON document.
     pub fn get_json<T: DeserializeOwned>(&self, url: &str) -> Result<T, HttpError> {
+        self.get_json_with_header(url, "", "")
+    }
+
+    /// Downloads JSON with an optional request header.
+    pub fn get_json_with_header<T: DeserializeOwned>(
+        &self,
+        url: &str,
+        header: &str,
+        value: &str,
+    ) -> Result<T, HttpError> {
         let agent = &self.agent;
         with_retry(|| {
-            let response = agent
-                .get(url)
-                .call()
-                .map_err(|error| map_error(url, error))?;
+            let request = agent.get(url);
+            let request = if header.is_empty() {
+                request
+            } else {
+                request.header(header, value)
+            };
+            let mut response = request.call().map_err(|error| map_error(url, error))?;
+            check_status(url, &mut response)?;
             response
-                .into_json()
-                .map_err(|error| HttpError::Json(error.to_string()))
+                .body_mut()
+                .read_json()
+                .map_err(|error| map_error(url, error))
         })
     }
 
@@ -278,13 +311,15 @@ impl Client {
     pub fn get_text(&self, url: &str) -> Result<String, HttpError> {
         let agent = &self.agent;
         with_retry(|| {
-            let response = agent
+            let mut response = agent
                 .get(url)
                 .call()
                 .map_err(|error| map_error(url, error))?;
+            check_status(url, &mut response)?;
             response
-                .into_string()
-                .map_err(|error| HttpError::Io(std::io::Error::other(error.to_string())))
+                .body_mut()
+                .read_to_string()
+                .map_err(|error| map_error(url, error))
         })
     }
 
@@ -292,12 +327,13 @@ impl Client {
     pub fn get_bytes(&self, url: &str) -> Result<Vec<u8>, HttpError> {
         let agent = &self.agent;
         with_retry(|| {
-            let response = agent
+            let mut response = agent
                 .get(url)
                 .call()
                 .map_err(|error| map_error(url, error))?;
+            check_status(url, &mut response)?;
             let mut buffer = Vec::new();
-            response.into_reader().read_to_end(&mut buffer)?;
+            response.body_mut().as_reader().read_to_end(&mut buffer)?;
             Ok(buffer)
         })
     }
@@ -310,13 +346,15 @@ impl Client {
     ) -> Result<T, HttpError> {
         let agent = &self.agent;
         with_retry(|| {
-            let response = agent
+            let mut response = agent
                 .post(url)
-                .send_form(form)
+                .send_form(form.iter().copied())
                 .map_err(|error| map_error(url, error))?;
+            check_status(url, &mut response)?;
             response
-                .into_json()
-                .map_err(|error| HttpError::Json(error.to_string()))
+                .body_mut()
+                .read_json()
+                .map_err(|error| map_error(url, error))
         })
     }
 
@@ -328,14 +366,16 @@ impl Client {
     ) -> Result<T, HttpError> {
         let agent = &self.agent;
         with_retry(|| {
-            let response = agent
+            let mut response = agent
                 .post(url)
-                .set("content-type", "application/json")
-                .send_json(body.clone())
+                .header("content-type", "application/json")
+                .send_json(body)
                 .map_err(|error| map_error(url, error))?;
+            check_status(url, &mut response)?;
             response
-                .into_json()
-                .map_err(|error| HttpError::Json(error.to_string()))
+                .body_mut()
+                .read_json()
+                .map_err(|error| map_error(url, error))
         })
     }
 
@@ -435,15 +475,21 @@ impl Client {
     }
 
     /// Sends the request of a download, with a range when a partial file is already there.
-    fn request(&self, url: &str, offset: u64) -> Result<ureq::Response, HttpError> {
+    fn request(
+        &self,
+        url: &str,
+        offset: u64,
+    ) -> Result<ureq::http::Response<ureq::Body>, HttpError> {
         let request = self.agent.get(url);
         let request = if offset > 0 {
-            request.set("range", &format!("bytes={}-", offset))
+            request.header("range", &format!("bytes={}-", offset))
         } else {
             request
         };
 
-        request.call().map_err(|error| map_error(url, error))
+        let mut response = request.call().map_err(|error| map_error(url, error))?;
+        check_status(url, &mut response)?;
+        Ok(response)
     }
 
     /// A single attempt of [`Client::download`].
@@ -472,7 +518,7 @@ impl Client {
             Err(error) => return Err(error),
         };
 
-        let mut resumed = offset > 0 && response.status() == 206;
+        let mut resumed = offset > 0 && response.status().as_u16() == 206;
 
         // A resume appends the bytes that follow the ones on the disk, so the range the server
         // announces has to start exactly where the request asked. Anything else, a missing or
@@ -493,7 +539,9 @@ impl Client {
         }
 
         let length = response
-            .header("content-length")
+            .headers()
+            .get("content-length")
+            .and_then(|value| value.to_str().ok())
             .and_then(|value| value.parse::<u64>().ok())
             .unwrap_or(0);
 
@@ -518,7 +566,7 @@ impl Client {
             fs::File::create(temporary)?
         };
 
-        let mut reader = response.into_reader();
+        let mut reader = response.body_mut().as_reader();
         let mut buffer = [0u8; CHUNK_SIZE];
         let mut received = offset;
 
@@ -608,24 +656,15 @@ pub fn get_with_status(url: &str) -> Result<(u16, String), HttpError> {
             body: Some(body),
         };
 
-        let response = match agent.get(url).call() {
-            Ok(response) => response,
-            Err(ureq::Error::Status(status, response)) => {
-                let body = response.into_string().unwrap_or_default();
-
-                if retryable_status(status) {
-                    return Err(failure(status, body));
-                }
-
-                return Ok((status, body));
-            }
-            Err(other) => return Err(HttpError::Io(std::io::Error::other(other.to_string()))),
-        };
-
-        let status = response.status();
+        let mut response = agent
+            .get(url)
+            .call()
+            .map_err(|error| map_error(url, error))?;
+        let status = response.status().as_u16();
         let body = response
-            .into_string()
-            .map_err(|error| HttpError::Io(std::io::Error::other(error.to_string())))?;
+            .body_mut()
+            .read_to_string()
+            .map_err(|error| map_error(url, error))?;
 
         if retryable_status(status) {
             return Err(failure(status, body));
@@ -659,9 +698,11 @@ pub fn download(
 ///
 /// `Content-Range: bytes 512-1023/1024` starts at 512. A header that is missing or that does not
 /// have that shape yields `None`: a resume never trusts a range it cannot read.
-fn content_range_start(response: &ureq::Response) -> Option<u64> {
+fn content_range_start(response: &ureq::http::Response<ureq::Body>) -> Option<u64> {
     response
-        .header("content-range")
+        .headers()
+        .get("content-range")
+        .and_then(|value| value.to_str().ok())
         .and_then(parse_content_range)
 }
 

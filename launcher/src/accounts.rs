@@ -3,7 +3,7 @@
 use serde::{Deserialize, Serialize};
 use std::time::{Duration, Instant};
 
-use crate::http::{post_form, post_json, HttpError};
+use crate::http::{post_form, post_json, Client, HttpError};
 use crate::offline;
 
 /// The public client of the Minecraft launcher, it is used by every third party launcher.
@@ -601,22 +601,11 @@ pub fn complete_microsoft_login(token: &TokenResponse) -> Result<Account, HttpEr
     )?;
 
     // 4. The profile
-    let profile: MinecraftProfile = {
-        let request = ureq::AgentBuilder::new().build();
-        request
-            .get(MC_PROFILE_URL)
-            .set(
-                "authorization",
-                &format!("Bearer {}", minecraft.access_token),
-            )
-            .call()
-            .map_err(|error| HttpError::Io(std::io::Error::other(error.to_string())))
-            .and_then(|response| {
-                response
-                    .into_json()
-                    .map_err(|error| HttpError::Json(error.to_string()))
-            })
-    }?;
+    let profile: MinecraftProfile = Client::new().get_json_with_header(
+        MC_PROFILE_URL,
+        "authorization",
+        &format!("Bearer {}", minecraft.access_token),
+    )?;
 
     Ok(Account {
         kind: "microsoft".to_string(),

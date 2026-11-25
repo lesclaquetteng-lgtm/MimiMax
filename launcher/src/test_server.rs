@@ -36,22 +36,36 @@ impl TestServer {
             .local_addr()
             .expect("the address of the listener")
             .to_string();
-        let routes: HashMap<String, Vec<u8>> = routes.into_iter().collect();
+        let routes = Arc::new(HashMap::<String, Vec<u8>>::from_iter(routes));
         let hits = Arc::new(Mutex::new(Vec::new()));
         let shutdown = Arc::new(AtomicBool::new(false));
 
         let thread_hits = Arc::clone(&hits);
         let thread_shutdown = Arc::clone(&shutdown);
+        let thread_routes = Arc::clone(&routes);
         let base = format!("http://{}", address);
         let handle = thread::spawn(move || {
+            // Downloads are deliberately concurrent in the real installer. Serve each accepted
+            // connection independently so a slow request cannot starve the others on Windows.
+            let mut workers = Vec::new();
             while !thread_shutdown.load(Ordering::Relaxed) {
                 match listener.accept() {
-                    Ok((stream, _)) => serve(stream, &routes, &thread_hits, &base),
+                    Ok((stream, _)) => {
+                        let routes = Arc::clone(&thread_routes);
+                        let hits = Arc::clone(&thread_hits);
+                        let base = base.clone();
+                        workers.push(thread::spawn(move || {
+                            serve(stream, routes.as_ref(), hits.as_ref(), &base)
+                        }));
+                    }
                     Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
                         thread::sleep(Duration::from_millis(2));
                     }
                     Err(_) => break,
                 }
+            }
+            for worker in workers {
+                let _ = worker.join();
             }
         });
 
@@ -119,18 +133,32 @@ fn serve(
     hits: &Mutex<Vec<String>>,
     base: &str,
 ) {
-    let _ = stream.set_read_timeout(Some(Duration::from_secs(5)));
-    let _ = stream.set_write_timeout(Some(Duration::from_secs(5)));
+    let _ = stream.set_read_timeout(Some(Duration::from_secs(30)));
+    let _ = stream.set_write_timeout(Some(Duration::from_secs(30)));
 
-    let mut buffer = [0u8; 4096];
-    let Ok(read) = stream.read(&mut buffer) else {
-        return;
-    };
-    if read == 0 {
-        return;
+    // Read the complete HTTP header before replying. A single TCP read is not guaranteed to
+    // contain the whole request; closing a socket with unread request bytes can reset the
+    // connection on Windows and surface as WSAECONNABORTED (10053) in the client.
+    const MAX_HEADER_BYTES: usize = 16 * 1024;
+    let mut buffer = Vec::with_capacity(1024);
+    let mut chunk = [0u8; 1024];
+    loop {
+        let Ok(read) = stream.read(&mut chunk) else {
+            return;
+        };
+        if read == 0 {
+            return;
+        }
+        buffer.extend_from_slice(&chunk[..read]);
+        if buffer.windows(4).any(|window| window == b"\r\n\r\n") {
+            break;
+        }
+        if buffer.len() >= MAX_HEADER_BYTES {
+            return;
+        }
     }
 
-    let request = String::from_utf8_lossy(&buffer[..read]);
+    let request = String::from_utf8_lossy(&buffer);
     let Some(line) = request.lines().next() else {
         return;
     };
@@ -157,6 +185,7 @@ fn serve(
     let _ = stream.write_all(header.as_bytes());
     let _ = stream.write_all(&body);
     let _ = stream.flush();
+    let _ = stream.shutdown(std::net::Shutdown::Write);
 }
 
 /// Replaces the `{base}` placeholder of a body with the address of the server.

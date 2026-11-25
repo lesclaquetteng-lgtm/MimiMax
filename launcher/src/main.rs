@@ -9,6 +9,7 @@ use std::sync::Arc;
 
 use aether_launcher::accounts;
 use aether_launcher::game;
+use aether_launcher::http::Client;
 use aether_launcher::installer::{InstallError, InstallProgress};
 use aether_launcher::logs;
 use aether_launcher::minecraft;
@@ -568,11 +569,9 @@ fn command_mods(arguments: &[String]) -> Result<(), String> {
                 .unwrap_or(&launcher.settings.game_version);
             let encoded = urlencoding::encode(query);
             let url = format!("https://api.modrinth.com/v2/search?query={}&facets=%5B%5B%22project_type%3Amod%22%5D%5D&limit=24", encoded);
-            let result: serde_json::Value = ureq::get(&url)
-                .call()
-                .map_err(|e| e.to_string())?
-                .into_json()
-                .map_err(|e| e.to_string())?;
+            let http = Client::new();
+            let result: serde_json::Value =
+                http.get_json(&url).map_err(|error| error.to_string())?;
             let hits = result
                 .get("hits")
                 .and_then(serde_json::Value::as_array)
@@ -584,14 +583,9 @@ fn command_mods(arguments: &[String]) -> Result<(), String> {
                     continue;
                 };
                 let version_url = format!("https://api.modrinth.com/v2/project/{}/version?loaders=%5B%22fabric%22%5D&game_versions=%5B%22{}%22%5D", slug, version);
-                let compatible = ureq::get(&version_url)
-                    .call()
-                    .map(|response| {
-                        response
-                            .into_json::<Vec<serde_json::Value>>()
-                            .map(|versions| !versions.is_empty())
-                            .unwrap_or(false)
-                    })
+                let compatible = http
+                    .get_json::<Vec<serde_json::Value>>(&version_url)
+                    .map(|versions| !versions.is_empty())
                     .unwrap_or(false);
                 mods.push(serde_json::json!({
 					"slug": slug,
