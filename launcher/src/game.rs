@@ -1,3 +1,5 @@
+#[cfg(unix)]
+use std::os::unix::process::CommandExt;
 //! The classpath and the arguments of the game.
 
 use std::collections::HashMap;
@@ -388,6 +390,9 @@ pub fn launch(
         process.creation_flags(CREATE_NO_WINDOW);
     }
 
+    #[cfg(unix)]
+    process.process_group(0);
+
     let mut child = process.spawn()?;
     let pid = child.id();
     if let Err(error) = on_start(pid, &process_token) {
@@ -464,22 +469,23 @@ pub(crate) fn forget_pid(data: &Path) {
 ///
 /// An unverified legacy record is treated as occupied so the launcher does not start a second
 /// process on top of one it cannot safely identify.
-pub fn running(data: &Path) -> Option<u32> {
-    let Some(record) = crate::hosting::read_process_record(&pid_file(data)) else {
-        if pid_file(data).exists() {
-            forget_pid(data);
-        }
-        return None;
-    };
+pub fn running(data: &Path) -> Result<Option<u32>, String> {
+    let file = pid_file(data);
+    if !file.exists() {
+        return Ok(None);
+    }
+
+    let record = crate::hosting::read_process_record(&file).ok_or_else(|| {
+        "the Minecraft process record is unreadable; close any previous Java process manually and repair or remove game.pid before launching again".to_string()
+    })?;
 
     match crate::hosting::process_state(&record) {
-        crate::hosting::ProcessState::Owned => Some(record.pid),
-        crate::hosting::ProcessState::Unverified | crate::hosting::ProcessState::Unknown => {
-            Some(record.pid)
-        }
+        crate::hosting::ProcessState::Owned
+        | crate::hosting::ProcessState::Unverified
+        | crate::hosting::ProcessState::Unknown => Ok(Some(record.pid)),
         crate::hosting::ProcessState::Exited | crate::hosting::ProcessState::Reused => {
             forget_pid(data);
-            None
+            Ok(None)
         }
     }
 }
@@ -513,8 +519,14 @@ fn finish_stop(data: &Path, pid: u32, stopped: bool) -> Result<u32, String> {
 /// A PID is never enough to authorize termination: the process command line must contain the
 /// random marker written when Java was launched.
 pub fn stop(data: &Path) -> Result<u32, String> {
-    let record = crate::hosting::read_process_record(&pid_file(data))
-        .ok_or_else(|| "no game is running".to_string())?;
+    let file = pid_file(data);
+    let record = crate::hosting::read_process_record(&file).ok_or_else(|| {
+        if file.exists() {
+            "the Minecraft process record is unreadable; it was kept so no unidentified process is terminated".to_string()
+        } else {
+            "no game is running".to_string()
+        }
+    })?;
     let pid = record.pid;
 
     match crate::hosting::process_state(&record) {
@@ -594,12 +606,13 @@ mod tests {
 
         #[cfg(not(windows))]
         {
-            Command::new("sleep")
+            let mut command = Command::new("sleep");
+            command
                 .arg("30")
                 .env("AETHER_LAUNCHER_PROCESS_TOKEN", token)
-                .stdout(Stdio::null())
-                .spawn()
-                .unwrap()
+                .stdout(Stdio::null());
+            command.process_group(0);
+            command.spawn().unwrap()
         }
     }
 
@@ -620,7 +633,7 @@ mod tests {
         // PID 0 is never a process the launcher manages.
         fs::write(pid_file(&data), "0").unwrap();
 
-        assert_eq!(running(&data), None);
+        assert_eq!(running(&data).unwrap(), None);
         assert_eq!(read_pid(&data), None, "the stale record was left behind");
     }
 
@@ -638,7 +651,7 @@ mod tests {
         let mut child = long_running_child(&token);
         record_pid(&data, child.id(), &token).unwrap();
 
-        assert_eq!(running(&data), Some(child.id()));
+        assert_eq!(running(&data).unwrap(), Some(child.id()));
         assert_eq!(stop(&data).unwrap(), child.id());
 
         let _ = child.wait();
@@ -647,6 +660,17 @@ mod tests {
             None,
             "the record survived the stopped game"
         );
+    }
+
+    #[test]
+    fn a_corrupt_pid_record_blocks_a_new_launch_and_is_preserved() {
+        let data = scratch("corrupt-pid");
+        fs::write(pid_file(&data), "{not-valid-json").unwrap();
+
+        let error = running(&data).unwrap_err();
+
+        assert!(error.contains("process record is unreadable"));
+        assert!(pid_file(&data).exists(), "the corrupt record must not be discarded");
     }
 
     #[test]
