@@ -7,6 +7,9 @@
 //! The server runs in its own directory under `servers/`, writes its console to `console.log` and
 //! can be stopped through RCON, which asks the server to save the world and shut down cleanly.
 
+#[cfg(unix)]
+use std::os::unix::process::CommandExt;
+
 use std::fs;
 use std::io::{self, Read, Write};
 use std::net::{TcpListener, TcpStream};
@@ -362,6 +365,15 @@ pub fn create(
     let metadata_file = metadata_path(&directory);
     let process_file = pid_path(&directory);
 
+    // A corrupt record is not proof that the previous server exited. Fail closed and require
+    // explicit manual recovery instead of overwriting its ports or starting a duplicate.
+    if process_file.exists() && read_process_record(&process_file).is_none() {
+        return Err(
+            "the hosted-server process record is unreadable; close any previous Java process manually and repair or remove server.pid before reconfiguring"
+                .to_string(),
+        );
+    }
+
     // Never rewrite the configuration of a live server. Its bound ports and properties cannot be
     // changed safely until it has stopped.
     if let Some(record) = read_process_record(&process_file) {
@@ -703,8 +715,15 @@ pub fn start(paths: &Paths, name: &str) -> Result<HostedServer, String> {
     let directory = directory(paths, name);
     let mut server = read_metadata(&directory)
         .ok_or_else(|| format!("unknown server: {}, create it first", name))?;
+    let process_file = pid_path(&directory);
+    if process_file.exists() && read_process_record(&process_file).is_none() {
+        return Err(
+            "the hosted-server process record is unreadable; close any previous Java process manually and repair or remove server.pid before starting another instance"
+                .to_string(),
+        );
+    }
 
-    if let Some(record) = read_process_record(&pid_path(&directory)) {
+    if let Some(record) = read_process_record(&process_file) {
         match process_state(&record) {
             ProcessState::Owned => {
                 server.pid = Some(record.pid);
@@ -712,7 +731,7 @@ pub fn start(paths: &Paths, name: &str) -> Result<HostedServer, String> {
                 return Ok(server);
             }
             ProcessState::Exited | ProcessState::Reused => {
-                let _ = fs::remove_file(pid_path(&directory));
+                let _ = fs::remove_file(&process_file);
                 server.pid = None;
                 server.running = false;
             }
@@ -788,6 +807,9 @@ pub fn start(paths: &Paths, name: &str) -> Result<HostedServer, String> {
         process.creation_flags(CREATE_NO_WINDOW);
     }
 
+    #[cfg(unix)]
+    process.process_group(0);
+
     let child = process
         .spawn()
         .map_err(|error| format!("could not start the Java server: {}", error))?;
@@ -825,7 +847,14 @@ pub fn stop(paths: &Paths, name: &str) -> Result<HostedServer, String> {
     let mut server =
         read_metadata(&directory).ok_or_else(|| format!("unknown server: {}", name))?;
 
-    let Some(record) = read_process_record(&pid_path(&directory)) else {
+    let process_file = pid_path(&directory);
+    let Some(record) = read_process_record(&process_file) else {
+        if process_file.exists() {
+            return Err(
+                "the hosted-server process record is unreadable; it was kept so no unidentified process is terminated"
+                    .to_string(),
+            );
+        }
         server.running = false;
         server.pid = None;
         return Ok(server);
@@ -990,7 +1019,7 @@ pub(crate) fn process_state(record: &ProcessRecord) -> ProcessState {
         // Query the command line only when an operation needs to prove ownership. Normal status
         // polling continues to use tasklist and does not launch PowerShell on every refresh.
         let script = format!(
-            "$ErrorActionPreference='Stop'; $p=Get-CimInstance -ClassName Win32_Process -Filter 'ProcessId = {}'; if ($null -eq $p) {{ exit 2 }}; if ($p.CommandLine -and $p.CommandLine.Contains('{}')) {{ exit 0 }}; exit 1",
+            "$ErrorActionPreference='Stop'; $p=Get-CimInstance -ClassName Win32_Process -Filter 'ProcessId = {}'; if ($null -eq $p) {{ exit 2 }}; if ($p.CommandLine -and $p.CommandLine.Contains('{}')) {{ exit 0 }}; exit 3",
             record.pid, marker
         );
         let status = Command::new("powershell.exe")
@@ -1000,8 +1029,8 @@ pub(crate) fn process_state(record: &ProcessRecord) -> ProcessState {
             .status();
         match status.ok().and_then(|status| status.code()) {
             Some(0) => ProcessState::Owned,
-            Some(1) => ProcessState::Reused,
             Some(2) => ProcessState::Exited,
+            Some(3) => ProcessState::Reused,
             _ => ProcessState::Unknown,
         }
     }
@@ -1088,11 +1117,15 @@ fn kill_tree(pid: u32) -> Result<(), String> {
         .status();
 
     #[cfg(not(windows))]
-    let status = Command::new("kill")
-        .args(["-TERM", &pid.to_string()])
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status();
+    let status = if let Ok(group) = i32::try_from(pid) {
+        Command::new("kill")
+            .args(["-TERM", &format!("-{}", group)])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+    } else {
+        return Err(format!("PID {} is outside the supported process-group range", pid));
+    };
 
     match status {
         Ok(status) if status.success() || !process_alive(pid) => Ok(()),
@@ -1363,6 +1396,33 @@ mod tests {
         assert!(offline_properties.contains(&format!("rcon.port={}", offline.rcon_port)));
         assert!(!offline.running);
 
+        fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn a_corrupt_server_pid_record_blocks_start_and_reconfiguration() {
+        let root = std::env::temp_dir().join(format!(
+            "aether-host-corrupt-record-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).unwrap();
+        let paths = test_paths(&root);
+        let server = create(&paths, "Corrupt", 0, None, 8, false, "1.21.11", "0.20.1")
+            .expect("initial server creation");
+        let directory = PathBuf::from(&server.directory);
+        let process_file = pid_path(&directory);
+        fs::write(&process_file, "{not-valid-json").unwrap();
+
+        let start_error = start(&paths, "Corrupt").unwrap_err();
+        assert!(start_error.contains("process record is unreadable"));
+        let create_error = create(&paths, "Corrupt", 0, None, 8, true, "1.21.11", "0.20.1")
+            .unwrap_err();
+        assert!(create_error.contains("process record is unreadable"));
+        assert_eq!(fs::read_to_string(&process_file).unwrap(), "{not-valid-json");
+
+        let stop_error = stop(&paths, "Corrupt").unwrap_err();
+        assert!(stop_error.contains("process record is unreadable"));
         fs::remove_dir_all(&root).ok();
     }
 
