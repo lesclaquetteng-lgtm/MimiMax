@@ -439,6 +439,7 @@ pub fn pid_file(data: &Path) -> PathBuf {
 }
 
 /// The identifier written in the record, even when the process it names is long gone.
+#[cfg(test)]
 fn read_pid(data: &Path) -> Option<u32> {
     crate::hosting::read_process_record(&pid_file(data)).map(|record| record.pid)
 }
