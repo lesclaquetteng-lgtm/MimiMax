@@ -1,10 +1,8 @@
-//! A local Minecraft server that accepts offline players.
+//! A local Fabric server managed by the launcher.
 //!
-//! The launcher creates a Fabric server with `online-mode=false` and
-//! `enforce-secure-profile=false`: an offline account can join it, and the game opens on
-//! `127.0.0.1:<port>` like on any other server. This is also the honest answer to "play with a
-//! cracked account on a server": a server has to disable the authentication itself, the client
-//! cannot force it.
+//! Hosted servers are bound to `127.0.0.1`. They can use authenticated online mode or offline mode;
+//! offline mode accepts a submitted name without proving ownership, and a whitelist does not change
+//! that authentication property. RCON stays on loopback because its traffic is not encrypted.
 //!
 //! The server runs in its own directory under `servers/`, writes its console to `console.log` and
 //! can be stopped through RCON, which asks the server to save the world and shut down cleanly.
