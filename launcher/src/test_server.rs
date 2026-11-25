@@ -133,8 +133,8 @@ fn serve(
     hits: &Mutex<Vec<String>>,
     base: &str,
 ) {
-    let _ = stream.set_read_timeout(Some(Duration::from_secs(5)));
-    let _ = stream.set_write_timeout(Some(Duration::from_secs(5)));
+    let _ = stream.set_read_timeout(Some(Duration::from_secs(30));
+    let _ = stream.set_write_timeout(Some(Duration::from_secs(30));
 
     // Read the complete HTTP header before replying. A single TCP read is not guaranteed to
     // contain the whole request; closing a socket with unread request bytes can reset the
@@ -185,6 +185,7 @@ fn serve(
     let _ = stream.write_all(header.as_bytes());
     let _ = stream.write_all(&body);
     let _ = stream.flush();
+    let _ = stream.shutdown(std::net::Shutdown::Write);
 }
 
 /// Replaces the `{base}` placeholder of a body with the address of the server.
