@@ -1164,6 +1164,28 @@ mod tests {
     use super::*;
     use std::net::TcpListener;
 
+    fn marked_test_child(token: &str) -> std::process::Child {
+        let marker = format!("-Daether.launcher.process-token={}", token);
+        #[cfg(windows)]
+        {
+            let script = format!("ping -n 30 127.0.0.1 >NUL & echo {}", marker);
+            Command::new("cmd")
+                .args(["/C", &script])
+                .stdout(Stdio::null())
+                .spawn()
+                .unwrap()
+        }
+        #[cfg(not(windows))]
+        {
+            let script = format!("exec -a {} sleep 30", marker);
+            Command::new("bash")
+                .args(["-c", &script])
+                .stdout(Stdio::null())
+                .spawn()
+                .unwrap()
+        }
+    }
+
     fn test_paths(root: &Path) -> Paths {
         Paths {
             home: root.to_path_buf(),
@@ -1302,6 +1324,41 @@ mod tests {
         assert!(offline_properties.contains(&format!("rcon.port={}", offline.rcon_port)));
         assert!(!offline.running);
 
+        fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn a_running_server_cannot_be_reconfigured() {
+        let root = std::env::temp_dir().join(format!(
+            "aether-host-running-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).unwrap();
+        let paths = test_paths(&root);
+        let server = create(&paths, "Busy", 0, None, 8, false, "1.21.11", "0.20.1").unwrap();
+        let directory = PathBuf::from(&server.directory);
+        let before = fs::read_to_string(directory.join("server.properties")).unwrap();
+
+        let token = format!("host-test-{}", std::process::id());
+        let mut child = marked_test_child(&token);
+        let record = ProcessRecord {
+            pid: child.id(),
+            token: Some(token),
+        };
+        write_process_record(&pid_path(&directory), &record).unwrap();
+
+        let error = create(&paths, "Busy", 0, None, 8, true, "1.21.11", "0.20.1")
+            .unwrap_err();
+        assert!(error.contains("stop the hosted server"));
+        assert_eq!(
+            fs::read_to_string(directory.join("server.properties")).unwrap(),
+            before,
+            "a running server's properties were modified"
+        );
+
+        kill_tracked_tree(&record).unwrap();
+        let _ = child.wait();
         fs::remove_dir_all(&root).ok();
     }
 
